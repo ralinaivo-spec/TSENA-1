@@ -14,15 +14,25 @@ import { RolesPage } from './pages/Roles';
 import { AuditPage } from './pages/Audit';
 import { SettingsPage } from './pages/Settings';
 import { AccountPage } from './pages/Account';
+import { ProductsPage } from './pages/Products';
+import { StockPage } from './pages/Stock';
+import { PurchasesPage } from './pages/Purchases';
+import { ReceptionsPage } from './pages/Receptions';
+import { ImportPage } from './pages/Import';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
 const NAV: NavItem[] = [
   { path: '/', label: 'Accueil', icon: 'home', group: '', page: () => <DashboardPage />, mobile: true },
-  { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage />, mobile: true },
+  { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Stock', page: () => <ProductsPage />, mobile: true },
+  { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage />, mobile: true },
+  { path: '/achats', label: 'Achats Chine', icon: 'truck', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage />, mobile: true },
+  { path: '/receptions', label: 'Réceptions', icon: 'inbox', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
+  { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage /> },
   { path: '/roles', label: 'Rôles et accès', icon: 'shield', perm: 'users.manage', group: 'Administration', page: () => <RolesPage /> },
   { path: '/journal', label: "Journal d'activité", icon: 'list', perm: 'audit.view', group: 'Administration', page: () => <AuditPage /> },
-  { path: '/parametres', label: 'Paramètres', icon: 'settings', group: 'Réglages', page: () => <SettingsPage />, mobile: true },
+  { path: '/import', label: 'Import Excel', icon: 'fileSheet', perm: 'catalog.edit', group: 'Réglages', page: () => <ImportPage /> },
+  { path: '/parametres', label: 'Paramètres', icon: 'settings', group: 'Réglages', page: () => <SettingsPage /> },
   { path: '/compte', label: 'Mon compte', icon: 'user', group: 'hidden', page: () => <AccountPage /> },
 ];
 

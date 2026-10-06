@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 1.4, validée le 05/10/2026)
+# TSENA — Cahier des charges (version 1.5, validée le 05/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -62,17 +62,25 @@
 - **Commande d'achat** : fournisseur, date, devise (RMB ou Ariary) + taux de change, lignes (article existant **ou nouvel article / nouvelle catégorie créés à la volée**), quantité, prix unitaire.
 - Paiements au fournisseur (acomptes, solde) et suivi de ce qui reste à payer.
 
-### 4.2 Expédition (colis / conteneur) — *ajout*
-- Une expédition regroupe une ou plusieurs commandes d'achat : transitaire, mode (bateau / avion), n° de suivi, poids, volume (CBM), dates (départ, arrivée prévue).
-- Statuts : **Commandé → Expédié → En transit → Arrivé Madagascar (dédouanement) → Réceptionné**.
-- Frais d'approche : transport international, dédouanement, transitaire, transport local, autres.
+### 4.2 Suivi de la commande
+- Statuts : **Commandée → Expédiée de Chine → Arrivée à Madagascar → Reçue** (partiellement ou totalement), ou Annulée — avec la date de chaque étape.
+- N° de commande 1688, n° de suivi, lien, transitaire.
+- Le **taux du RMB** est saisi sur chaque commande (pas de taux fixe) et reste modifiable.
 
-### 4.3 Coût de revient (essentiel pour un bénéfice juste) — *ajout*
-- Les frais d'approche sont **répartis sur les articles** de l'expédition — **par valeur** par défaut, ou au choix par quantité ou par poids/volume, expédition par expédition.
-- Coût de revient unitaire = prix d'achat converti en Ariary + part des frais.
-- Le prix d'achat moyen de l'article est recalculé à chaque arrivage (**coût moyen pondéré**) : le bénéfice est donc calculé sur ce que l'article a réellement coûté.
+### 4.3 Réception et facture du transit (validé avec le gérant)
+- **Les tarifs du transit ne sont jamais fixés à l'avance** : on les saisit **à la réception**, d'après la facture du transitaire.
+- Une réception (arrivage) regroupe **une ou plusieurs commandes** reçues ensemble.
+- Facture du transit :
+  - **Maritime** : volume facturé en **m³** × tarif par m³.
+  - **Aérien** : poids facturé en **kg** × tarif par kg.
+  - Tarif en **USD, RMB ou Ariary**, avec le **taux de change de la facture**.
+  - Autres frais éventuels : dédouanement, transport local, frais du transitaire…
+- Répartition des frais sur les pièces reçues : **par quantité** (méthode habituelle du gérant, par défaut), ou par valeur.
+- **Coût de revient unitaire** = (prix unitaire + part des frais Chine − part de la remise) × taux du RMB + part du transit + part des autres frais.
+- Aperçu avant validation : coût de revient, prix de vente détail/gros et marge de chaque article.
+- Le **coût moyen pondéré** de chaque article est recalculé à la réception.
 
-### 4.4 Réception
+### 4.4 Réception (quantités)
 - Réception totale ou **partielle**, avec écarts (manquant, abîmé, en trop) et photos.
 - La réception crée automatiquement les **entrées de stock**.
 - Vue « **En attente d'arrivage** » : ce qui est commandé et pas encore arrivé, par article (utile pour dire au client « disponible le … »).
@@ -129,6 +137,7 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 ## 8. Vente en boutique (caisse)
 
 - Écran de caisse rapide : recherche ou scan, panier, remise, paiement (espèces avec calcul de la monnaie à rendre, mobile money avec **référence de transaction**), **paiement mixte** (ex. une partie en espèces + une partie MVola).
+- **Prix de gros** : appliqué automatiquement **à partir de 3 pièces** (seuil réglable dans les paramètres). Le vendeur peut aussi **l'accorder à la main** à un client qui en prend moins (ex. 2 pièces) ; ce choix est enregistré avec la vente.
 - Impression du ticket de caisse.
 - Mise en attente d'un panier, reprise plus tard.
 
