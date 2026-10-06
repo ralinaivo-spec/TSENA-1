@@ -47,3 +47,9 @@ create policy "records_company" on public.records for all to authenticated using
 
 drop policy if exists "backups_company" on public.backups;
 create policy "backups_company" on public.backups for all to authenticated using (true) with check (true);
+
+-- Droits d'accès pour les appareils connectés (nécessaire sur les projets récents).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.records to authenticated;
+grant select, insert, update, delete on public.backups to authenticated;
+grant usage, select on sequence public.records_rev_seq to authenticated;
