@@ -62,6 +62,8 @@ export interface Order extends BaseRecord {
   courierId?: string;
   dispatchedAt?: string;
   returnedAt?: string;
+  courierSettledAt?: string;      // versement du livreur validé (étape 6) : plus de changement de livreur
+  events?: { at: string; text: string; user?: string }[];
   createdBy?: string;
   createdByName?: string;
 }
@@ -258,6 +260,22 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
 function nextOrderNumber(prefix: string) {
   const nums = all<Order>('orders').filter((o) => o.number.startsWith(prefix + '-')).map((o) => parseInt(o.number.slice(prefix.length + 1), 10)).filter((n) => !isNaN(n));
   return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
+}
+
+/** Changer de livreur (avant le versement) : la commande, ses frais et l'argent encaissé passent au nouveau livreur. */
+export function canReassign(o: Order) {
+  return !!o.courierId && !o.courierSettledAt && !['cancelled'].includes(o.status) && !isPickupZone(o.zoneId);
+}
+export async function reassignCourier(o: Order, newCourierId: string, reason?: string) {
+  if (!canReassign(o)) throw new Error('Le versement de ce livreur est déjà validé : la commande ne peut plus changer de livreur.');
+  if (newCourierId === o.courierId) return;
+  const from = get<Courier>('couriers', o.courierId || '')?.name || '?';
+  const to = get<Courier>('couriers', newCourierId)?.name || '?';
+  const u = currentUser();
+  const payments = (o.payments || []).map((p) => (p.receivedBy === 'courier' && p.courierId === o.courierId ? { ...p, courierId: newCourierId } : p));
+  const text = `Livreur changé : ${from} → ${to}${reason ? ` (${reason})` : ''}`;
+  await save('orders', { id: o.id, courierId: newCourierId, payments, events: [...(o.events || []), { at: nowIso(), text, user: u?.fullName }] });
+  await audit('Changement de livreur', `${o.number} : ${from} → ${to}${reason ? ` — ${reason}` : ''}`, 'orders', o.id);
 }
 
 export async function cancelOrder(o: Order, reason: string) {

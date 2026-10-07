@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 1.8, validée le 05/10/2026)
+# TSENA — Cahier des charges (version 1.9, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -133,6 +133,7 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 ### 7.2 Livraisons
 - **Zones / axes de livraison** paramétrables, chacun avec un **tarif par défaut** ; le montant peut être modifié à la main.
 - Regroupement des commandes par axe, **feuille de route** pour chaque livreur (imprimable).
+- **Changer de livreur** : une commande déjà attribuée peut être réattribuée à un autre livreur (fiche commande → « Changer », ou Livraisons → En cours → « Changer de livreur »), avec un motif. La commande et l'argent déjà encaissé passent du compte du premier livreur au compte du nouveau ; les frais de livraison iront au nouveau livreur ; l'historique de la commande garde la trace « Livreur changé : A → B ». **Possible uniquement tant que le versement du livreur n'est pas validé** (règlement par l'admin, étape 6).
 - Au retour du livreur, **le vendeur** enregistre pour chaque commande : livrée, refusée, articles pris parmi les choix, articles rendus, montant encaissé et par quel moyen.
 
 ### 7.3 Retours, refus et échanges

@@ -7,7 +7,7 @@ import { courierAccount, fmtPhone, isPickupZone, orderLabel, remaining, totalQty
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, TextField, Toggle, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
-import { DispatchModal, ReturnModal, OrderRow } from './Orders';
+import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
 
 const TABS = [
   { key: 'a-livrer', label: 'À livrer', perm: 'orders.dispatch' },
@@ -83,6 +83,7 @@ function OutNow() {
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
   const [ret, setRet] = useState<Order | null>(null);
+  const [move, setMove] = useState<Order | null>(null);
   const out = orders.filter((o) => o.status === 'out');
   const byCourier = new Map<string, Order[]>();
   for (const o of out) { const k = o.courierId || ''; if (!byCourier.has(k)) byCourier.set(k, []); byCourier.get(k)!.push(o); }
@@ -103,7 +104,10 @@ function OutNow() {
                     <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span></span>
                     <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser {fmtAr(Math.max(0, remaining(o)))}</p>
                   </a>
-                  <Button variant="ghost" onClick={() => setRet(o)}>Retour</Button>
+                  <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                    <Button variant="quiet" onClick={() => setMove(o)}>Changer de livreur</Button>
+                    <Button variant="ghost" onClick={() => setRet(o)}>Retour</Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -111,6 +115,7 @@ function OutNow() {
         );
       })}
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
+      {move && <ReassignModal order={move} onClose={() => setMove(null)} />}
     </>
   );
 }

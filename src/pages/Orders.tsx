@@ -5,7 +5,7 @@ import { get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
-  isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
+  canReassign, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Zone,
 } from '../lib/orders';
@@ -374,7 +374,7 @@ function OrderDetail({ id }: { id: string }) {
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
-  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup'>('');
+  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign'>('');
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
   const courier = couriers.find((c) => c.id === o.courierId);
@@ -403,7 +403,7 @@ function OrderDetail({ id }: { id: string }) {
           {o.phone && <div><span className="small muted">Contact</span><a href={`tel:${o.phone}`}><strong>{fmtPhone(o.phone)}</strong></a></div>}
           <div><span className="small muted">Livraison</span><strong>{zone?.name || '—'}{o.place && !isPickupZone(zone) ? ` — ${o.place}` : ''}</strong></div>
           {o.wantedDate && <div><span className="small muted">Souhaitée le</span><strong>{fmtDate(o.wantedDate)}</strong></div>}
-          {courier && <div><span className="small muted">Livreur</span><strong>{courier.name}</strong></div>}
+          {courier && <div><span className="small muted">Livreur</span><strong>{courier.name}</strong>{canReassign(o) && can('orders.dispatch') && <button className="link-btn" onClick={() => setModal('reassign')}>Changer</button>}</div>}
         </div>
         {o.notes && <p className="small" style={{ whiteSpace: 'pre-line' }}><strong>Observations :</strong> {o.notes}</p>}
         {parent && <p className="small">Échange de la commande <a href={`#/commandes/${parent.id}`}>{parent.number}</a></p>}
@@ -476,7 +476,10 @@ function OrderDetail({ id }: { id: string }) {
       <div className="card stack-s">
         <h2>Historique</h2>
         <ul className="timeline">
-          {(Object.entries(o.statusDates || {}) as [OrderStatus, string][]).sort((a, b) => a[1].localeCompare(b[1])).map(([s, at]) => <li key={s}><strong>{ORDER_STATUS[s].label}</strong> <span className="small muted">{fmtDateTime(at)}</span></li>)}
+          {[
+            ...(Object.entries(o.statusDates || {}) as [OrderStatus, string][]).map(([s, at]) => ({ at, text: ORDER_STATUS[s].label, user: '' })),
+            ...(o.events || []),
+          ].sort((a, b) => a.at.localeCompare(b.at)).map((e, i) => <li key={i}><strong>{e.text}</strong> <span className="small muted">{fmtDateTime(e.at)}{e.user ? ` · ${e.user}` : ''}</span></li>)}
         </ul>
       </div>
 
@@ -487,6 +490,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'exchange' && <ExchangeStart order={o} onClose={() => setModal('')} />}
       {modal === 'shop' && <ShopExchangeModal order={o} onClose={() => setModal('')} />}
       {modal === 'pickup' && <PickupModal order={o} onClose={() => setModal('')} />}
+      {modal === 'reassign' && <ReassignModal order={o} onClose={() => setModal('')} />}
       {modal === 'cancel' && <CancelModal order={o} onClose={() => setModal('')} />}
     </>
   );
@@ -671,6 +675,37 @@ function PickupModal({ order: o, onClose }: { order: Order; onClose: () => void 
         <TextField label="Montant encaissé (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={`Reste à payer : ${fmtAr(rest)}`} />
         <SelectField label="Moyen de paiement" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
+      </div>
+    </Modal>
+  );
+}
+
+/** Changer de livreur avant son versement : la commande, ses frais et l'argent encaissé passent au nouveau. */
+export function ReassignModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false && c.id !== o.courierId);
+  const current = get<Courier>('couriers', o.courierId || '');
+  const [courierId, setCourierId] = useState(couriers.find((c) => c.zoneIds?.includes(o.zoneId || ''))?.id ?? couriers[0]?.id ?? '__new');
+  const [newName, setNewName] = useState('');
+  const [reason, setReason] = useState('Zone d’un autre livreur');
+  const [busy, setBusy] = useState(false);
+  const collected = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((s, p) => s + p.amount, 0);
+  return (
+    <Modal title={`Changer de livreur — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={courierId === '__new' && !newName.trim()} onClick={async () => {
+        setBusy(true);
+        try {
+          let cid = courierId;
+          if (cid === '__new') { const [c] = await save('couriers', { name: newName.trim(), active: true }); cid = c.id; }
+          await reassignCourier(o, cid, reason.trim() || undefined);
+          toast('Livreur changé'); onClose();
+        } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
+      }}>Changer de livreur</Button></>}>
+      <div className="stack">
+        <p>Livreur actuel : <strong>{current?.name ?? '—'}</strong></p>
+        <SelectField label="Nouveau livreur" value={courierId} onChange={setCourierId} options={[...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />
+        {courierId === '__new' && <TextField label="Nom du nouveau livreur" value={newName} onChange={setNewName} autoFocus />}
+        <SelectField label="Motif" value={reason} onChange={setReason} options={['Zone d’un autre livreur', 'Livreur indisponible', 'Erreur d’attribution', 'Autre'].map((r) => ({ value: r, label: r }))} />
+        <div className="notice"><Icon name="refresh" /><span>La commande est retirée du compte de {current?.name ?? 'l’ancien livreur'} et passe au nouveau{['delivered', 'partial', 'refused'].includes(o.status) ? `, avec ses frais (${fmtAr(o.feeCharged ?? 0)})` : ''}{collected ? ` et l’argent encaissé (${fmtAr(collected)})` : ''}. Le changement est noté dans l’historique.</span></div>
       </div>
     </Modal>
   );
