@@ -1,6 +1,6 @@
 // Articles, variantes (couleur/taille), mouvements de stock, coût moyen, quantités en arrivage.
 import { useMemo } from 'react';
-import { all, get, newId, nowIso, save, useTable, type BaseRecord } from './db';
+import { all, get, newId, nowIso, save, useTable, type BaseRecord , bizNow, workDate } from './db';
 import { audit, currentUser } from './auth';
 
 export interface Category extends BaseRecord { name: string; parentId?: string; order?: number }
@@ -181,7 +181,7 @@ export async function addMoves(moves: Omit<StockMove, 'id' | 'createdAt' | 'upda
   const u = currentUser();
   const list = (Array.isArray(moves) ? moves : [moves]).filter((m) => m.qty !== 0);
   if (!list.length) return [];
-  return save('stockMoves', list.map((m) => ({ ...m, at: m.at ?? nowIso(), userId: u?.id, userName: u?.fullName })));
+  return save('stockMoves', list.map((m) => ({ ...m, at: m.at ?? bizNow(), userId: u?.id, userName: u?.fullName })));
 }
 
 /** Entrée en stock avec mise à jour du coût moyen pondéré. */
@@ -236,6 +236,8 @@ export function nextNumber(prefix: string, table: 'purchases' | 'receptions' | '
 }
 
 export const todayYmd = () => {
+  const wd = workDate();
+  if (wd) return wd;
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };

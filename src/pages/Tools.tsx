@@ -2,9 +2,10 @@
 // Paramètres → Système (super-admin) : effacer les données de test.
 import { useEffect, useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
-import { useTable } from '../lib/db';
+import { setMeta, useMeta, useTable, workDate } from '../lib/db';
+import { audit } from '../lib/auth';
 import { DATA_GROUPS, KEPT_LABEL, checkData, clearData, exportAllExcel, tableCounts, type Issue } from '../lib/maintenance';
-import { Badge, Button, Confirm, toast } from '../ui/kit';
+import { Badge, Button, Confirm, TextField, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const TABLE_LABELS: Record<string, string> = {
@@ -28,6 +29,7 @@ export function ToolsTab() {
   const mb = (n: number) => (n / 1048576).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Mo';
   return (
     <div className="stack">
+      <WorkDateCard />
       <div className="card stack">
         <div className="row-between">
           <div><h3>Vérifier les données</h3><p className="small muted">Recalcule le stock à partir de tous les mouvements et cherche les incohérences (stock négatif, commandes sans livreur, trop-perçus…). Rien n’est modifié sans votre accord.</p></div>
@@ -94,6 +96,41 @@ export function ClearDataCard() {
       {open && <Confirm title="Effacer les données sélectionnées ?" danger confirmLabel="Effacer" typeToConfirm="EFFACER" onClose={() => setOpen(false)}
         message={<div className="stack-s"><p>Seront effacés : <strong>{DATA_GROUPS.filter((g) => sel.includes(g.key)).map((g) => g.label).join(' ; ')}</strong>.</p><p className="small muted">Un fichier de sauvegarde va être téléchargé avant l’effacement.</p></div>}
         onConfirm={async () => { const n = await clearData(sel); toast(`${n.toLocaleString('fr-FR')} enregistrement(s) effacé(s)`); }} />}
+    </div>
+  );
+}
+
+const realToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const longDay = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+/** Choisir une date passée pour les saisies (tests ou rattrapage d'un cahier). */
+function WorkDateCard() {
+  const wd = useMeta<string | null>('workDate', null);
+  const active = workDate();
+  const [d, setD] = useState(wd && active ? wd : '');
+  return (
+    <div className="card stack" style={active ? { borderColor: 'var(--gold)' } : undefined}>
+      <div><h3>Date de saisie</h3>
+        <p className="small muted">Pour faire des essais avec des dates passées, ou pour rattraper les ventes d’un cahier : choisissez un jour passé. Tout ce que vous saisissez ensuite sur cet appareil (ventes sur place, commandes, livraisons, retours, paiements, versements, dépenses, mouvements de stock) sera daté de ce jour, à l’heure actuelle. Les autres appareils ne sont pas concernés. Pensez à revenir à aujourd’hui ensuite (c’est automatique à la déconnexion).</p></div>
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <div style={{ maxWidth: 220 }}><TextField label="Saisir à la date du" type="date" value={d} max={realToday()} onChange={setD} /></div>
+        <Button disabled={!d || d >= realToday()} onClick={async () => { await setMeta('workDate', d); await audit('Date de saisie', `Saisies datées du ${d} sur cet appareil`); toast(`Les saisies seront datées du ${longDay(d)}`); }}>Utiliser cette date</Button>
+        {active && <Button variant="ghost" onClick={async () => { await setMeta('workDate', null); setD(''); await audit('Date de saisie', 'Retour à la date du jour'); toast('Retour à la date du jour'); }}>Revenir à aujourd’hui</Button>}
+      </div>
+      {active && <p><Badge tone="warn">En cours : saisies datées du {longDay(active)}</Badge></p>}
+    </div>
+  );
+}
+
+/** Bandeau visible sur toutes les pages tant qu'une date passée est utilisée. */
+export function WorkDateBanner() {
+  useMeta<string | null>('workDate', null);
+  const active = workDate();
+  if (!active) return null;
+  return (
+    <div className="notice workdate-banner"><Icon name="alert" />
+      <span style={{ flex: 1 }}><strong>Saisies datées du {longDay(active)}</strong> — tout ce que vous enregistrez prend cette date.</span>
+      <Button variant="ghost" onClick={async () => { await setMeta('workDate', null); await audit('Date de saisie', 'Retour à la date du jour'); toast('Retour à la date du jour'); }}>Revenir à aujourd’hui</Button>
     </div>
   );
 }

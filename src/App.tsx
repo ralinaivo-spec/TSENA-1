@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { usePrintStationWorker } from './lib/print';
 import { TreasuryPage } from './pages/Treasury';
 import { RecapPage } from './pages/Recap';
+import { WorkDateBanner } from './pages/Tools';
 import { ReportsPage } from './pages/Reports';
 import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } from './lib/auth';
 import { getMeta, setMeta, useMeta } from './lib/db';
@@ -165,7 +166,7 @@ function Shell() {
           <SyncPill />
         </header>
         <main className="main">
-          <div className="content">{current.page()}</div>
+          <div className="content"><WorkDateBanner />{current.page()}</div>
         </main>
         <nav className="bottom-nav" aria-label="Raccourcis">
           {mobileItems.map((i) => (

@@ -1,7 +1,7 @@
 // Commandes clients : saisie (comme le cahier), préparation, remise au livreur, retour, échanges.
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
-import { get, newId, save, useTable } from '../lib/db';
+import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
@@ -201,7 +201,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
         toast('Commande enregistrée'); onClose();
       } else {
         const u = currentUser();
-        const now = new Date();
+        const now = new Date(bizNow());
         const payments = parseNum(prepay) ? [{ id: newId(), at: now.toISOString(), amount: parseNum(prepay)!, method: prepayMethod, ref: prepayRef.trim() || undefined, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
         const [o] = await save('orders', {
           ...data, number: nextNumber(exchangeOf ? 'ECH' : 'C', 'orders'), kind: exchangeOf ? 'exchange' : 'order', parentId: exchangeOf?.parent.id,

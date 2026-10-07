@@ -1,6 +1,6 @@
 // Trésorerie : comptes (caisse, mobile money, banque), mouvements, dépenses et revenus, règlements des
 // livreurs, chiffres d'une journée et clôture (« Z de caisse »).
-import { all, applyRemote, get, newId, nowIso, remove, save, type BaseRecord } from './db';
+import { all, applyRemote, bizNow, get, newId, nowIso, remove, save, workDate, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { variantCost, type Variant } from './catalog';
 import { courierSplit, isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
@@ -37,11 +37,11 @@ export interface CourierSettlement extends BaseRecord { courierId: string; at: s
 // ---------- Dates (heure de Madagascar = heure de l'appareil) ----------
 const pad = (n: number) => String(n).padStart(2, '0');
 export const dayOf = (iso?: string) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-export const today = () => dayOf(new Date().toISOString());
+export const today = () => workDate() ?? dayOf(new Date().toISOString());
 /** Fin de journée locale (pour les soldes « au soir du … »). */
 export const endOf = (ymd: string) => new Date(`${ymd}T23:59:59.999`).toISOString();
 /** Heure pour une opération saisie à une date : maintenant si c'est aujourd'hui, sinon midi ce jour-là. */
-export const atFor = (ymd: string) => (ymd === today() ? nowIso() : new Date(`${ymd}T12:00:00`).toISOString());
+export const atFor = (ymd: string) => (ymd === today() ? bizNow() : new Date(`${ymd}T12:00:00`).toISOString());
 
 // ---------- Catégories par défaut (identifiants fixes, identiques sur tous les appareils) ----------
 const SEED = '2000-01-01T00:00:00.000Z';
@@ -198,7 +198,7 @@ export async function settleCourier(c: Courier, orderIds: string[], amount: numb
   const before = courierBalance(c.id);
   const checked = orderIds.map((id) => get<Order>('orders', id)!).filter(Boolean);
   const expected = before.carry + checked.reduce((t, o) => t + deliveryNet(o).net, 0);
-  const at = nowIso();
+  const at = bizNow();
   const [s] = await save('courierSettlements', { courierId: c.id, at, amount, account, balanceBefore: expected, orderIds, note, userName: who() });
   if (amount) await save('cashMoves', { at, account, amount, type: 'courier_settlement', label: `${amount > 0 ? 'Versement de' : 'Frais versés à'} ${c.name}`, note, refType: 'courierSettlements', refId: s.id, userName: who() });
   // Les commandes réglées ne peuvent plus changer de livreur.

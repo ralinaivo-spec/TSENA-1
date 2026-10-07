@@ -484,3 +484,4 @@ a.btn { text-decoration: none; }
 .filters .field { min-width: 160px; flex: 1; max-width: 240px; }
 .table-report td { white-space: nowrap; } .table-report td:nth-child(n) { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .pin-input { font-size: 1.6rem; letter-spacing: .5em; text-align: center; }
+.workdate-banner { align-items: center; border: 2px solid var(--gold); position: sticky; top: 8px; z-index: 20; }

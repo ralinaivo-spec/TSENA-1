@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.5, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.6, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -293,6 +293,7 @@ Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…),
 - **Remise à l'état d'origine** (super-admin) inchangée.
 - **Mot de passe oublié par e-mail** (super-admin et gérant) : un lien est envoyé à l'adresse e-mail du **compte cloud de la société** ; en l'ouvrant sur un appareil relié au cloud, on choisit le nouveau mot de passe (lien valable 1 heure, réinitialisation tracée). Réglage nécessaire une fois dans Supabase : Authentication → URL Configuration → Site URL = adresse de l'application. La question secrète et la réinitialisation par le gérant restent possibles.
 - **Code PIN** (4 à 6 chiffres, propre à chaque appareil, Mon compte) pour déverrouiller après le verrouillage automatique ; après 5 erreurs, le mot de passe est demandé.
+- **Date de saisie** (admin et gérant, Paramètres → Outils) : choisir un jour passé pour des essais ou pour rattraper un cahier ; ventes, commandes, livraisons, retours, paiements, versements, dépenses et mouvements de stock saisis sur cet appareil prennent ce jour (heure actuelle). Bandeau orange visible sur toutes les pages, bouton « Revenir à aujourd'hui », retour automatique à la déconnexion ; changement tracé dans le journal. La synchronisation garde l'heure réelle.
 - **Outils** (admin, Paramètres → Outils) : vérification de la cohérence (stock recalculé depuis les mouvements, stocks négatifs avec correction tracée, variantes orphelines, articles sans coût, commandes sans livreur, trop-perçus, impayés, numéros en double), **export complet en Excel** (sans mots de passe ni photos), espace utilisé et nombre d'enregistrements ; **Tout resynchroniser** et **Chercher une mise à jour** (Système).
 
 ---

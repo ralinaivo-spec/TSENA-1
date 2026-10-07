@@ -1,5 +1,5 @@
 // Commandes clients, livraisons, livreurs, zones : règles de calcul et actions.
-import { all, applyRemote, get, newId, nowIso, save, type BaseRecord } from './db';
+import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { addMoves, stockOf, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
@@ -198,7 +198,7 @@ export function availableOf(variantId: string, reserved: Map<string, number>) {
 
 // ---------- Actions ----------
 async function setStatus(o: Order, status: OrderStatus, extra: Partial<Order> = {}) {
-  await save('orders', { id: o.id, status, statusDates: { ...(o.statusDates || {}), [status]: nowIso() }, ...extra });
+  await save('orders', { id: o.id, status, statusDates: { ...(o.statusDates || {}), [status]: bizNow() }, ...extra });
   await audit('Commande', `${o.number} : ${ORDER_STATUS[status].label}`, 'orders', o.id);
 }
 export const confirmOrder = (o: Order) => setStatus(o, 'confirmed');
@@ -207,14 +207,14 @@ export const backToPrepare = (o: Order) => setStatus(o, 'confirmed');
 
 /** Remise au livreur : les articles (y compris les choix) quittent la boutique. */
 export async function dispatchOrder(o: Order, courierId: string) {
-  const at = nowIso();
+  const at = bizNow();
   await addMoves(o.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number}${l.isChoice ? ' (choix)' : ''}`, at })));
   await setStatus(o, 'out', { courierId, dispatchedAt: at });
 }
 
 /** Retour du livreur : ce qui est gardé, rendu, l'argent encaissé. */
 export async function recordReturn(o: Order, r: { kept: Record<string, number>; feeCharged: number; collected: { amount: number; method: PayMethod; ref?: string }[]; note?: string }) {
-  const at = nowIso();
+  const at = bizNow();
   const lines = o.lines.map((l) => {
     const kept = Math.max(0, Math.min(l.qty, r.kept[l.id] ?? 0));
     return { ...l, qtyKept: kept, qtyReturned: l.qty - kept };
@@ -236,7 +236,7 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
 
 /** Échange traité directement en boutique (sans livraison). */
 export async function completeAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
-  const at = nowIso();
+  const at = bizNow();
   await addMoves([
     ...o.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — remis en boutique`, at })),
     ...(o.returnLines || []).map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })),
@@ -248,7 +248,7 @@ export async function completeAtShop(o: Order, pay?: { amount: number; method: P
 
 /** Retrait en boutique : le client repart avec ses articles et paie sur place. */
 export async function handOverAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
-  const at = nowIso();
+  const at = bizNow();
   await addMoves(o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — retiré en boutique`, at })));
   const u = currentUser();
   const pays = pay?.amount ? [{ id: newId(), at, amount: pay.amount, method: pay.method, ref: pay.ref, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
@@ -260,7 +260,7 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
 export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number }) {
-  const at = nowIso();
+  const at = bizNow();
   const u = currentUser();
   const pickup = all<Zone>('zones').find((z) => isPickupZone(z));
   const phone = d.phone ? normPhone(d.phone) : '';
@@ -298,7 +298,7 @@ export async function reassignCourier(o: Order, newCourierId: string, reason?: s
   const u = currentUser();
   const payments = (o.payments || []).map((p) => (p.receivedBy === 'courier' && p.courierId === o.courierId ? { ...p, courierId: newCourierId } : p));
   const text = `Livreur changé : ${from} → ${to}${reason ? ` (${reason})` : ''}`;
-  await save('orders', { id: o.id, courierId: newCourierId, payments, events: [...(o.events || []), { at: nowIso(), text, user: u?.fullName }] });
+  await save('orders', { id: o.id, courierId: newCourierId, payments, events: [...(o.events || []), { at: bizNow(), text, user: u?.fullName }] });
   await audit('Changement de livreur', `${o.number} : ${from} → ${to}${reason ? ` — ${reason}` : ''}`, 'orders', o.id);
 }
 
@@ -312,7 +312,7 @@ export async function cancelOrder(o: Order, reason: string) {
 /** Correction d'un paiement (erreur de saisie) par l'admin : tout est gardé dans l'historique. */
 export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string) {
   const u = currentUser();
-  const at = nowIso();
+  const at = new Date().toISOString(); // heure réelle de la correction
   const old = (o.payments || []).find((p) => p.id === paymentId);
   if (!old) return;
   const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason }] } : p));
@@ -322,7 +322,7 @@ export async function editPayment(o: Order, paymentId: string, amount: number, m
 }
 
 export async function addPayment(o: Order, p: Omit<Payment, 'id' | 'at' | 'userName'>) {
-  const pay: Payment = { ...p, id: newId(), at: nowIso(), userName: currentUser()?.fullName };
+  const pay: Payment = { ...p, id: newId(), at: bizNow(), userName: currentUser()?.fullName };
   await save('orders', { id: o.id, payments: [...(o.payments || []), pay] });
   await audit('Paiement client', `${o.number} : ${pay.amount} Ar (${PAY_METHODS[pay.method]}, ${pay.receivedBy === 'shop' ? 'boutique' : 'livreur'})`, 'orders', o.id);
 }

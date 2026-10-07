@@ -76,6 +76,27 @@ export function newId(): string {
 }
 export const nowIso = () => new Date().toISOString();
 
+/**
+ * Date de saisie : pour des tests ou pour rattraper un cahier, l'admin peut choisir un jour passé (réglage propre à
+ * l'appareil). Les opérations (ventes, commandes, livraisons, paiements, stock, dépenses) prennent alors ce jour,
+ * avec l'heure actuelle. La synchronisation, elle, garde toujours l'heure réelle.
+ */
+export function workDate(): string | null {
+  const wd = getMeta<string | null>('workDate', null);
+  if (!wd) return null;
+  const d = new Date(), real = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return wd >= real ? null : wd;
+}
+export function bizNow(): string {
+  const wd = workDate();
+  if (!wd) return nowIso();
+  const t = new Date();
+  const [y, m, d] = wd.split('-').map(Number);
+  return new Date(y, m - 1, d, t.getHours(), t.getMinutes(), t.getSeconds(), t.getMilliseconds()).toISOString();
+}
+/** Tables dont la date de création est une date « métier » (suit la date de saisie). */
+const BIZ_TABLES = new Set<string>(['orders', 'customers', 'stockMoves', 'cashMoves', 'courierSettlements', 'purchases', 'receptions']);
+
 /** Tous les enregistrements non supprimés d'une table. */
 export function all<T extends BaseRecord = BaseRecord>(table: TableName): T[] {
   let snap = snapshots.get(table);
@@ -99,7 +120,7 @@ export async function save(table: TableName, records: Partial<BaseRecord> | Part
   const now = nowIso();
   const written: BaseRecord[] = list.map((r) => {
     const prev = r.id ? cache.get(table)?.get(r.id) : undefined;
-    return { ...prev, ...r, id: r.id || newId(), createdAt: prev?.createdAt || r.createdAt || now, updatedAt: now } as BaseRecord;
+    return { ...prev, ...r, id: r.id || newId(), createdAt: prev?.createdAt || r.createdAt || (BIZ_TABLES.has(table) ? bizNow() : now), updatedAt: now } as BaseRecord;
   });
   const tx = idb!.transaction([table, '_outbox'], 'readwrite');
   for (const r of written) {
