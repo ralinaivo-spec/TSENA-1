@@ -9,6 +9,7 @@ import {
 import { lastRate, lineTotal, purchaseGoods, purchasePaid, purchaseQty, purchaseReceivedQty, purchaseTotal, purchaseTotalAr, toAr, type Supplier } from '../lib/purchases';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { ACCOUNTS, ACCOUNT_IDS, addMove, atFor, type AccountId } from '../lib/money';
 import { ProductForm, Thumb } from './Products';
 
 const money = (n: number, cur: 'RMB' | 'MGA') => cur === 'RMB' ? `${n.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} ¥` : fmtAr(n);
@@ -219,7 +220,7 @@ function PurchaseDetail({ id }: { id: string }) {
               {p.payments.map((x) => (
                 <li key={x.id} className="list-item" style={{ padding: '10px 0' }}>
                   <div className="list-item-main"><strong className="num">{money(x.amount, x.currency)}</strong><p className="small muted">{fmtDate(x.date)} · {x.method}{x.note ? ` · ${x.note}` : ''}</p></div>
-                  {can('purchases.manage') && <IconButton icon="trash" label="Supprimer le paiement" onClick={async () => { await save('purchases', { id: p.id, payments: p.payments.filter((y) => y.id !== x.id) }); }} />}
+                  {can('purchases.manage') && <IconButton icon="trash" label="Supprimer le paiement" onClick={async () => { if ((x as any).moveId) await remove('cashMoves', (x as any).moveId); await save('purchases', { id: p.id, payments: p.payments.filter((y) => y.id !== x.id) }); }} />}
                 </li>
               ))}
             </ul>
@@ -253,10 +254,17 @@ function PaymentModal({ purchase, onClose }: { purchase: Purchase; onClose: () =
   const [date, setDate] = useState(todayYmd());
   const [method, setMethod] = useState('Alipay / agent');
   const [note, setNote] = useState('');
+  const [account, setAccount] = useState<AccountId | ''>('');
+  const [ar, setAr] = useState('');
+  const arAuto = currency === 'MGA' ? parseNum(amount) || 0 : Math.round((parseNum(amount) || 0) * (purchase.rate || 0));
   return (
     <Modal title="Paiement au fournisseur" onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!parseNum(amount)} onClick={async () => {
-        const pay = { id: newId(), date, amount: parseNum(amount)!, currency, method, note: note.trim() || undefined };
+        const pay: any = { id: newId(), date, amount: parseNum(amount)!, currency, method, note: note.trim() || undefined };
+        if (account) {
+          const m = await addMove({ at: atFor(date), account, amount: -(parseNum(ar) || arAuto), type: 'purchase', label: `Paiement ${purchase.number}`, note: pay.note, refType: 'purchases', refId: purchase.id });
+          pay.moveId = m.id; pay.ar = parseNum(ar) || arAuto;
+        }
         await save('purchases', { id: purchase.id, payments: [...(purchase.payments || []), pay] });
         await audit('Paiement fournisseur', `${purchase.number} : ${money(pay.amount, currency)} (${method})`, 'purchases', purchase.id);
         toast('Paiement enregistré'); onClose();
@@ -269,6 +277,10 @@ function PaymentModal({ purchase, onClose }: { purchase: Purchase; onClose: () =
           <SelectField label="Moyen" value={method} onChange={setMethod} options={['Alipay / agent', 'Virement bancaire', 'Espèces', 'MVola', 'Orange Money', 'Airtel Money', 'Autre'].map((m) => ({ value: m, label: m }))} />
         </div>
         <TextField label="Note (facultatif)" value={note} onChange={setNote} />
+        <div className="grid-2">
+          <SelectField label="Sorti de la trésorerie" value={account} onChange={(v) => setAccount(v as AccountId | '')} options={[{ value: '', label: 'Non (payé hors caisse, ex. par un agent)' }, ...ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))]} />
+          {account && <TextField label="Montant sorti en Ariary" value={ar} onChange={setAr} inputMode="numeric" placeholder={String(arAuto)} hint={currency === 'RMB' ? `Au taux de la commande : ${arAuto.toLocaleString('fr-FR')} Ar` : undefined} />}
+        </div>
       </div>
     </Modal>
   );

@@ -4,6 +4,7 @@ import './styles.css';
 import { getMeta, newId, openDb, setMeta } from './lib/db';
 import { seedAccounts } from './lib/auth';
 import { seedZones } from './lib/orders';
+import { seedFinance } from './lib/money';
 import { startSync } from './lib/sync';
 import { App } from './App';
 
@@ -33,6 +34,7 @@ async function boot() {
     }
     await seedAccounts();
     await seedZones();
+    await seedFinance();
     startSync();
     root.render(<App />);
   } catch (e: any) {

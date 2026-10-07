@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.0, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.1, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -181,6 +181,8 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - **Opérations récurrentes** *(ajout)* : loyer mensuel, salaires, abonnement… générées automatiquement à l'échéance et à confirmer.
 - Pièce jointe (photo du reçu).
 
+- *Réalisé (étape 6)* : menu **Argent → Trésorerie** : soldes en temps réel (ventes payées en boutique + mouvements), dépenses avec photo du reçu, autres revenus, virements entre comptes (avec frais de retrait), apports et retraits du gérant, solde de départ de chaque compte, opérations récurrentes à confirmer. Les paiements aux fournisseurs chinois peuvent sortir d'un compte (montant en Ariary). Remboursement d'un client (échange moins cher) depuis la commande. Règlement des livreurs dans **Livraisons → Livreurs → « Régler »** (paiement partiel possible, historique) : les commandes réglées ne peuvent plus changer de livreur.
+
 ---
 
 ## 10. Clôture de journée
@@ -205,6 +207,8 @@ Un résumé court, envoyé en un clic (WhatsApp, Messenger, SMS, e-mail ou PDF) 
 - Encaissements par moyen : espèces / MVola / Orange Money / Airtel Money
 - Reste à recevoir des livreurs
 - Solde de caisse en fin de journée
+
+- *Réalisé (étape 6)* : menu **Argent → Clôture de journée** : chiffres du jour en direct, comptage de la caisse par billets (20 000 à 100 Ar + pièces), écart et motif obligatoire, vérification facultative des soldes mobile money, ce qui reste chez chaque livreur, validation. Les écarts sont enregistrés pour que la caisse du lendemain parte du montant compté ; seuls l'admin et le gérant peuvent saisir sur une journée clôturée ou la rouvrir (motif tracé). Récapitulatif envoyé en un clic par WhatsApp (numéro du patron dans Paramètres → Société), SMS, e-mail, partage, copie, impression ou PDF ; le bénéfice n'y figure que pour les utilisateurs autorisés à voir les marges.
 
 ---
 

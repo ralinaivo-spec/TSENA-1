@@ -428,7 +428,7 @@ function OrderDetail({ id }: { id: string }) {
           {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Remise en préparation')}>Revenir à « à préparer »</Button>}
           {o.status === 'out' && can('deliveries.manage') && <Button icon="inbox" onClick={() => setModal('return')}>Enregistrer le retour du livreur</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
-          {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>Paiement reçu</Button>}
+          {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
           {closed && o.status !== 'refused' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>Retour / échange</Button>}
           {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="quiet" onClick={() => setModal('cancel')}>Annuler</Button>}
         </div>
@@ -591,17 +591,19 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
 }
 
 function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const [amount, setAmount] = useState(String(Math.max(0, remaining(o))));
-  const [method, setMethod] = useState<PayMethod>('mvola');
+  const refund = remaining(o) < 0;
+  const [amount, setAmount] = useState(String(Math.abs(remaining(o))));
+  const [method, setMethod] = useState<PayMethod>(refund ? 'cash' : 'mvola');
   const [ref, setRef] = useState('');
   const [by, setBy] = useState<'shop' | 'courier'>('shop');
   return (
-    <Modal title={`Paiement reçu — ${o.number}`} onClose={onClose}
+    <Modal title={refund ? `Argent rendu au client — ${o.number}` : `Paiement reçu — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!parseNum(amount)} onClick={async () => {
-        await addPayment(o, { amount: parseNum(amount)!, method, ref: ref.trim() || undefined, receivedBy: by, courierId: by === 'courier' ? o.courierId : undefined });
-        toast('Paiement enregistré'); onClose();
+        await addPayment(o, { amount: refund ? -parseNum(amount)! : parseNum(amount)!, method, ref: ref.trim() || undefined, receivedBy: by, courierId: by === 'courier' ? o.courierId : undefined });
+        toast(refund ? 'Remboursement enregistré' : 'Paiement enregistré'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
+        {refund && <p className="small">Le client a trop payé (ex. échange contre un article moins cher) : ce montant sort de la caisse ou du compte choisi.</p>}
         <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
         <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}

@@ -16,7 +16,7 @@ Logiciel de gestion commerciale : achats (Chine), stock, ventes en ligne et en b
 | 3 | Fournisseurs, commandes Chine, paiements, réception avec facture transit, coût de revient | ✅ |
 | 4 | Clients, commandes, préparation, livraisons, livreurs, zones, retours, échanges | ✅ |
 | 5 | Vente sur place (comptoir), paiements, impression des tickets 58 mm, bons de livraison, feuilles de route | ✅ terminé |
-| 6 | Trésorerie, dépenses, comptes livreurs, clôture, récapitulatif | à venir |
+| 6 | Trésorerie, dépenses, comptes livreurs, clôture, récapitulatif | ✅ terminé |
 | 7 | Tableaux de bord, rapports, bénéfice / perte | à venir |
 | 8 | Sauvegardes avancées, réinitialisation par e-mail, outils | à venir |
 

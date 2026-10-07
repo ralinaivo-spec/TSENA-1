@@ -12,6 +12,8 @@ export interface Company extends BaseRecord {
   nif?: string;
   stat?: string;
   ticketFooter?: string;
+  bossPhone?: string;   // WhatsApp du patron (récapitulatif)
+  bossEmail?: string;
   autoLockMinutes: number;
   wholesaleMinQty?: number;
   hours?: Record<string, { open: string; close: string } | null>; // clé 0 = dimanche … 6 = samedi
@@ -82,7 +84,7 @@ export function useApplyAppearance() {
 }
 
 /** Réduit une image (logo) pour la stocker légèrement. */
-export function resizeImage(file: File, max = 256): Promise<string> {
+export function resizeImage(file: File, max = 256, type: 'image/png' | 'image/jpeg' = 'image/png'): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -91,7 +93,9 @@ export function resizeImage(file: File, max = 256): Promise<string> {
       c.width = Math.round(img.width * scale);
       c.height = Math.round(img.height * scale);
       c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/png'));
+      const ctx = c.getContext('2d')!;
+      if (type === 'image/jpeg') { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height); }
+      resolve(c.toDataURL(type, 0.72));
       URL.revokeObjectURL(img.src);
     };
     img.onerror = () => reject(new Error("Image illisible. Choisissez un fichier PNG ou JPG."));

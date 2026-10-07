@@ -4,13 +4,14 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
 import { courierAccount, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, TextField, Toggle, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
 import { useCompany } from '../lib/settings';
 import { deliveryNoteDoc, joinDocs, routeSheetDoc } from '../lib/print';
 import { PrintButton } from '../ui/print';
+import { ACCOUNTS, ACCOUNT_IDS, courierBalance, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 
 const TABS = [
   { key: 'a-livrer', label: 'À livrer', perm: 'orders.dispatch' },
@@ -138,6 +139,8 @@ function Couriers() {
   const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const [edit, setEdit] = useState<Courier | 'new' | null>(null);
   const [open, setOpen] = useState<Courier | null>(null);
+  const [settle, setSettle] = useState<Courier | null>(null);
+  useTable<CourierSettlement>('courierSettlements');
   const sorted = [...couriers].sort((a, b) => Number(b.active !== false) - Number(a.active !== false) || a.name.localeCompare(b.name));
   return (
     <>
@@ -149,10 +152,11 @@ function Couriers() {
         {sorted.length === 0 ? <Empty icon="truck" title="Aucun livreur" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde</th><th></th></tr></thead>
+              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">Solde à ce jour</th><th></th></tr></thead>
               <tbody>
                 {sorted.map((c) => {
                   const a = courierAccount(c.id, period.from, period.to);
+                  const bal = courierBalance(c.id).due;
                   return (
                     <tr key={c.id} style={{ opacity: c.active === false ? .55 : 1 }} className="row-link" onClick={() => setOpen(c)}>
                       <td><strong>{c.name}</strong><div className="small muted">{[fmtPhone(c.phone), (c.zoneIds || []).map((z) => zones.find((x) => x.id === z)?.name).filter(Boolean).join(', ')].filter(Boolean).join(' · ')}</div></td>
@@ -161,7 +165,8 @@ function Couriers() {
                       <td className="t-num">{fmtAr(a.collected)}</td>
                       <td className="t-num">{fmtAr(a.fees)}</td>
                       <td className={`t-num ${a.due > 0 ? '' : a.due < 0 ? 'neg' : ''}`}><strong>{a.due > 0 ? `rend ${fmtAr(a.due)}` : a.due < 0 ? `à lui verser ${fmtAr(-a.due)}` : '—'}</strong></td>
-                      <td className="t-actions">{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</td>
+                      <td className={`t-num ${bal < 0 ? 'neg' : ''}`}><strong>{bal > 0 ? `doit ${fmtAr(bal)}` : bal < 0 ? `à lui verser ${fmtAr(-bal)}` : '✓ à jour'}</strong></td>
+                      <td className="t-actions"><div className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>{can('couriers.settle') && <Button variant="ghost" onClick={(e) => { e.stopPropagation(); setSettle(c); }}>Régler</Button>}{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</div></td>
                     </tr>
                   );
                 })}
@@ -170,10 +175,65 @@ function Couriers() {
           </div>
         )}
       </div>
-      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). Les règlements seront enregistrés avec la trésorerie (étape 6).</p>
+      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « Solde à ce jour » tient compte des règlements déjà faits : c’est ce qu’il faut régler maintenant.</p>
       {edit && <CourierForm courier={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
       {open && <CourierOrders courier={open} onClose={() => setOpen(null)} />}
+      {settle && <SettleModal courier={settle} onClose={() => setSettle(null)} />}
     </>
+  );
+}
+
+/** Règlement d'un livreur (admin) : il remet l'argent encaissé moins ses frais, ou la boutique lui verse ses frais. */
+function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => void }) {
+  useTable<Order>('orders');
+  const settlements = useTable<CourierSettlement>('courierSettlements').filter((s) => s.courierId === courier.id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
+  const b = courierBalance(courier.id);
+  const owesShop = b.due >= 0;
+  const [amount, setAmount] = useState(String(Math.abs(b.due) || ''));
+  const [account, setAccount] = useState<AccountId>('cash');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const n = parseNum(amount) || 0;
+  const closed = b.unsettled.filter((o) => ['delivered', 'partial', 'refused'].includes(o.status));
+  const after = owesShop ? b.due - n : b.due + n;
+  const collectedOf = (o: Order) => (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === courier.id).reduce((s, p) => s + p.amount, 0);
+  return (
+    <Modal title={`Règlement — ${courier.name}`} onClose={onClose} wide
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n && !closed.length} onClick={async () => {
+        setBusy(true);
+        try { await settleCourier(courier, owesShop ? n : -n, account, note.trim() || undefined); toast('Règlement enregistré'); onClose(); } finally { setBusy(false); }
+      }}>Valider le règlement</Button></>}>
+      <div className="stack">
+        <div className="stat-grid">
+          <div className="card stat"><span className="small muted">Argent encaissé (total)</span><strong className="stat-value num">{fmtAr(b.collected)}</strong></div>
+          <div className="card stat"><span className="small muted">Frais de livraison gagnés</span><strong className="stat-value num">{fmtAr(b.fees)}</strong></div>
+          <div className="card stat"><span className="small muted">Déjà réglé</span><strong className="stat-value num">{fmtAr(b.settled)}</strong></div>
+          <div className="card stat"><span className="small muted">{owesShop ? 'Il doit rendre' : 'La boutique lui doit'}</span><strong className={`stat-value num ${owesShop ? '' : 'neg'}`}>{fmtAr(Math.abs(b.due))}</strong></div>
+        </div>
+        {closed.length > 0 && (
+          <div className="table-wrap"><table className="table">
+            <thead><tr><th>Commande non réglée</th><th className="t-num">Encaissé</th><th className="t-num">Frais</th></tr></thead>
+            <tbody>{closed.map((o) => <tr key={o.id}><td>{o.number} · {orderLabel(o)} <span className="muted small">({o.status === 'refused' ? 'refusée' : 'livrée'})</span></td><td className="t-num">{fmtAr(collectedOf(o))}</td><td className="t-num">{fmtAr(o.feeCharged ?? 0)}</td></tr>)}</tbody>
+          </table></div>
+        )}
+        {b.outOrders > 0 && <div className="notice"><Icon name="truck" /><span>Encore dehors : {b.outOrders} commande(s), {b.outPieces} pièce(s). Elles seront réglées après le retour du livreur.</span></div>}
+        <div className="grid-2">
+          <TextField label={owesShop ? 'Montant remis par le livreur (Ar)' : 'Montant versé au livreur (Ar)'} value={amount} onChange={setAmount} inputMode="numeric" />
+          <SelectField label={owesShop ? 'Argent reçu sur' : 'Payé depuis'} value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
+        </div>
+        <TextField label="Note (facultatif)" value={note} onChange={setNote} />
+        <p className="small">{after === 0 ? '✓ Après ce règlement, le livreur sera à jour.' : after > 0 ? `Il restera ${fmtAr(after)} à rendre par le livreur.` : `La boutique lui devra encore ${fmtAr(-after)}.`}</p>
+        <p className="small muted">Après validation, les commandes terminées ci-dessus sont marquées « réglées » : elles ne pourront plus changer de livreur.</p>
+        {settlements.length > 0 && (
+          <div className="stack-s">
+            <h3>Derniers règlements</h3>
+            <ul className="list">{settlements.map((s) => (
+              <li key={s.id} className="list-item"><div className="list-item-main"><span className="list-item-title">{s.amount >= 0 ? `Remis ${fmtAr(s.amount)}` : `Versé ${fmtAr(-s.amount)}`}</span><p className="small muted">{fmtDateTime(s.at)} · {ACCOUNTS[s.account]} · solde avant {fmtAr(s.balanceBefore)} · {s.orderIds.length} commande(s){s.userName ? ` · ${s.userName}` : ''}{s.note ? ` · ${s.note}` : ''}</p></div></li>
+            ))}</ul>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 

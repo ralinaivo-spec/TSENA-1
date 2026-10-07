@@ -76,6 +76,8 @@ function CompanyTab() {
         <TextField label="Adresse" value={form.address ?? ''} onChange={set('address')} />
         <TextField label="NIF" value={form.nif ?? ''} onChange={set('nif')} />
         <TextField label="STAT" value={form.stat ?? ''} onChange={set('stat')} />
+        <TextField label="WhatsApp du patron (récapitulatif)" value={form.bossPhone ?? ''} onChange={set('bossPhone')} type="tel" placeholder="034 00 000 00" />
+        <TextField label="E-mail du patron (facultatif)" value={form.bossEmail ?? ''} onChange={set('bossEmail')} type="email" />
       </div>
       <TextField label="Message en bas du ticket de caisse" value={form.ticketFooter ?? ''} onChange={set('ticketFooter')} />
       <SelectField label="Verrouillage automatique après inactivité" value={String(form.autoLockMinutes)} onChange={(v) => setForm({ ...form, autoLockMinutes: Number(v) })}
