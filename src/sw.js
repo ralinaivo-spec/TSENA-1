@@ -40,10 +40,29 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // cloud (Supabase) : jamais mis en cache
   if (url.pathname.endsWith('/version.json')) return;
 
-  // Pages : toujours l'application en cache (fonctionne hors ligne).
+  // Pages : la version en ligne d'abord (évite une page périmée après une mise à jour), sinon celle du cache.
   if (req.mode === 'navigate') {
-    event.respondWith(caches.match('./index.html').then((r) => r || fetch(req)));
+    event.respondWith((async () => {
+      const cache = await caches.open(APP_CACHE);
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(req, { signal: ctrl.signal, cache: 'no-store' });
+        clearTimeout(t);
+        if (res.ok) { cache.put('./index.html', res.clone()); return res; }
+        throw new Error('HTTP ' + res.status);
+      } catch {
+        return (await cache.match('./index.html')) || (await caches.match('./index.html')) || fetch(req);
+      }
+    })());
     return;
   }
-  event.respondWith(caches.match(req).then((r) => r || fetch(req)));
+  // Fichiers de l'application : cache d'abord, sinon réseau (et mise en cache).
+  event.respondWith((async () => {
+    const hit = await caches.match(req);
+    if (hit) return hit;
+    const res = await fetch(req);
+    if (res.ok && url.pathname.includes('/assets/')) (await caches.open(APP_CACHE)).put(req, res.clone());
+    return res;
+  })());
 });
