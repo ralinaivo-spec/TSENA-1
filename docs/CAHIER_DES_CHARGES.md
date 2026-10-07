@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.1, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.2, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -181,34 +181,28 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - **Opérations récurrentes** *(ajout)* : loyer mensuel, salaires, abonnement… générées automatiquement à l'échéance et à confirmer.
 - Pièce jointe (photo du reçu).
 
-- *Réalisé (étape 6)* : menu **Argent → Trésorerie** : soldes en temps réel (ventes payées en boutique + mouvements), dépenses avec photo du reçu, autres revenus, virements entre comptes (avec frais de retrait), apports et retraits du gérant, solde de départ de chaque compte, opérations récurrentes à confirmer. Les paiements aux fournisseurs chinois peuvent sortir d'un compte (montant en Ariary). Remboursement d'un client (échange moins cher) depuis la commande. Règlement des livreurs dans **Livraisons → Livreurs → « Régler »** (paiement partiel possible, historique) : les commandes réglées ne peuvent plus changer de livreur.
+- *Réalisé (étape 6)* : menu **Argent → Trésorerie** : soldes en temps réel (ventes payées en boutique + mouvements), dépenses avec photo du reçu, autres revenus, virements entre comptes (avec frais de retrait), apports et retraits du gérant, solde de départ de chaque compte, opérations récurrentes à confirmer. Les paiements aux fournisseurs chinois peuvent sortir d'un compte (montant en Ariary). Remboursement d'un client (échange moins cher) depuis la commande. Versement des livreurs dans **Livraisons → Livreurs → « Versement »** : l'admin **coche les livraisons réellement effectuées** ; seules celles-ci sont comptées dans le montant à verser, les autres restent sur le compte du livreur et sont **reportées automatiquement** au versement suivant. Une livraison cochée encore « à confirmer » est marquée livrée ; une livraison pas faite, refusée ou avec retour se corrige par « Retour / anomalie ». Versement partiel possible (le reste est reporté), historique gardé ; les commandes versées ne peuvent plus changer de livreur. **Ticket des livraisons** (58 mm) à remettre au livreur : pour chaque commande, client, lieu, articles, ce que le client paie, frais, à verser, cases « Livré / Pas livré / Retour » et remarque ; il le rapporte au moment du versement.
 
 ---
 
-## 10. Clôture de journée
+## 10. Récapitulatif journalier et hebdomadaire *(remplace la « clôture de caisse », modifié le 07/10/2026)*
 
-### 10.1 Règle de clôture (votre point 14, reformulé)
-- À la fermeture, tout article **en cours de livraison chez un livreur** (hors articles « choix ») est **compté comme vendu ce jour-là**.
-- Les articles « choix » encore chez le livreur restent dans le stock « Chez livreur ».
-- Si le lendemain un de ces articles revient : il est enregistré comme **« Retour sur vente du [date] »**, et apparaît comme tel dans le rapport du jour où il revient (le rapport de la veille n'est pas modifié).
+Les livreurs versent généralement le lendemain (ou en fin de semaine) : il n'y a donc **pas de comptage des billets** ni de verrouillage de la journée. À la place :
 
-### 10.2 Procédure de clôture *(ajout : « Z de caisse »)*
-1. Comptage des espèces dans la caisse (par billets) → comparaison avec le théorique → **écart** affiché et justifié.
-2. Vérification des soldes mobile money.
-3. Liste de ce qui reste chez chaque livreur (argent et articles).
-4. Validation : la journée est verrouillée (corrections seulement par l'admin, tracées).
+### 10.1 Récapitulatif journalier (menu Argent → Récapitulatifs → Journée)
+- **Ventes sur place** (liste, heure, paiement, montant).
+- **Livraisons du jour** par livreur : commande, lieu, état (pas encore confirmée / livrée / refusée / versée), ce que le client paie, frais du livreur, **montant à verser**.
+- **Comptes livreurs** : livraisons du jour, à verser pour le jour, déjà versé, **compte à ce jour** (y compris les livraisons non versées des jours précédents).
+- **Paiements reçus** par compte (espèces boutique, MVola, Orange Money, Airtel Money, versements des livreurs), **dépenses** et **autres mouvements** (virements, apports, retraits, autres revenus, paiements fournisseurs).
+- Soldes en fin de journée et **espèces attendues** (caisse + à verser par les livreurs) ; bénéfice brut pour les utilisateurs autorisés.
+- Règle de comptage inchangée : un article parti chez un livreur (hors choix) est vendu le jour du départ ; ce qui revient est un retour le jour du retour.
 
-### 10.3 Récapitulatif pour le boss
-Un résumé court, envoyé en un clic (WhatsApp, Messenger, SMS, e-mail ou PDF) :
-- Ventes du jour (nombre, montant), dont boutique / en ligne
-- Retours du jour
-- Dépenses du jour
-- **Bénéfice brut du jour**
-- Encaissements par moyen : espèces / MVola / Orange Money / Airtel Money
-- Reste à recevoir des livreurs
-- Solde de caisse en fin de journée
+### 10.2 Récapitulatif hebdomadaire (lundi → samedi)
+- Tableau **jour par jour** : sur place, livraisons, total des ventes, espèces reçues, mobile money, versements des livreurs, dépenses ; total de la semaine (le dimanche est ajouté seulement s'il y a eu de l'activité).
+- **Comptes livreurs de la semaine** et **total à verser en espèces** par les livreurs en fin de semaine.
 
-- *Réalisé (étape 6)* : menu **Argent → Clôture de journée** : chiffres du jour en direct, comptage de la caisse par billets (20 000 à 100 Ar + pièces), écart et motif obligatoire, vérification facultative des soldes mobile money, ce qui reste chez chaque livreur, validation. Les écarts sont enregistrés pour que la caisse du lendemain parte du montant compté ; seuls l'admin et le gérant peuvent saisir sur une journée clôturée ou la rouvrir (motif tracé). Récapitulatif envoyé en un clic par WhatsApp (numéro du patron dans Paramètres → Société), SMS, e-mail, partage, copie, impression ou PDF ; le bénéfice n'y figure que pour les utilisateurs autorisés à voir les marges.
+### 10.3 Envoi au responsable
+Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…), copie, impression 58 mm ou PDF.
 
 ---
 

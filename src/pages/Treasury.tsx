@@ -5,7 +5,7 @@ import { save, useTable } from '../lib/db';
 import { fmtAr, parseNum } from '../lib/catalog';
 import { resizeImage } from '../lib/settings';
 import {
-  ACCOUNTS, ACCOUNT_IDS, MOVE_TYPES, addMove, addTransfer, atFor, balances, confirmRecurring, dayOf, deleteMove, dueRecurring, flows, isClosedDay, skipRecurring, today,
+  ACCOUNTS, ACCOUNT_IDS, MOVE_TYPES, addMove, addTransfer, atFor, balances, confirmRecurring, dayOf, deleteMove, dueRecurring, flows, skipRecurring, today,
   type AccountId, type CashMove, type FinanceCategory, type Flow, type MoveType, type Recurring,
 } from '../lib/money';
 import type { Order } from '../lib/orders';
@@ -19,11 +19,9 @@ const TABS = [
   { key: 'categories', label: 'Catégories et récurrentes' },
 ];
 
-/** Jours clôturés : seuls l'admin et le gérant peuvent encore y saisir ou supprimer. */
+/** Plus de clôture verrouillée : toutes les journées restent modifiables (traçées dans le journal). */
 export function useDayLock() {
-  const can = useCan();
-  useTable('closings');
-  return (ymd: string) => isClosedDay(ymd) && !can('users.manage');
+  return (_ymd: string) => false;
 }
 
 export function TreasuryPage() {
@@ -88,7 +86,7 @@ function Accounts() {
       <div className="card card-flush">
         {list.length === 0 ? <Empty icon="list" title="Aucun mouvement sur la période" /> : (
           <ul className="list">
-            {list.slice(0, 300).map((f) => <FlowRow key={f.id + f.account} f={f} onDelete={f.move && can('expenses.manage') && !locked(dayOf(f.at)) && f.move.type !== 'courier_settlement' && f.move.type !== 'gap' ? () => setDel(f.move!) : undefined} />)}
+            {list.slice(0, 300).map((f) => <FlowRow key={f.id + f.account} f={f} onDelete={f.move && can('expenses.manage') && !locked(dayOf(f.at)) && f.move.type !== 'courier_settlement' ? () => setDel(f.move!) : undefined} />)}
           </ul>
         )}
       </div>

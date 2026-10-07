@@ -11,7 +11,7 @@ import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
 import { useCompany } from '../lib/settings';
 import { deliveryNoteDoc, joinDocs, routeSheetDoc } from '../lib/print';
 import { PrintButton } from '../ui/print';
-import { ACCOUNTS, ACCOUNT_IDS, courierBalance, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, courierBalance, deliveryNet, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 
 const TABS = [
   { key: 'a-livrer', label: 'À livrer', perm: 'orders.dispatch' },
@@ -101,8 +101,8 @@ function OutNow() {
             <div className="row-between card-pad">
               <div><h3>{c?.name || 'Livreur ?'}</h3><p className="small muted">{list.length} commande(s) · {fmtNum(list.reduce((s, o) => s + o.lines.reduce((t, l) => t + l.qty, 0), 0))} article(s) dehors</p></div>
               <div className="row" style={{ alignItems: 'center' }}>
-                <PrintButton label="Feuille de route" docs={[
-                  { key: 'route', label: 'Feuille de route', build: () => routeSheetDoc(c, list, company) },
+                <PrintButton label="Ticket livreur" docs={[
+                  { key: 'route', label: 'Ticket des livraisons', build: () => routeSheetDoc(c, list, company) },
                   { key: 'bons', label: `Bons de livraison (${list.length})`, build: () => joinDocs(`Bons de livraison ${c?.name ?? ''}`, list.map((o) => deliveryNoteDoc(o, company))) },
                 ]} />
                 <div className="total-box"><span className="small muted">À encaisser</span><strong className="num">{fmtAr(list.reduce((s, o) => s + Math.max(0, remaining(o)), 0))}</strong></div>
@@ -133,6 +133,7 @@ function OutNow() {
 
 function Couriers() {
   const can = useCan();
+  const company = useCompany();
   const couriers = useTable<Courier>('couriers');
   useTable<Order>('orders');
   const zones = useTable<Zone>('zones');
@@ -152,7 +153,7 @@ function Couriers() {
         {sorted.length === 0 ? <Empty icon="truck" title="Aucun livreur" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">Solde à ce jour</th><th></th></tr></thead>
+              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">À verser (compte)</th><th></th></tr></thead>
               <tbody>
                 {sorted.map((c) => {
                   const a = courierAccount(c.id, period.from, period.to);
@@ -166,7 +167,7 @@ function Couriers() {
                       <td className="t-num">{fmtAr(a.fees)}</td>
                       <td className={`t-num ${a.due > 0 ? '' : a.due < 0 ? 'neg' : ''}`}><strong>{a.due > 0 ? `rend ${fmtAr(a.due)}` : a.due < 0 ? `à lui verser ${fmtAr(-a.due)}` : '—'}</strong></td>
                       <td className={`t-num ${bal < 0 ? 'neg' : ''}`}><strong>{bal > 0 ? `doit ${fmtAr(bal)}` : bal < 0 ? `à lui verser ${fmtAr(-bal)}` : '✓ à jour'}</strong></td>
-                      <td className="t-actions"><div className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>{can('couriers.settle') && <Button variant="ghost" onClick={(e) => { e.stopPropagation(); setSettle(c); }}>Régler</Button>}{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</div></td>
+                      <td className="t-actions"><div className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}><span onClick={(e) => e.stopPropagation()}><PrintButton variant="quiet" label="Ticket" docs={[{ key: 'liste', label: 'Livraisons à verser', build: () => routeSheetDoc(c, courierBalance(c.id).pending, company, 'LIVRAISONS À VERSER') }]} /></span>{can('couriers.settle') && <Button variant="ghost" onClick={(e) => { e.stopPropagation(); setSettle(c); }}>Versement</Button>}{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</div></td>
                     </tr>
                   );
                 })}
@@ -175,7 +176,7 @@ function Couriers() {
           </div>
         )}
       </div>
-      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « Solde à ce jour » tient compte des règlements déjà faits : c’est ce qu’il faut régler maintenant.</p>
+      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « À verser (compte) » : toutes les livraisons pas encore versées + le reste des versements précédents. « Ticket » imprime la liste à remettre au livreur ; « Versement » permet de cocher les livraisons effectuées.</p>
       {edit && <CourierForm courier={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
       {open && <CourierOrders courier={open} onClose={() => setOpen(null)} />}
       {settle && <SettleModal courier={settle} onClose={() => setSettle(null)} />}
@@ -183,56 +184,86 @@ function Couriers() {
   );
 }
 
-/** Règlement d'un livreur (admin) : il remet l'argent encaissé moins ses frais, ou la boutique lui verse ses frais. */
+/**
+ * Versement d'un livreur (admin) : on coche les livraisons réellement effectuées. Seules celles-ci sont réglées ;
+ * les autres restent sur son compte et passent automatiquement au versement suivant.
+ */
 function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => void }) {
+  const company = useCompany();
   useTable<Order>('orders');
   const settlements = useTable<CourierSettlement>('courierSettlements').filter((s) => s.courierId === courier.id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 10);
   const b = courierBalance(courier.id);
-  const owesShop = b.due >= 0;
-  const [amount, setAmount] = useState(String(Math.abs(b.due) || ''));
+  const [checked, setChecked] = useState<string[]>([]);
+  const [amount, setAmount] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountId>('cash');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const n = parseNum(amount) || 0;
-  const closed = b.unsettled.filter((o) => ['delivered', 'partial', 'refused'].includes(o.status));
-  const after = owesShop ? b.due - n : b.due + n;
-  const collectedOf = (o: Order) => (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === courier.id).reduce((s, p) => s + p.amount, 0);
+  const [ret, setRet] = useState<Order | null>(null);
+  const checkable = (o: Order) => !(o.status === 'out' && o.lines.some((l) => l.isChoice));
+  const sel = b.pending.filter((o) => checked.includes(o.id));
+  const selNet = sel.reduce((t, o) => t + deliveryNet(o).net, 0);
+  const expected = b.carry + selNet;
+  const n = amount == null ? Math.abs(expected) : parseNum(amount) || 0;
+  const owesShop = expected >= 0;
+  const after = owesShop ? expected - n : expected + n;
+  const toggle = (id: string) => setChecked(checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id]);
   return (
-    <Modal title={`Règlement — ${courier.name}`} onClose={onClose} wide
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n && !closed.length} onClick={async () => {
-        setBusy(true);
-        try { await settleCourier(courier, owesShop ? n : -n, account, note.trim() || undefined); toast('Règlement enregistré'); onClose(); } finally { setBusy(false); }
-      }}>Valider le règlement</Button></>}>
+    <Modal title={`Versement — ${courier.name}`} onClose={onClose} wide
+      footer={<>
+        <PrintButton label="Ticket des livraisons" docs={[{ key: 'liste', label: 'Livraisons à verser', build: () => routeSheetDoc(courier, b.pending, company, 'LIVRAISONS À VERSER') }]} />
+        <Button variant="ghost" onClick={onClose}>Annuler</Button>
+        <Button busy={busy} disabled={!sel.length && !n} onClick={async () => {
+          setBusy(true);
+          try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined); toast('Versement enregistré'); onClose(); } finally { setBusy(false); }
+        }}>Valider le versement</Button></>}>
       <div className="stack">
-        <div className="stat-grid">
-          <div className="card stat"><span className="small muted">Argent encaissé (total)</span><strong className="stat-value num">{fmtAr(b.collected)}</strong></div>
-          <div className="card stat"><span className="small muted">Frais de livraison gagnés</span><strong className="stat-value num">{fmtAr(b.fees)}</strong></div>
-          <div className="card stat"><span className="small muted">Déjà réglé</span><strong className="stat-value num">{fmtAr(b.settled)}</strong></div>
-          <div className="card stat"><span className="small muted">{owesShop ? 'Il doit rendre' : 'La boutique lui doit'}</span><strong className={`stat-value num ${owesShop ? '' : 'neg'}`}>{fmtAr(Math.abs(b.due))}</strong></div>
-        </div>
-        {closed.length > 0 && (
+        <p className="small">Cochez les livraisons <strong>réellement effectuées</strong> (d’après le ticket rapporté par le livreur). Les autres restent sur son compte et seront reportées au prochain versement. Pour une livraison pas faite, refusée ou un retour, touchez « Retour / anomalie ».</p>
+        {b.pending.length === 0 ? <Empty icon="truck" title="Aucune livraison en attente de versement" /> : (
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>Commande non réglée</th><th className="t-num">Encaissé</th><th className="t-num">Frais</th></tr></thead>
-            <tbody>{closed.map((o) => <tr key={o.id}><td>{o.number} · {orderLabel(o)} <span className="muted small">({o.status === 'refused' ? 'refusée' : 'livrée'})</span></td><td className="t-num">{fmtAr(collectedOf(o))}</td><td className="t-num">{fmtAr(o.feeCharged ?? 0)}</td></tr>)}</tbody>
+            <thead><tr>
+              <th style={{ width: 40 }}><input type="checkbox" className="perm-check" aria-label="Tout cocher" checked={sel.length > 0 && sel.length === b.pending.filter(checkable).length} onChange={(e) => setChecked(e.target.checked ? b.pending.filter(checkable).map((o) => o.id) : [])} /></th>
+              <th>Livraison</th><th>État</th><th className="t-num">Client paie</th><th className="t-num">Frais</th><th className="t-num">À verser</th><th></th>
+            </tr></thead>
+            <tbody>
+              {b.pending.map((o) => {
+                const d = deliveryNet(o);
+                const ok = checkable(o);
+                return (
+                  <tr key={o.id} className={checked.includes(o.id) ? 'is-checked' : ''}>
+                    <td><input type="checkbox" className="perm-check" disabled={!ok} checked={checked.includes(o.id)} onChange={() => toggle(o.id)} aria-label={`Livraison ${o.number} effectuée`} /></td>
+                    <td><strong>{o.number}</strong> <span className="small muted">{orderLabel(o)} · {get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · partie le {fmtDateTime(o.dispatchedAt)}</span></td>
+                    <td>{o.status === 'out' ? <Badge tone="warn">{ok ? 'À confirmer' : 'Choix à préciser'}</Badge> : <Badge tone={o.status === 'refused' ? 'danger' : 'ok'}>{o.status === 'refused' ? 'Refusée' : o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}</td>
+                    <td className="t-num">{fmtAr(d.collect)}</td><td className="t-num">{fmtAr(d.fee)}</td><td className="t-num"><strong>{fmtAr(d.net)}</strong></td>
+                    <td>{o.status === 'out' && <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </table></div>
         )}
-        {b.outOrders > 0 && <div className="notice"><Icon name="truck" /><span>Encore dehors : {b.outOrders} commande(s), {b.outPieces} pièce(s). Elles seront réglées après le retour du livreur.</span></div>}
+        <div className="stat-grid">
+          {b.carry !== 0 && <div className="card stat"><span className="small muted">Reste des versements précédents</span><strong className={`stat-value num ${b.carry < 0 ? 'neg' : ''}`}>{fmtAr(b.carry)}</strong></div>}
+          <div className="card stat"><span className="small muted">Livraisons cochées ({sel.length})</span><strong className="stat-value num">{fmtAr(selNet)}</strong></div>
+          <div className="card stat stat-strong"><span className="small muted">{owesShop ? 'Le livreur doit verser' : 'La boutique lui doit'}</span><strong className="stat-value num">{fmtAr(Math.abs(expected))}</strong></div>
+          <div className="card stat"><span className="small muted">Reporté (non cochées)</span><strong className="stat-value num">{fmtAr(b.pendingNet - selNet)}</strong></div>
+        </div>
         <div className="grid-2">
-          <TextField label={owesShop ? 'Montant remis par le livreur (Ar)' : 'Montant versé au livreur (Ar)'} value={amount} onChange={setAmount} inputMode="numeric" />
+          <TextField label={owesShop ? 'Montant versé par le livreur (Ar)' : 'Montant versé au livreur (Ar)'} value={amount ?? String(Math.abs(expected) || '')} onChange={setAmount} inputMode="numeric" />
           <SelectField label={owesShop ? 'Argent reçu sur' : 'Payé depuis'} value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
         </div>
-        <TextField label="Note (facultatif)" value={note} onChange={setNote} />
-        <p className="small">{after === 0 ? '✓ Après ce règlement, le livreur sera à jour.' : after > 0 ? `Il restera ${fmtAr(after)} à rendre par le livreur.` : `La boutique lui devra encore ${fmtAr(-after)}.`}</p>
-        <p className="small muted">Après validation, les commandes terminées ci-dessus sont marquées « réglées » : elles ne pourront plus changer de livreur.</p>
+        <TextField label="Note (remarques du ticket, facultatif)" value={note} onChange={setNote} />
+        <p className="small">{after === 0 ? '✓ Après ce versement, les livraisons cochées sont soldées.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (ajouté au prochain versement).` : `La boutique lui devra encore ${fmtAr(-after)}.`}</p>
+        {sel.some((o) => o.status === 'out') && <p className="small muted">Les livraisons cochées encore « à confirmer » seront marquées livrées : le client a payé au livreur tout ce qui restait.</p>}
         {settlements.length > 0 && (
           <div className="stack-s">
-            <h3>Derniers règlements</h3>
+            <h3>Derniers versements</h3>
             <ul className="list">{settlements.map((s) => (
-              <li key={s.id} className="list-item"><div className="list-item-main"><span className="list-item-title">{s.amount >= 0 ? `Remis ${fmtAr(s.amount)}` : `Versé ${fmtAr(-s.amount)}`}</span><p className="small muted">{fmtDateTime(s.at)} · {ACCOUNTS[s.account]} · solde avant {fmtAr(s.balanceBefore)} · {s.orderIds.length} commande(s){s.userName ? ` · ${s.userName}` : ''}{s.note ? ` · ${s.note}` : ''}</p></div></li>
+              <li key={s.id} className="list-item"><div className="list-item-main"><span className="list-item-title">{s.amount >= 0 ? `Versé ${fmtAr(s.amount)}` : `Payé au livreur ${fmtAr(-s.amount)}`}</span><p className="small muted">{fmtDateTime(s.at)} · {ACCOUNTS[s.account]} · attendu {fmtAr(s.balanceBefore)} · {s.orderIds.length} livraison(s){s.userName ? ` · ${s.userName}` : ''}{s.note ? ` · ${s.note}` : ''}</p></div></li>
             ))}</ul>
           </div>
         )}
       </div>
+      {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
     </Modal>
   );
 }

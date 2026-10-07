@@ -3,7 +3,7 @@
 import { all, applyRemote, get, newId, nowIso, remove, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { variantCost, type Variant } from './catalog';
-import { isWalkIn, keptTotal, sellingLines, type Courier, type Order, type PayMethod } from './orders';
+import { isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
 // ---------- Comptes ----------
 export type AccountId = PayMethod | 'bank';
@@ -34,20 +34,6 @@ export interface CashMove extends BaseRecord {
 export interface FinanceCategory extends BaseRecord { kind: 'expense' | 'income'; name: string; order?: number; active: boolean }
 export interface Recurring extends BaseRecord { kind: 'expense' | 'income'; label: string; categoryId: string; account: AccountId; amount: number; day: number; startMonth: string; active: boolean; skipped?: string[] }
 export interface CourierSettlement extends BaseRecord { courierId: string; at: string; amount: number; account: AccountId; balanceBefore: number; orderIds: string[]; note?: string; userName?: string }
-export interface Closing extends BaseRecord {
-  date: string;
-  cash: { notes: Record<string, number>; coins: number; counted: number; theoretical: number; gap: number; reason?: string };
-  mobile: Partial<Record<AccountId, { theoretical: number; actual?: number; gap?: number }>>;
-  stats: DayStats;
-  courierDue: { courierId: string; name: string; due: number; outOrders: number; outPieces: number }[];
-  gapMoveIds: string[];
-  closedBy?: string;
-  closedAt: string;
-}
-
-/** Billets et pièces de l'Ariary pour le comptage de la caisse. */
-export const NOTES = [20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-
 // ---------- Dates (heure de Madagascar = heure de l'appareil) ----------
 const pad = (n: number) => String(n).padStart(2, '0');
 export const dayOf = (iso?: string) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -163,83 +149,123 @@ export async function skipRecurring(d: { r: Recurring; period: string }) {
   await save('recurring', { id: d.r.id, skipped: [...(d.r.skipped || []), d.period] });
 }
 
-// ---------- Livreurs : solde et règlements ----------
-/** Solde d'un livreur à une date : argent encaissé − frais gagnés − règlements (+ : il doit à la boutique). */
-export function courierBalance(courierId: string, until?: string) {
-  let collected = 0, fees = 0, settled = 0, outOrders = 0, outPieces = 0;
-  const unsettled: Order[] = [];
-  for (const o of all<Order>('orders')) {
-    if (o.courierId !== courierId) continue;
-    for (const p of o.payments || []) if (p.receivedBy === 'courier' && p.courierId === courierId && (!until || p.at <= until)) collected += p.amount;
-    const closed = ['delivered', 'partial', 'refused'].includes(o.status);
-    if (closed && o.returnedAt && (!until || o.returnedAt <= until)) fees += o.feeCharged ?? 0;
-    if (o.status === 'out') { outOrders++; outPieces += o.lines.reduce((s, l) => s + l.qty, 0); }
-    if (!o.courierSettledAt && (closed || (o.payments || []).some((p) => p.receivedBy === 'courier'))) unsettled.push(o);
-  }
-  for (const s of all<CourierSettlement>('courierSettlements')) if (s.courierId === courierId && (!until || s.at <= until)) settled += s.amount;
-  return { collected, fees, settled, due: collected - fees - settled, outOrders, outPieces, unsettled };
+// ---------- Livreurs : compte et versements ----------
+const CLOSED = ['delivered', 'partial', 'refused'];
+/**
+ * Ce qu'une livraison doit rapporter à la boutique par le livreur : argent encaissé auprès du client − frais du livreur.
+ * Commande encore dehors : ce qu'il doit encaisser (reste à payer, frais compris) − ses frais prévus.
+ */
+export function deliveryNet(o: Order) {
+  const got = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((t, p) => t + p.amount, 0);
+  if (CLOSED.includes(o.status)) { const fee = o.feeCharged ?? 0; return { collect: got, fee, net: got - fee, done: true }; }
+  const collect = got + Math.max(0, remaining(o));
+  const fee = o.deliveryFee || 0;
+  return { collect, fee, net: collect - fee, done: false };
 }
 
-/** Règlement : le livreur remet l'argent (montant +) ou la boutique lui verse ses frais (montant −). */
-export async function settleCourier(c: Courier, amount: number, account: AccountId, note?: string) {
-  const b = courierBalance(c.id);
+/**
+ * Compte d'un livreur. Seules les livraisons cochées au moment du versement sont réglées ;
+ * les autres restent « en attente » et passent automatiquement au versement suivant.
+ * carry = reste dû sur les versements précédents (+ : le livreur doit encore, − : la boutique lui doit).
+ */
+export function courierBalance(courierId: string, until?: string) {
+  let carry = 0, pendingNet = 0, outOrders = 0, outPieces = 0, collected = 0, fees = 0, settled = 0;
+  const pending: Order[] = [];
+  for (const o of all<Order>('orders')) {
+    if (o.courierId !== courierId || o.status === 'cancelled' || !o.dispatchedAt || isPickupZone(o.zoneId)) continue;
+    if (until && o.dispatchedAt > until) continue;
+    const d = deliveryNet(o);
+    const settledThen = o.courierSettledAt && (!until || o.courierSettledAt <= until);
+    if (settledThen) carry += d.net;
+    else { pending.push(o); pendingNet += d.net; }
+    if (o.status === 'out') { outOrders++; outPieces += o.lines.reduce((t, l) => t + l.qty, 0); }
+    if (d.done) { collected += d.collect; fees += d.fee; }
+  }
+  for (const s of all<CourierSettlement>('courierSettlements')) if (s.courierId === courierId && (!until || s.at <= until)) settled += s.amount;
+  carry -= settled;
+  return { carry, pendingNet, due: carry + pendingNet, pending: pending.sort((a, b) => (a.dispatchedAt || '').localeCompare(b.dispatchedAt || '')), outOrders, outPieces, collected, fees, settled };
+}
+
+/**
+ * Versement d'un livreur : seules les livraisons cochées sont réglées. Une commande cochée encore « en livraison »
+ * (sans articles en choix) est marquée livrée : le client a payé au livreur tout ce qui restait.
+ * amount + : le livreur remet l'argent ; − : la boutique lui verse ses frais.
+ */
+export async function settleCourier(c: Courier, orderIds: string[], amount: number, account: AccountId, note?: string) {
+  for (const id of orderIds) {
+    const o = get<Order>('orders', id);
+    if (o && o.status === 'out' && !o.lines.some((l) => l.isChoice)) {
+      await recordReturn(o, { kept: Object.fromEntries(o.lines.map((l) => [l.id, l.qty])), feeCharged: o.deliveryFee || 0, collected: remaining(o) > 0 ? [{ amount: remaining(o), method: 'cash' }] : [], note: 'Livrée (cochée au versement)' });
+    }
+  }
+  const before = courierBalance(c.id);
+  const checked = orderIds.map((id) => get<Order>('orders', id)!).filter(Boolean);
+  const expected = before.carry + checked.reduce((t, o) => t + deliveryNet(o).net, 0);
   const at = nowIso();
-  const orderIds = b.unsettled.filter((o) => ['delivered', 'partial', 'refused'].includes(o.status)).map((o) => o.id);
-  const [s] = await save('courierSettlements', { courierId: c.id, at, amount, account, balanceBefore: b.due, orderIds, note, userName: who() });
-  if (amount) await save('cashMoves', { at, account, amount, type: 'courier_settlement', label: `${amount > 0 ? 'Remise de' : 'Frais versés à'} ${c.name}`, note, refType: 'courierSettlements', refId: s.id, userName: who() });
-  // Les commandes terminées et réglées ne peuvent plus changer de livreur.
+  const [s] = await save('courierSettlements', { courierId: c.id, at, amount, account, balanceBefore: expected, orderIds, note, userName: who() });
+  if (amount) await save('cashMoves', { at, account, amount, type: 'courier_settlement', label: `${amount > 0 ? 'Versement de' : 'Frais versés à'} ${c.name}`, note, refType: 'courierSettlements', refId: s.id, userName: who() });
+  // Les commandes réglées ne peuvent plus changer de livreur.
   if (orderIds.length) await save('orders', orderIds.map((id) => ({ id, courierSettledAt: at })));
-  await audit('Règlement livreur', `${c.name} : ${amount >= 0 ? 'remis ' + amount : 'versé ' + -amount} Ar (${ACCOUNTS[account]}) — solde avant ${b.due} Ar, ${orderIds.length} commande(s)`, 'courierSettlements', s.id);
+  await audit('Versement livreur', `${c.name} : ${amount >= 0 ? 'remis ' + amount : 'versé ' + -amount} Ar (${ACCOUNTS[account]}) — attendu ${expected} Ar, ${orderIds.length} livraison(s) cochée(s)`, 'courierSettlements', s.id);
   return s as CourierSettlement;
 }
 
-// ---------- Chiffres d'une journée ----------
-export interface DayStats {
-  date: string;
+// ---------- Récapitulatif d'une journée ou d'une semaine ----------
+export interface DeliveryRow { o: Order; courierId: string; value: number; collect: number; fee: number; net: number; done: boolean; settled: boolean }
+export interface CourierRow { courierId: string; name: string; count: number; value: number; collect: number; fees: number; net: number; delivered: number; refused: number; out: number; paidIn: number; carry: number; pending: number; balance: number }
+export interface Report {
+  from: string; to: string;
   sales: { count: number; amount: number; shopCount: number; shopAmount: number; onlineCount: number; onlineAmount: number };
   returns: { count: number; amount: number };
-  netSales: number;
-  cost: number;
-  grossProfit: number;
-  expenses: number;
-  expensesByCat: { name: string; amount: number }[];
-  incomes: number;
-  receipts: Record<AccountId, number>;        // encaissé directement par la boutique (ventes, acomptes…)
-  fromCouriers: Record<AccountId, number>;    // remis par les livreurs (règlements)
-  collectedByCouriers: number;                 // encaissé par les livreurs ce jour (pas encore forcément remis)
-  courierFees: number;                         // frais de livraison gagnés par les livreurs (hors chiffre d'affaires)
-  courierDue: number;                          // reste à recevoir des livreurs en fin de journée
+  netSales: number; cost: number; grossProfit: number;
+  walkIns: Order[];
+  deliveries: DeliveryRow[];
+  couriers: CourierRow[];
+  expenses: number; expensesByCat: { name: string; amount: number }[]; expenseMoves: CashMove[];
+  incomes: number; otherMoves: CashMove[];
+  receipts: Record<AccountId, number>;        // reçu directement par la boutique (ventes sur place, acomptes, mobile money…)
+  fromCouriers: Record<AccountId, number>;    // versements des livreurs
+  collectedByCouriers: number;
+  courierFees: number;
+  courierDue: number;                          // total à verser par les livreurs en fin de période
   balancesEnd: Record<AccountId, number>;
 }
+/** Compatibilité : ancien nom. */
+export type DayStats = Report;
 
 const costOf = (variantId: string) => { const v = get<Variant>('variants', variantId); return v ? variantCost(v) : 0; };
 
 /**
- * Règle de clôture : les articles partis avec un livreur (hors « choix ») sont vendus le jour du départ.
+ * Règle de comptage : les articles partis avec un livreur (hors « choix ») sont vendus le jour du départ.
  * Ce qui revient ensuite est un « retour » le jour du retour ; les choix gardés sont vendus le jour du retour.
  */
-export function dayStats(date: string): DayStats {
+export function report(from: string, to: string): Report {
   const z = () => Object.fromEntries(ACCOUNT_IDS.map((a) => [a, 0])) as Record<AccountId, number>;
-  const s: DayStats = {
-    date, sales: { count: 0, amount: 0, shopCount: 0, shopAmount: 0, onlineCount: 0, onlineAmount: 0 }, returns: { count: 0, amount: 0 },
-    netSales: 0, cost: 0, grossProfit: 0, expenses: 0, expensesByCat: [], incomes: 0, receipts: z(), fromCouriers: z(), collectedByCouriers: 0, courierFees: 0, courierDue: 0, balancesEnd: z(),
+  const inR = (iso?: string) => { if (!iso) return false; const d = dayOf(iso); return d >= from && d <= to; };
+  const s: Report = {
+    from, to, sales: { count: 0, amount: 0, shopCount: 0, shopAmount: 0, onlineCount: 0, onlineAmount: 0 }, returns: { count: 0, amount: 0 },
+    netSales: 0, cost: 0, grossProfit: 0, walkIns: [], deliveries: [], couriers: [], expenses: 0, expensesByCat: [], expenseMoves: [], incomes: 0, otherMoves: [],
+    receipts: z(), fromCouriers: z(), collectedByCouriers: 0, courierFees: 0, courierDue: 0, balancesEnd: z(),
   };
   const addSale = (o: Order, amount: number, cost: number, count: boolean) => {
     s.sales.amount += amount; s.cost += cost;
     if (isWalkIn(o)) { s.sales.shopAmount += amount; if (count) s.sales.shopCount++; } else { s.sales.onlineAmount += amount; if (count) s.sales.onlineCount++; }
     if (count) s.sales.count++;
   };
-  let returnedOrders = 0;
   for (const o of all<Order>('orders')) {
     if (isWalkIn(o)) {
-      if (o.status !== 'cancelled' && dayOf(o.createdAt) === date) addSale(o, keptTotal(o) - (o.discount || 0), o.lines.reduce((t, l) => t + (l.qtyKept ?? l.qty) * costOf(l.variantId), 0), true);
+      if (o.status !== 'cancelled' && inR(o.createdAt)) { addSale(o, keptTotal(o) - (o.discount || 0), o.lines.reduce((t, l) => t + (l.qtyKept ?? l.qty) * costOf(l.variantId), 0), true); s.walkIns.push(o); }
       continue;
     }
     if (!o.dispatchedAt) continue;
     const nonChoice = sellingLines(o);
-    if (dayOf(o.dispatchedAt) === date) addSale(o, nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0), nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0), true);
+    if (inR(o.dispatchedAt)) {
+      const value = nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0);
+      addSale(o, value, nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0), true);
+      if (o.status !== 'cancelled') { const d = deliveryNet(o); s.deliveries.push({ o, courierId: isPickupZone(o.zoneId) ? '' : o.courierId || '', value, ...d, settled: !!o.courierSettledAt }); }
+    }
     const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
-    if (back && dayOf(back) === date) {
+    if (inR(back)) {
       let ret = 0, retCost = 0;
       if (o.status === 'cancelled') { ret = nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0); retCost = nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0); }
       else {
@@ -251,63 +277,51 @@ export function dayStats(date: string): DayStats {
         if (o.credit && !(o.returnLines || []).length) ret += o.credit;
         s.courierFees += o.feeCharged ?? 0;
       }
-      if (ret) { s.returns.amount += ret; s.cost -= retCost; returnedOrders++; }
+      if (ret) { s.returns.amount += ret; s.cost -= retCost; s.returns.count++; }
     }
   }
-  s.returns.count = returnedOrders;
   s.netSales = s.sales.amount - s.returns.amount;
   s.grossProfit = s.netSales - s.cost;
 
   for (const o of all<Order>('orders')) for (const p of o.payments || []) {
-    if (dayOf(p.at) !== date) continue;
+    if (!inR(p.at)) continue;
     if (p.receivedBy === 'shop') s.receipts[ACCOUNT_OF_METHOD[p.method]] += p.amount;
     else s.collectedByCouriers += p.amount;
   }
   const cats = new Map(all<FinanceCategory>('financeCategories').map((c) => [c.id, c.name]));
   const byCat = new Map<string, number>();
-  for (const m of all<CashMove>('cashMoves')) {
-    if (dayOf(m.at) !== date) continue;
-    if (m.type === 'expense') { s.expenses += -m.amount; const n = (m.categoryId && cats.get(m.categoryId)) || 'Sans catégorie'; byCat.set(n, (byCat.get(n) ?? 0) - m.amount); }
-    if (m.type === 'income') s.incomes += m.amount;
-    if (m.type === 'courier_settlement' && m.amount > 0) s.fromCouriers[m.account] += m.amount;
+  const paidIn = new Map<string, number>();
+  for (const st of all<CourierSettlement>('courierSettlements')) if (inR(st.at)) paidIn.set(st.courierId, (paidIn.get(st.courierId) ?? 0) + st.amount);
+  for (const m of all<CashMove>('cashMoves').sort((a, b) => a.at.localeCompare(b.at))) {
+    if (!inR(m.at)) continue;
+    if (m.type === 'expense') { s.expenses += -m.amount; s.expenseMoves.push(m); const n = (m.categoryId && cats.get(m.categoryId)) || 'Sans catégorie'; byCat.set(n, (byCat.get(n) ?? 0) - m.amount); }
+    else if (m.type === 'courier_settlement') { if (m.amount > 0) s.fromCouriers[m.account] += m.amount; }
+    else { if (m.type === 'income') s.incomes += m.amount; if (!(m.type === 'transfer' && m.amount > 0)) s.otherMoves.push(m); }
   }
   s.expensesByCat = [...byCat.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
-  const end = endOf(date);
-  for (const c of all<Courier>('couriers')) s.courierDue += Math.max(0, courierBalance(c.id, end).due);
+  const end = endOf(to);
+  for (const c of all<Courier>('couriers')) {
+    const mine = s.deliveries.filter((d) => d.courierId === c.id);
+    const b = courierBalance(c.id, end);
+    if (!mine.length && !b.due && !paidIn.get(c.id) && !b.outOrders) continue;
+    s.couriers.push({
+      courierId: c.id, name: c.name, count: mine.length, value: mine.reduce((t, d) => t + d.value, 0), collect: mine.reduce((t, d) => t + d.collect, 0),
+      fees: mine.reduce((t, d) => t + d.fee, 0), net: mine.reduce((t, d) => t + d.net, 0),
+      delivered: mine.filter((d) => ['delivered', 'partial'].includes(d.o.status)).length, refused: mine.filter((d) => d.o.status === 'refused').length, out: mine.filter((d) => d.o.status === 'out').length,
+      paidIn: paidIn.get(c.id) ?? 0, carry: b.carry, pending: b.pendingNet, balance: b.due,
+    });
+    s.courierDue += Math.max(0, b.due);
+  }
+  s.couriers.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   s.balancesEnd = balances(end);
   return s;
 }
+export const dayStats = (date: string) => report(date, date);
 
-// ---------- Clôture ----------
-export const closingId = (date: string) => `closing-${date}`;
-export const getClosing = (date: string) => get<Closing>('closings', closingId(date));
-export const isClosedDay = (date: string) => !!getClosing(date);
-
-export async function closeDay(date: string, d: { notes: Record<string, number>; coins: number; reason?: string; mobileActual: Partial<Record<AccountId, number | undefined>> }) {
-  const at = date === today() ? nowIso() : endOf(date);
-  const before = dayStats(date);
-  const counted = NOTES.reduce((t, n) => t + n * (d.notes[n] || 0), 0) + (d.coins || 0);
-  const theoretical = before.balancesEnd.cash;
-  const gap = counted - theoretical;
-  const gapMoveIds: string[] = [];
-  if (gap) gapMoveIds.push((await addMove({ at, account: 'cash', amount: gap, type: 'gap', label: `Écart de caisse du ${date.split('-').reverse().join('/')}`, note: d.reason })).id);
-  const mobile: Closing['mobile'] = {};
-  for (const a of ['mvola', 'orange', 'airtel', 'bank'] as AccountId[]) {
-    const th = before.balancesEnd[a];
-    const actual = d.mobileActual[a];
-    const g = actual == null ? undefined : actual - th;
-    if (g) gapMoveIds.push((await addMove({ at, account: a, amount: g, type: 'gap', label: `Écart ${ACCOUNTS[a]} du ${date.split('-').reverse().join('/')}`, note: d.reason })).id);
-    if (th || actual != null) mobile[a] = { theoretical: th, actual, gap: g };
-  }
-  const courierDue = all<Courier>('couriers').map((c) => { const b = courierBalance(c.id, endOf(date)); return { courierId: c.id, name: c.name, due: b.due, outOrders: b.outOrders, outPieces: b.outPieces }; }).filter((x) => x.due || x.outOrders);
-  const stats = dayStats(date);
-  await save('closings', { id: closingId(date), date, cash: { notes: d.notes, coins: d.coins, counted, theoretical, gap, reason: d.reason }, mobile, stats, courierDue, gapMoveIds, closedBy: who(), closedAt: nowIso() });
-  await audit('Clôture de journée', `${date} : caisse comptée ${counted} Ar (écart ${gap} Ar)`, 'closings', closingId(date));
+/** Lundi de la semaine d'une date (AAAA-MM-JJ). */
+export function mondayOf(ymd: string) {
+  const d = new Date(`${ymd}T12:00:00`);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return dayOf(d.toISOString());
 }
-export async function reopenDay(date: string, reason: string) {
-  const c = getClosing(date);
-  if (!c) return;
-  for (const id of c.gapMoveIds || []) await remove('cashMoves', id);
-  await remove('closings', c.id);
-  await audit('Journée rouverte', `${date} : ${reason}`, 'closings', c.id);
-}
+export function addDays(ymd: string, n: number) { const d = new Date(`${ymd}T12:00:00`); d.setDate(d.getDate() + n); return dayOf(d.toISOString()); }

@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePrintStationWorker } from './lib/print';
 import { TreasuryPage } from './pages/Treasury';
-import { ClosingPage } from './pages/Closing';
+import { RecapPage } from './pages/Recap';
 import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } from './lib/auth';
 import { getMeta, setMeta, useMeta } from './lib/db';
 import { useApplyAppearance, useCompany } from './lib/settings';
@@ -40,7 +40,7 @@ const NAV: NavItem[] = [
   { path: '/achats', label: 'Achats Chine', icon: 'inbox', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage /> },
   { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
   { path: '/tresorerie', label: 'Trésorerie', icon: 'wallet', perm: 'treasury.view', group: 'Argent', page: () => <TreasuryPage /> },
-  { path: '/cloture', label: 'Clôture de journée', icon: 'lock', perm: 'treasury.view', group: 'Argent', page: () => <ClosingPage /> },
+  { path: '/recapitulatif', label: 'Récapitulatifs', icon: 'list', perm: 'treasury.view', group: 'Argent', page: () => <RecapPage /> },
   { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage /> },
   { path: '/roles', label: 'Rôles et accès', icon: 'shield', perm: 'users.manage', group: 'Administration', page: () => <RolesPage /> },
   { path: '/journal', label: "Journal d'activité", icon: 'list', perm: 'audit.view', group: 'Administration', page: () => <AuditPage /> },
