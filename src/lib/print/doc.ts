@@ -4,7 +4,7 @@
 import { get } from '../db';
 import { fmtAr, fmtNum, variantLabel, type Product, type Variant } from '../catalog';
 import {
-  CHANNELS, exchangeBalance, fmtPhone, isPickupZone, isWalkIn, keptTotal, orderTotal, PAY_METHODS, paidTotal, remaining, sellingLines,
+  CHANNELS, courierSplit, exchangeBalance, fmtPhone, isPickupZone, isWalkIn, keptTotal, orderTotal, PAY_METHODS, paidTotal, remaining, sellingLines,
   type Courier, type Order, type Zone,
 } from '../orders';
 import type { Company } from '../settings';
@@ -194,7 +194,8 @@ export function deliveryNoteDoc(o: Order, c: Company): PrintDoc {
   b.push(P('Frais de livraison', ar(o.deliveryFee || 0)));
   const paid = paidTotal(o);
   if (paid) b.push(P('Déjà payé', '- ' + ar(paid)));
-  b.push(P('À ENCAISSER', ar(Math.max(0, remaining(o))), { bold: true, big: true }));
+  b.push(P('LE CLIENT PAIE', ar(Math.max(0, remaining(o))), { bold: true, big: true }));
+  { const x = courierSplit(o); b.push(P('  dont pour la boutique', ar(x.toCollect))); if (x.feeKept) b.push(P('  dont frais livreur', ar(x.feeKept))); if (x.feeOwed) b.push(T(`Frais livreur ${ar(x.feeOwed)} déjà payés à la boutique`)); }
   if (remaining(o) < 0) b.push(P('À rendre au client', ar(-remaining(o)), { bold: true }));
   if (o.notes) { b.push(L()); b.push(T(`Obs. : ${o.notes}`)); }
   b.push(L());
@@ -216,21 +217,20 @@ export function routeSheetDoc(courier: Courier | undefined, orders: Order[], c: 
   if (courier?.phone) b.push(T(fmtPhone(courier.phone), { align: 'center' }));
   b.push(T(`Imprimé le ${dt(new Date().toISOString())}`, { align: 'center' }));
   b.push(L());
-  let collect = 0, fees = 0, pcs = 0;
+  let collect = 0, fees = 0, owed = 0, clients = 0, pcs = 0;
   orders.forEach((o, i) => {
     const zone = get<Zone>('zones', o.zoneId || '');
     const closed = ['delivered', 'partial', 'refused'].includes(o.status);
-    const got = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((t, p) => t + p.amount, 0);
-    const toCollect = closed ? got : got + Math.max(0, remaining(o));
-    const fee = closed ? (o.feeCharged ?? 0) : (o.deliveryFee || 0);
-    collect += toCollect; fees += fee; pcs += o.lines.reduce((t, l) => t + l.qty, 0);
+    const x = courierSplit(o);
+    collect += x.toCollect; fees += x.fee; owed += x.feeOwed; clients += x.clientPays; pcs += o.lines.reduce((t, l) => t + l.qty, 0);
     b.push(P(`${i + 1}. ${o.number}`, o.dispatchedAt ? dt(o.dispatchedAt).slice(0, 5) : '', { bold: true }));
     b.push(T(`${o.name ? o.name + ' - ' : ''}${fmtPhone(o.phone)}`));
     b.push(T(`${zone?.name || ''}${o.place ? ' - ' + o.place : ''}`));
     for (const l of o.lines) b.push(T(`  ${fmtNum(l.qty)} x ${itemName(l.variantId)}${l.isChoice ? ' (CHOIX)' : ''}`));
-    b.push(P('Client paie', ar(toCollect)));
-    b.push(P('Frais livreur', ar(fee)));
-    b.push(P('À verser', ar(toCollect - fee), { bold: true }));
+    b.push(P('À ENCAISSER', ar(x.toCollect), { bold: true }));
+    if (!x.toCollect && x.feeOwed) b.push(T('Déjà payé par Mobile Money : rien à encaisser'));
+    b.push(P(`  + frais livreur${x.feeOwed ? ' (déjà payés)' : ''}`, ar(x.fee)));
+    b.push(P('  Le client paie au total', ar(x.clientPays)));
     if (closed) b.push(T(`Déjà saisi : ${o.status === 'refused' ? 'refusée' : o.status === 'partial' ? 'livrée en partie' : 'livrée'}`));
     else b.push(T('[ ] Livré  [ ] Pas livré  [ ] Retour'));
     if (o.notes) b.push(T(`Obs. : ${o.notes}`));
@@ -238,9 +238,11 @@ export function routeSheetDoc(courier: Courier | undefined, orders: Order[], c: 
     b.push(L());
   });
   b.push(P(`${orders.length} livraison(s), ${fmtNum(pcs)} pcs`, ''));
-  b.push(P('Total client paie', ar(collect)));
-  b.push(P('Total frais livreur', ar(fees)));
-  b.push(P('TOTAL À VERSER', ar(collect - fees), { bold: true, big: true }));
+  b.push(P('Info : total payé par les clients', ar(clients)));
+  b.push(P('Info : frais livreur (gardés)', ar(fees - owed)));
+  if (owed) b.push(P('Frais à reverser au livreur', '- ' + ar(owed), { bold: true }));
+  b.push(P('TOTAL À VERSER', ar(collect - owed), { bold: true, big: true }));
+  b.push(T('Les frais de livraison ne sont pas à verser : ils restent au livreur.'));
   b.push(T('Si une livraison n’est pas faite ou revient, cochez-la et ne versez pas son montant : elle sera reportée.'));
   b.push({ k: 'feed' });
   b.push(T('Versé le : ....../....../......'));

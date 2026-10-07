@@ -34,6 +34,8 @@ export interface Payment {
   courierId?: string;
   note?: string;
   userName?: string;
+  /** Corrections faites par l'admin : ancien et nouveau montant, date, utilisateur. */
+  edits?: { at: string; user?: string; fromAmount: number; toAmount: number; fromMethod: PayMethod; toMethod: PayMethod; reason?: string }[];
 }
 export interface Order extends BaseRecord {
   number: string;
@@ -140,6 +142,27 @@ export function exchangeBalance(o: Order) {
 export function remaining(o: Order) {
   const due = o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o);
   return due - paidTotal(o);
+}
+/**
+ * Répartition pour le livreur. Le client paie d'abord les articles, puis les frais.
+ * - toCollect : ce que le livreur encaisse pour la boutique (articles, sans ses frais) → à verser ;
+ * - feeKept   : frais qu'il encaisse auprès du client et garde ;
+ * - feeOwed   : frais déjà payés à la boutique (ex. tout payé par Mobile Money) → à lui reverser en espèces ;
+ * - clientPays: total réellement payé par le client au livreur (articles + frais), pour information.
+ * Exemple : articles 50 000, frais 3 000, Mobile Money 20 000 → le livreur encaisse 30 000 pour la boutique + 3 000 de frais.
+ */
+export function courierSplit(o: Order) {
+  const closed = ['delivered', 'partial', 'refused'].includes(o.status);
+  const fee = closed ? (o.feeCharged ?? o.deliveryFee ?? 0) : (o.deliveryFee || 0);
+  const shopPaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((s, p) => s + p.amount, 0);
+  const got = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((s, p) => s + p.amount, 0);
+  const itemsDue = Math.max(0, (o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o)) - fee);
+  const clientPays = closed ? got : got + Math.max(0, remaining(o));
+  const feeFromClient = Math.max(0, fee - Math.max(0, shopPaid - itemsDue));
+  const feeKept = Math.min(clientPays, feeFromClient);
+  const toCollect = clientPays - feeKept;
+  const feeOwed = fee - feeKept;
+  return { clientPays, toCollect, fee, feeKept, feeOwed, net: toCollect - feeOwed, closed };
 }
 export const totalQty = (o: Order) => sellingLines(o).reduce((s, l) => s + l.qty, 0);
 
@@ -284,6 +307,18 @@ export async function cancelOrder(o: Order, reason: string) {
     await addMoves(o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, type: 'delivery_return' as const, refType: 'order', refId: o.id, reason: `${o.number} annulée — retour en boutique` })));
   }
   await setStatus(o, 'cancelled', { notes: [o.notes, `Annulée : ${reason}`].filter(Boolean).join('\n') });
+}
+
+/** Correction d'un paiement (erreur de saisie) par l'admin : tout est gardé dans l'historique. */
+export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string) {
+  const u = currentUser();
+  const at = nowIso();
+  const old = (o.payments || []).find((p) => p.id === paymentId);
+  if (!old) return;
+  const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason }] } : p));
+  const text = `Paiement corrigé : ${old.amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[old.method]}) → ${amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[method]})${reason ? ` — ${reason}` : ''}`;
+  await save('orders', { id: o.id, payments, events: [...(o.events || []), { at, text, user: u?.fullName }] });
+  await audit('Paiement corrigé', `${o.number} : ${text}`, 'orders', o.id);
 }
 
 export async function addPayment(o: Order, p: Omit<Payment, 'id' | 'at' | 'userName'>) {

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
-import { courierAccount, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
@@ -71,7 +71,7 @@ function ToDeliver() {
                   <span className="list-item-title">{orderLabel(o)}</span>
                   <p className="small muted">{o.number} · {fmtPhone(o.phone)} · {o.place || 'lieu non précisé'} · {fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ' + choix' : ''}</p>
                 </a>
-                <div className="list-item-side"><strong className="num">{fmtAr(Math.max(0, remaining(o)))}</strong><span className="small muted">à encaisser</span></div>
+                <div className="list-item-side"><strong className="num">{fmtAr(courierSplit(o).toCollect)}</strong><span className="small muted">à encaisser{courierSplit(o).fee ? ` + frais ${fmtAr(courierSplit(o).feeKept)}` : ''}</span></div>
               </li>
             ))}
           </ul>
@@ -105,7 +105,7 @@ function OutNow() {
                   { key: 'route', label: 'Ticket des livraisons', build: () => routeSheetDoc(c, list, company) },
                   { key: 'bons', label: `Bons de livraison (${list.length})`, build: () => joinDocs(`Bons de livraison ${c?.name ?? ''}`, list.map((o) => deliveryNoteDoc(o, company))) },
                 ]} />
-                <div className="total-box"><span className="small muted">À encaisser</span><strong className="num">{fmtAr(list.reduce((s, o) => s + Math.max(0, remaining(o)), 0))}</strong></div>
+                <div className="total-box"><span className="small muted">À encaisser (sans frais)</span><strong className="num">{fmtAr(list.reduce((s, o) => s + courierSplit(o).toCollect, 0))}</strong><span className="small muted">frais livreur : {fmtAr(list.reduce((s, o) => s + courierSplit(o).fee, 0))}</span></div>
               </div>
             </div>
             <ul className="list">
@@ -113,7 +113,7 @@ function OutNow() {
                 <li key={o.id} className="list-item">
                   <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                     <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span></span>
-                    <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser {fmtAr(Math.max(0, remaining(o)))}</p>
+                    <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser <strong>{fmtAr(courierSplit(o).toCollect)}</strong>{courierSplit(o).toCollect === 0 ? ' (déjà payé)' : ''} · frais livreur {fmtAr(courierSplit(o).fee)}{courierSplit(o).feeOwed ? ` (payés par Mobile Money : à lui reverser)` : ''}</p>
                   </a>
                   <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                     <Button variant="quiet" onClick={() => setMove(o)}>Changer de livreur</Button>
@@ -153,7 +153,7 @@ function Couriers() {
         {sorted.length === 0 ? <Empty icon="truck" title="Aucun livreur" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">À verser (compte)</th><th></th></tr></thead>
+              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">Solde à verser</th><th></th></tr></thead>
               <tbody>
                 {sorted.map((c) => {
                   const a = courierAccount(c.id, period.from, period.to);
@@ -176,7 +176,7 @@ function Couriers() {
           </div>
         )}
       </div>
-      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « À verser (compte) » : toutes les livraisons pas encore versées + le reste des versements précédents. « Ticket » imprime la liste à remettre au livreur ; « Versement » permet de cocher les livraisons effectuées.</p>
+      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « Solde à verser » : argent encaissé pour la boutique sur toutes les livraisons pas encore versées (sans les frais du livreur), moins les frais à lui reverser, plus le reste des versements précédents. « Ticket » imprime la liste à remettre au livreur ; « Versement » permet de cocher les livraisons effectuées.</p>
       {edit && <CourierForm courier={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
       {open && <CourierOrders courier={open} onClose={() => setOpen(null)} />}
       {settle && <SettleModal courier={settle} onClose={() => setSettle(null)} />}
@@ -202,6 +202,8 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
   const checkable = (o: Order) => !(o.status === 'out' && o.lines.some((l) => l.isChoice));
   const sel = b.pending.filter((o) => checked.includes(o.id));
   const selNet = sel.reduce((t, o) => t + deliveryNet(o).net, 0);
+  const selCollect = sel.reduce((t, o) => t + deliveryNet(o).collect, 0);
+  const selFeeOwed = sel.reduce((t, o) => t + deliveryNet(o).feeOwed, 0);
   const expected = b.carry + selNet;
   const n = amount == null ? Math.abs(expected) : parseNum(amount) || 0;
   const owesShop = expected >= 0;
@@ -217,12 +219,12 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
           try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined); toast('Versement enregistré'); onClose(); } finally { setBusy(false); }
         }}>Valider le versement</Button></>}>
       <div className="stack">
-        <p className="small">Cochez les livraisons <strong>réellement effectuées</strong> (d’après le ticket rapporté par le livreur). Les autres restent sur son compte et seront reportées au prochain versement. Pour une livraison pas faite, refusée ou un retour, touchez « Retour / anomalie ».</p>
+        <p className="small">Les frais du livreur ne sont jamais dans le montant à encaisser : il les garde. Cochez les livraisons <strong>réellement effectuées</strong> (d’après le ticket rapporté par le livreur). Les autres restent sur son compte et seront reportées au prochain versement. Pour une livraison pas faite, refusée ou un retour, touchez « Retour / anomalie ».</p>
         {b.pending.length === 0 ? <Empty icon="truck" title="Aucune livraison en attente de versement" /> : (
           <div className="table-wrap"><table className="table">
             <thead><tr>
               <th style={{ width: 40 }}><input type="checkbox" className="perm-check" aria-label="Tout cocher" checked={sel.length > 0 && sel.length === b.pending.filter(checkable).length} onChange={(e) => setChecked(e.target.checked ? b.pending.filter(checkable).map((o) => o.id) : [])} /></th>
-              <th>Livraison</th><th>État</th><th className="t-num">Client paie</th><th className="t-num">Frais</th><th className="t-num">À verser</th><th></th>
+              <th>Livraison</th><th>État</th><th className="t-num">À encaisser</th><th className="t-num muted">Frais livreur</th><th className="t-num">Frais à reverser</th><th></th>
             </tr></thead>
             <tbody>
               {b.pending.map((o) => {
@@ -233,7 +235,7 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
                     <td><input type="checkbox" className="perm-check" disabled={!ok} checked={checked.includes(o.id)} onChange={() => toggle(o.id)} aria-label={`Livraison ${o.number} effectuée`} /></td>
                     <td><strong>{o.number}</strong> <span className="small muted">{orderLabel(o)} · {get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · partie le {fmtDateTime(o.dispatchedAt)}</span></td>
                     <td>{o.status === 'out' ? <Badge tone="warn">{ok ? 'À confirmer' : 'Choix à préciser'}</Badge> : <Badge tone={o.status === 'refused' ? 'danger' : 'ok'}>{o.status === 'refused' ? 'Refusée' : o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}</td>
-                    <td className="t-num">{fmtAr(d.collect)}</td><td className="t-num">{fmtAr(d.fee)}</td><td className="t-num"><strong>{fmtAr(d.net)}</strong></td>
+                    <td className="t-num"><strong>{fmtAr(d.collect)}</strong>{d.collect === 0 && o.payments.some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé par Mobile Money</div> : null}</td><td className="t-num muted">{fmtAr(d.fee)}</td><td className="t-num">{d.feeOwed ? fmtAr(d.feeOwed) : '—'}</td>
                     <td>{o.status === 'out' && <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button>}</td>
                   </tr>
                 );
@@ -243,9 +245,10 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
         )}
         <div className="stat-grid">
           {b.carry !== 0 && <div className="card stat"><span className="small muted">Reste des versements précédents</span><strong className={`stat-value num ${b.carry < 0 ? 'neg' : ''}`}>{fmtAr(b.carry)}</strong></div>}
-          <div className="card stat"><span className="small muted">Livraisons cochées ({sel.length})</span><strong className="stat-value num">{fmtAr(selNet)}</strong></div>
-          <div className="card stat stat-strong"><span className="small muted">{owesShop ? 'Le livreur doit verser' : 'La boutique lui doit'}</span><strong className="stat-value num">{fmtAr(Math.abs(expected))}</strong></div>
-          <div className="card stat"><span className="small muted">Reporté (non cochées)</span><strong className="stat-value num">{fmtAr(b.pendingNet - selNet)}</strong></div>
+          <div className="card stat"><span className="small muted">À encaisser — cochées ({sel.length})</span><strong className="stat-value num">{fmtAr(selCollect)}</strong></div>
+          {selFeeOwed > 0 && <div className="card stat"><span className="small muted">Frais à lui reverser (payés par Mobile Money)</span><strong className="stat-value num neg">− {fmtAr(selFeeOwed)}</strong></div>}
+          <div className="card stat stat-strong"><span className="small muted">{owesShop ? 'Net à verser par le livreur' : 'Net : la boutique lui doit'}</span><strong className="stat-value num">{fmtAr(Math.abs(expected))}</strong></div>
+          <div className="card stat"><span className="small muted">Reporté (non cochées)</span><strong className="stat-value num">{fmtAr(b.pendingCollect - selCollect)}</strong></div>
         </div>
         <div className="grid-2">
           <TextField label={owesShop ? 'Montant versé par le livreur (Ar)' : 'Montant versé au livreur (Ar)'} value={amount ?? String(Math.abs(expected) || '')} onChange={setAmount} inputMode="numeric" />

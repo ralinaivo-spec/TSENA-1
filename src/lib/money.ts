@@ -3,7 +3,7 @@
 import { all, applyRemote, get, newId, nowIso, remove, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { variantCost, type Variant } from './catalog';
-import { isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
+import { courierSplit, isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
 // ---------- Comptes ----------
 export type AccountId = PayMethod | 'bank';
@@ -156,11 +156,8 @@ const CLOSED = ['delivered', 'partial', 'refused'];
  * Commande encore dehors : ce qu'il doit encaisser (reste à payer, frais compris) − ses frais prévus.
  */
 export function deliveryNet(o: Order) {
-  const got = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((t, p) => t + p.amount, 0);
-  if (CLOSED.includes(o.status)) { const fee = o.feeCharged ?? 0; return { collect: got, fee, net: got - fee, done: true }; }
-  const collect = got + Math.max(0, remaining(o));
-  const fee = o.deliveryFee || 0;
-  return { collect, fee, net: collect - fee, done: false };
+  const x = courierSplit(o);
+  return { collect: x.toCollect, clientPays: x.clientPays, fee: x.fee, feeOwed: x.feeOwed, net: x.net, done: x.closed };
 }
 
 /**
@@ -169,7 +166,7 @@ export function deliveryNet(o: Order) {
  * carry = reste dû sur les versements précédents (+ : le livreur doit encore, − : la boutique lui doit).
  */
 export function courierBalance(courierId: string, until?: string) {
-  let carry = 0, pendingNet = 0, outOrders = 0, outPieces = 0, collected = 0, fees = 0, settled = 0;
+  let carry = 0, pendingNet = 0, pendingCollect = 0, pendingFeeOwed = 0, outOrders = 0, outPieces = 0, collected = 0, fees = 0, settled = 0;
   const pending: Order[] = [];
   for (const o of all<Order>('orders')) {
     if (o.courierId !== courierId || o.status === 'cancelled' || !o.dispatchedAt || isPickupZone(o.zoneId)) continue;
@@ -177,13 +174,13 @@ export function courierBalance(courierId: string, until?: string) {
     const d = deliveryNet(o);
     const settledThen = o.courierSettledAt && (!until || o.courierSettledAt <= until);
     if (settledThen) carry += d.net;
-    else { pending.push(o); pendingNet += d.net; }
+    else { pending.push(o); pendingNet += d.net; pendingCollect += d.collect; pendingFeeOwed += d.feeOwed; }
     if (o.status === 'out') { outOrders++; outPieces += o.lines.reduce((t, l) => t + l.qty, 0); }
     if (d.done) { collected += d.collect; fees += d.fee; }
   }
   for (const s of all<CourierSettlement>('courierSettlements')) if (s.courierId === courierId && (!until || s.at <= until)) settled += s.amount;
   carry -= settled;
-  return { carry, pendingNet, due: carry + pendingNet, pending: pending.sort((a, b) => (a.dispatchedAt || '').localeCompare(b.dispatchedAt || '')), outOrders, outPieces, collected, fees, settled };
+  return { carry, pendingNet, pendingCollect, pendingFeeOwed, due: carry + pendingNet, pending: pending.sort((a, b) => (a.dispatchedAt || '').localeCompare(b.dispatchedAt || '')), outOrders, outPieces, collected, fees, settled };
 }
 
 /**
@@ -211,8 +208,8 @@ export async function settleCourier(c: Courier, orderIds: string[], amount: numb
 }
 
 // ---------- Récapitulatif d'une journée ou d'une semaine ----------
-export interface DeliveryRow { o: Order; courierId: string; value: number; collect: number; fee: number; net: number; done: boolean; settled: boolean }
-export interface CourierRow { courierId: string; name: string; count: number; value: number; collect: number; fees: number; net: number; delivered: number; refused: number; out: number; paidIn: number; carry: number; pending: number; balance: number }
+export interface DeliveryRow { o: Order; courierId: string; value: number; collect: number; clientPays: number; fee: number; feeOwed: number; net: number; done: boolean; settled: boolean }
+export interface CourierRow { courierId: string; name: string; count: number; value: number; collect: number; clientPays: number; fees: number; feeOwed: number; net: number; delivered: number; refused: number; out: number; paidIn: number; carry: number; pending: number; balance: number }
 export interface Report {
   from: string; to: string;
   sales: { count: number; amount: number; shopCount: number; shopAmount: number; onlineCount: number; onlineAmount: number };
@@ -306,7 +303,7 @@ export function report(from: string, to: string): Report {
     if (!mine.length && !b.due && !paidIn.get(c.id) && !b.outOrders) continue;
     s.couriers.push({
       courierId: c.id, name: c.name, count: mine.length, value: mine.reduce((t, d) => t + d.value, 0), collect: mine.reduce((t, d) => t + d.collect, 0),
-      fees: mine.reduce((t, d) => t + d.fee, 0), net: mine.reduce((t, d) => t + d.net, 0),
+      clientPays: mine.reduce((t, d) => t + d.clientPays, 0), fees: mine.reduce((t, d) => t + d.fee, 0), feeOwed: mine.reduce((t, d) => t + d.feeOwed, 0), net: mine.reduce((t, d) => t + d.net, 0),
       delivered: mine.filter((d) => ['delivered', 'partial'].includes(d.o.status)).length, refused: mine.filter((d) => d.o.status === 'refused').length, out: mine.filter((d) => d.o.status === 'out').length,
       paidIn: paidIn.get(c.id) ?? 0, carry: b.carry, pending: b.pendingNet, balance: b.due,
     });

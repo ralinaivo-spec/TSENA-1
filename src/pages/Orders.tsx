@@ -6,8 +6,8 @@ import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, varia
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
-  repriceLines, reservedIndex, totalQty, useWholesale,
-  type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Zone,
+  repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
+  type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
@@ -278,6 +278,12 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
         {!order && (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>
             <strong className="small">Paiement déjà reçu (facultatif)</strong>
+            <p className="small muted">Par défaut, le client paie tout à la livraison. S’il a déjà payé (tout ou une partie) par Mobile Money, indiquez-le : le livreur n’encaissera que le reste.</p>
+            <div className="row" style={{ gap: 6 }}>
+              <button type="button" className="chip" onClick={() => setPrepay(String(Math.max(0, total - draft.deliveryFee)))}>Articles payés</button>
+              {draft.deliveryFee > 0 && <button type="button" className="chip" onClick={() => setPrepay(String(Math.max(0, total)))}>Tout payé (articles + frais)</button>}
+              {prepay && <button type="button" className="chip" onClick={() => setPrepay('')}>Rien payé</button>}
+            </div>
             <div className="grid-2">
               <TextField label="Montant (Ar)" value={prepay} onChange={setPrepay} inputMode="numeric" />
               <SelectField label="Moyen" value={prepayMethod} onChange={(v) => setPrepayMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
@@ -294,7 +300,10 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
           <div><span>Frais de livraison</span><strong className="num">{fmtAr(draft.deliveryFee)}</strong></div>
           <div className="summary-total"><span>{exchangeOf ? (total >= 0 ? 'Le client paie' : 'À rendre au client') : 'Total à payer'}</span><strong className="num">{fmtAr(Math.abs(total))}</strong></div>
           {parseNum(prepay) ? <div><span>Déjà payé</span><strong className="num">− {fmtAr(parseNum(prepay))}</strong></div> : null}
-          {parseNum(prepay) ? <div className="summary-total"><span>Reste à encaisser</span><strong className="num">{fmtAr(total - (parseNum(prepay) || 0))}</strong></div> : null}
+          {parseNum(prepay) ? <div className="summary-total"><span>Reste à payer par le client</span><strong className="num">{fmtAr(Math.max(0, total - (parseNum(prepay) || 0)))}</strong></div> : null}
+          {draft.deliveryFee > 0 && !exchangeOf && (() => { const x = courierSplit({ ...draft, payments: parseNum(prepay) ? [{ id: 'x', at: '', amount: parseNum(prepay)!, method: prepayMethod, receivedBy: 'shop' }] : [] } as Order); return (
+            <div className="small muted" style={{ display: 'block' }}>Le livreur encaissera <strong>{fmtAr(x.toCollect)}</strong> pour la boutique{x.feeKept ? <> + ses frais {fmtAr(x.feeKept)}</> : null}{x.feeOwed ? <> ; frais {fmtAr(x.feeOwed)} déjà payés, à lui reverser en espèces</> : null}.</div>
+          ); })()}
         </div>
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
@@ -384,6 +393,7 @@ function OrderDetail({ id }: { id: string }) {
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
+  const [editPay, setEditPay] = useState<Payment | null>(null);
   const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign'>('');
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
@@ -467,6 +477,9 @@ function OrderDetail({ id }: { id: string }) {
           <div className="summary-total"><span>{o.kind === 'exchange' && due < 0 ? 'À rendre au client' : 'Total'}</span><strong className="num">{fmtAr(Math.abs(due))}</strong></div>
           <div><span>Payé</span><strong className="num">{fmtAr(paidTotal(o))}</strong></div>
           {o.status !== 'cancelled' && <div className="summary-total"><span>{rest >= 0 ? 'Reste à encaisser' : 'Trop perçu / à rendre'}</span><strong className={`num ${rest > 0 ? '' : rest < 0 ? 'neg' : 'pos'}`}>{fmtAr(Math.abs(rest))}</strong></div>}
+          {!isWalkIn(o) && !isPickupZone(o.zoneId) && !['cancelled', 'delivered', 'partial', 'refused'].includes(o.status) && (() => { const x = courierSplit(o); return (
+            <p className="small muted" style={{ margin: 0 }}>Le livreur encaisse <strong>{fmtAr(x.toCollect)}</strong> pour la boutique{x.feeKept ? ` + ses frais ${fmtAr(x.feeKept)}` : ''}{x.feeOwed ? ` ; frais ${fmtAr(x.feeOwed)} déjà payés : à lui reverser` : ''}.</p>
+          ); })()}
         </div>
       </div>
 
@@ -477,7 +490,10 @@ function OrderDetail({ id }: { id: string }) {
             {o.payments.map((p) => (
               <li key={p.id} className="list-item" style={{ padding: '10px 0' }}>
                 <div className="list-item-main"><strong className="num">{fmtAr(p.amount)}</strong> · {PAY_METHODS[p.method]}{p.ref ? ` · réf. ${p.ref}` : ''}
-                  <p className="small muted">{fmtDateTime(p.at)} · {p.receivedBy === 'shop' ? 'reçu par la boutique' : `encaissé par ${get<Courier>('couriers', p.courierId || '')?.name || 'le livreur'}`}{p.userName ? ` · saisi par ${p.userName}` : ''}</p></div>
+                  <p className="small muted">{fmtDateTime(p.at)} · {p.receivedBy === 'shop' ? 'reçu par la boutique' : `encaissé par ${get<Courier>('couriers', p.courierId || '')?.name || 'le livreur'}`}{p.userName ? ` · saisi par ${p.userName}` : ''}</p>
+                  {(p.edits || []).map((e, i) => <p key={i} className="small" style={{ color: 'var(--warn, #9a6700)' }}>Corrigé le {fmtDateTime(e.at)} par {e.user || '—'} : {fmtAr(e.fromAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.fromMethod]})` : ''} → {fmtAr(e.toAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.toMethod]})` : ''}{e.reason ? ` — ${e.reason}` : ''}</p>)}
+                </div>
+                {can('users.manage') && <IconButton icon="edit" label="Corriger ce paiement" onClick={() => setEditPay(p)} />}
               </li>
             ))}
           </ul>
@@ -502,6 +518,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'shop' && <ShopExchangeModal order={o} onClose={() => setModal('')} />}
       {modal === 'pickup' && <PickupModal order={o} onClose={() => setModal('')} />}
       {modal === 'reassign' && <ReassignModal order={o} onClose={() => setModal('')} />}
+      {editPay && <EditPaymentModal order={o} payment={editPay} onClose={() => setEditPay(null)} />}
       {modal === 'cancel' && <CancelModal order={o} onClose={() => setModal('')} />}
     </>
   );
@@ -585,6 +602,27 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
           {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
         </div>
         <TextField label="Remarque (motif de refus, etc.)" value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
+      </div>
+    </Modal>
+  );
+}
+
+function EditPaymentModal({ order: o, payment: p, onClose }: { order: Order; payment: Payment; onClose: () => void }) {
+  const [amount, setAmount] = useState(String(p.amount));
+  const [method, setMethod] = useState<PayMethod>(p.method);
+  const [reason, setReason] = useState('Erreur de saisie');
+  const n = parseNum(amount) ?? NaN;
+  return (
+    <Modal title={`Corriger un paiement — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={isNaN(n) || (n === p.amount && method === p.method)} onClick={async () => { await editPayment(o, p.id, n, method, reason.trim() || undefined); toast('Paiement corrigé'); onClose(); }}>Enregistrer la correction</Button></>}>
+      <div className="stack">
+        <p className="small">Montant actuel : <strong>{fmtAr(p.amount)}</strong> ({PAY_METHODS[p.method]}, {p.receivedBy === 'shop' ? 'reçu par la boutique' : 'encaissé par le livreur'}) le {fmtDateTime(p.at)}.</p>
+        <div className="grid-2">
+          <TextField label="Nouveau montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint="0 pour annuler ce paiement" />
+          <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
+        </div>
+        <TextField label="Motif" value={reason} onChange={setReason} />
+        <p className="small muted">L’ancien montant, le nouveau, la date et votre nom restent visibles sous le paiement et dans le journal d’activité. Le reste à payer et le compte du livreur se recalculent tout seuls.</p>
       </div>
     </Modal>
   );

@@ -36,10 +36,12 @@ function common(r: Report, withProfit: boolean): Section[] {
     { label: `Livraisons (${t.delivCount})`, value: fmtAr(t.deliv) },
     ...(r.returns.amount ? [{ label: `Retours (${r.returns.count})`, value: neg(r.returns.amount) }] : []),
     { label: 'Total des ventes', value: fmtAr(r.netSales), strong: true },
-    { label: 'Frais de livraison (aux livreurs)', value: fmtAr(r.deliveries.reduce((a, d) => a + d.fee, 0)), sub: true },
+    { label: 'Info : frais des livreurs (non compris)', value: fmtAr(r.deliveries.reduce((a, d) => a + d.fee, 0)), sub: true },
+    { label: 'Info : total payé par les clients livrés (frais compris)', value: fmtAr(r.deliveries.reduce((a, d) => a + d.clientPays, 0)), sub: true },
   ] });
   out.push({ title: 'Comptes livreurs', lines: r.couriers.length ? [
-    ...r.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)${c.out ? `, ${c.out} pas encore confirmée(s)` : ''}`, value: `à verser ${fmtAr(c.net)}` })),
+    ...r.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)${c.out ? `, ${c.out} pas encore confirmée(s)` : ''}`, value: `à encaisser ${fmtAr(c.collect)}` })),
+    ...r.couriers.filter((c) => c.feeOwed).map((c) => ({ label: `Frais à reverser à ${c.name} (payés par Mobile Money)`, value: fmtAr(c.feeOwed), sub: true })),
     ...r.couriers.filter((c) => c.paidIn).map((c) => ({ label: `Versé par ${c.name}`, value: fmtAr(c.paidIn), sub: true })),
     { label: 'Total à verser par les livreurs (compte à ce jour)', value: fmtAr(r.courierDue), strong: true },
   ] : [{ label: 'Aucune livraison', value: '—' }] });

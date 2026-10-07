@@ -95,17 +95,17 @@ function DayTables({ r }: { r: Report }) {
           <div key={cid}>
             <h3 className="card-pad" style={{ paddingBottom: 0 }}>{cid ? get<any>('couriers', cid)?.name ?? 'Livreur ?' : 'Retirées en boutique'} <span className="muted small">· {list.length} commande(s)</span></h3>
             <div className="table-wrap"><table className="table">
-              <thead><tr><th>Commande</th><th>Lieu</th><th>État</th><th className="t-num">Client paie</th><th className="t-num">Frais</th><th className="t-num">À verser</th></tr></thead>
+              <thead><tr><th>Commande</th><th>Lieu</th><th>État</th><th className="t-num">À encaisser</th><th className="t-num muted">Frais livreur</th><th className="t-num muted">Total client</th><th className="t-num">Frais à reverser</th></tr></thead>
               <tbody>
                 {list.map((d) => (
                   <tr key={d.o.id}>
                     <td><a href={`#/commandes/${d.o.id}`}>{d.o.number}</a> <span className="small muted">{orderLabel(d.o)}</span></td>
                     <td className="small">{get<Zone>('zones', d.o.zoneId || '')?.name}{d.o.place ? ` — ${d.o.place}` : ''}</td>
                     <td><Badge tone={ORDER_STATUS[d.o.status].tone}>{d.o.status === 'out' ? 'Pas encore confirmée' : ORDER_STATUS[d.o.status].label}</Badge>{d.settled && <span className="small pos"> · versée</span>}</td>
-                    <td className="t-num">{fmtAr(d.collect)}</td><td className="t-num">{fmtAr(d.fee)}</td><td className="t-num"><strong>{fmtAr(d.net)}</strong></td>
+                    <td className="t-num"><strong>{fmtAr(d.collect)}</strong>{d.collect === 0 && d.o.payments.some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé par Mobile Money</div> : null}</td><td className="t-num muted">{fmtAr(d.fee)}</td><td className="t-num muted">{fmtAr(d.clientPays)}</td><td className="t-num">{d.feeOwed ? fmtAr(d.feeOwed) : '—'}</td>
                   </tr>
                 ))}
-                <tr className="t-total"><td colSpan={3}>Sous-total</td><td className="t-num">{fmtAr(list.reduce((s, d) => s + d.collect, 0))}</td><td className="t-num">{fmtAr(list.reduce((s, d) => s + d.fee, 0))}</td><td className="t-num"><strong>{fmtAr(list.reduce((s, d) => s + d.net, 0))}</strong></td></tr>
+                <tr className="t-total"><td colSpan={3}>Sous-total</td><td className="t-num"><strong>{fmtAr(list.reduce((s, d) => s + d.collect, 0))}</strong></td><td className="t-num muted">{fmtAr(list.reduce((s, d) => s + d.fee, 0))}</td><td className="t-num muted">{fmtAr(list.reduce((s, d) => s + d.clientPays, 0))}</td><td className="t-num">{fmtAr(list.reduce((s, d) => s + d.feeOwed, 0))}</td></tr>
               </tbody>
             </table></div>
           </div>
@@ -119,19 +119,19 @@ function DayTables({ r }: { r: Report }) {
 function CourierTable({ r, week }: { r: Report; week?: boolean }) {
   return (
     <div className="card card-flush">
-      <div className="card-pad"><h2>Comptes livreurs{week ? ' de la semaine' : ''}</h2><p className="small muted">« À verser » = argent des clients − frais du livreur, pour les livraisons {week ? 'de la semaine' : 'du jour'}. « Compte à ce jour » comprend aussi les livraisons non encore versées des jours précédents.</p></div>
+      <div className="card-pad"><h2>Comptes livreurs{week ? ' de la semaine' : ''}</h2><p className="small muted">« À encaisser » = ce que le livreur encaisse pour la boutique (articles, sans ses frais). Les frais et le total payé par les clients sont indiqués pour information. « Frais à reverser » = frais déjà payés à la boutique (Mobile Money), à lui rendre en espèces. « Compte à ce jour » comprend aussi les livraisons non versées des jours précédents.</p></div>
       {r.couriers.length === 0 ? <p className="card-pad small muted">Aucun livreur concerné.</p> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>Livreur</th><th className="t-num">Livraisons</th><th className="t-num">Client paie</th><th className="t-num">Frais</th><th className="t-num">À verser</th><th className="t-num">Déjà versé</th><th className="t-num">Compte à ce jour</th></tr></thead>
+          <thead><tr><th>Livreur</th><th className="t-num">Livraisons</th><th className="t-num">À encaisser</th><th className="t-num muted">Frais livreur</th><th className="t-num muted">Total clients</th><th className="t-num">Frais à reverser</th><th className="t-num">Déjà versé</th><th className="t-num">Compte à ce jour</th></tr></thead>
           <tbody>
             {r.couriers.map((c) => (
               <tr key={c.courierId}>
                 <td><strong>{c.name}</strong>{c.out ? <div className="small muted">{c.out} pas encore confirmée(s)</div> : null}{c.refused ? <div className="small neg">{c.refused} refusée(s)</div> : null}</td>
-                <td className="t-num">{c.count}</td><td className="t-num">{fmtAr(c.collect)}</td><td className="t-num">{fmtAr(c.fees)}</td><td className="t-num"><strong>{fmtAr(c.net)}</strong></td>
+                <td className="t-num">{c.count}</td><td className="t-num"><strong>{fmtAr(c.collect)}</strong></td><td className="t-num muted">{fmtAr(c.fees)}</td><td className="t-num muted">{fmtAr(c.clientPays)}</td><td className="t-num">{c.feeOwed ? fmtAr(c.feeOwed) : '—'}</td>
                 <td className="t-num">{fmtAr(c.paidIn)}</td><td className={`t-num ${c.balance < 0 ? 'neg' : ''}`}><strong>{c.balance >= 0 ? fmtAr(c.balance) : `on lui doit ${fmtAr(-c.balance)}`}</strong></td>
               </tr>
             ))}
-            <tr className="t-total"><td>Total</td><td className="t-num">{r.couriers.reduce((s, c) => s + c.count, 0)}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.collect, 0))}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.fees, 0))}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.net, 0))}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.paidIn, 0))}</td><td className="t-num"><strong>{fmtAr(r.courierDue)}</strong></td></tr>
+            <tr className="t-total"><td>Total</td><td className="t-num">{r.couriers.reduce((s, c) => s + c.count, 0)}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.collect, 0))}</td><td className="t-num muted">{fmtAr(r.couriers.reduce((s, c) => s + c.fees, 0))}</td><td className="t-num muted">{fmtAr(r.couriers.reduce((s, c) => s + c.clientPays, 0))}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.feeOwed, 0))}</td><td className="t-num">{fmtAr(r.couriers.reduce((s, c) => s + c.paidIn, 0))}</td><td className="t-num"><strong>{fmtAr(r.courierDue)}</strong></td></tr>
           </tbody>
         </table></div>
       )}

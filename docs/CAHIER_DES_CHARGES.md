@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.2, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.3, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -182,6 +182,13 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - Pièce jointe (photo du reçu).
 
 - *Réalisé (étape 6)* : menu **Argent → Trésorerie** : soldes en temps réel (ventes payées en boutique + mouvements), dépenses avec photo du reçu, autres revenus, virements entre comptes (avec frais de retrait), apports et retraits du gérant, solde de départ de chaque compte, opérations récurrentes à confirmer. Les paiements aux fournisseurs chinois peuvent sortir d'un compte (montant en Ariary). Remboursement d'un client (échange moins cher) depuis la commande. Versement des livreurs dans **Livraisons → Livreurs → « Versement »** : l'admin **coche les livraisons réellement effectuées** ; seules celles-ci sont comptées dans le montant à verser, les autres restent sur le compte du livreur et sont **reportées automatiquement** au versement suivant. Une livraison cochée encore « à confirmer » est marquée livrée ; une livraison pas faite, refusée ou avec retour se corrige par « Retour / anomalie ». Versement partiel possible (le reste est reporté), historique gardé ; les commandes versées ne peuvent plus changer de livreur. **Ticket des livraisons** (58 mm) à remettre au livreur : pour chaque commande, client, lieu, articles, ce que le client paie, frais, à verser, cases « Livré / Pas livré / Retour » et remarque ; il le rapporte au moment du versement.
+
+### 9.5 Frais du livreur, paiements Mobile Money et corrections *(ajouté le 07/10/2026)*
+- Le client paie d'abord les **articles**, puis les **frais de livraison**. Le livreur **garde ses frais** : ils ne sont **jamais** dans le « montant à encaisser » ni dans les totaux des ventes, des récapitulatifs ou du tableau de bord ; ils apparaissent seulement **pour information**, avec le total réellement payé par les clients.
+- **À encaisser** (compte livreur) = ce que le livreur encaisse pour la boutique. Exemple : articles 50 000 Ar, Mobile Money 20 000 Ar → **30 000 Ar à encaisser** (+ ses frais qu'il garde).
+- **Commande entièrement payée par Mobile Money** : 0 Ar à encaisser, mais la livraison reste dans le compte du livreur (trace de qui a livré). Si les frais ont aussi été payés à la boutique, ils sont comptés à part comme **« frais à reverser »** au livreur en espèces (déduits au versement).
+- Par défaut, le client paie tout à la livraison ; dans la commande, « Paiement déjà reçu » permet d'indiquer un paiement total ou partiel par Mobile Money (boutons « Articles payés » / « Tout payé ») et affiche ce que le livreur encaissera.
+- **Correction d'un paiement** (admin et gérant) : nouveau montant et/ou moyen, motif ; l'ancien montant, le nouveau, la date et l'utilisateur restent visibles sous le paiement, dans l'historique de la commande et dans le journal. Reste à payer et compte du livreur se recalculent.
 
 ---
 
