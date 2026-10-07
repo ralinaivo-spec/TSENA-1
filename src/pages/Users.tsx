@@ -1,6 +1,6 @@
 // Gestion des utilisateurs : seul l'admin crée les comptes et attribue les rôles.
 import { useMemo, useState } from 'react';
-import { audit, normUsername, roleOf, setPassword, SUPERADMIN_ID, useCurrentUser, type Role, type User } from '../lib/auth';
+import { audit, normUsername, roleOf, setPassword, SUPERADMIN_ID, useCurrentUser, type Role, type User, useMe } from '../lib/auth';
 import { hashSecret } from '../lib/crypto';
 import { save, useTable } from '../lib/db';
 import { ADMIN_ROLE, SUPERADMIN_ROLE } from '../lib/permissions';
@@ -15,7 +15,7 @@ function tempPassword() {
 }
 
 export function UsersPage() {
-  const me = useCurrentUser()!;
+  const me = useMe();
   const users = useTable<User>('users');
   const roles = useTable<Role>('roles');
   const [q, setQ] = useState('');

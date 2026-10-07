@@ -1,13 +1,13 @@
 // Mon compte : mot de passe, question secrète, thème, déconnexion.
 import { useState } from 'react';
-import { checkPasswordStrength, logout, managesOwnPassword, roleOf, SECRET_QUESTIONS, setPassword, setSecretQuestion, audit, useCurrentUser } from '../lib/auth';
+import { checkPasswordStrength, logout, managesOwnPassword, roleOf, SECRET_QUESTIONS, setPassword, setSecretQuestion, audit, useCurrentUser, useMe } from '../lib/auth';
 import { verifySecret } from '../lib/crypto';
 import { PERMISSIONS, SUPERADMIN_ROLE } from '../lib/permissions';
 import { Badge, Button, PageHead, PasswordField, SelectField, TextField, toast } from '../ui/kit';
 import { ThemePicker } from './Settings';
 
 export function AccountPage() {
-  const me = useCurrentUser()!;
+  const me = useMe();
   const role = roleOf(me);
   const perms = me.roleId === SUPERADMIN_ROLE ? PERMISSIONS : PERMISSIONS.filter((p) => role?.permissions.includes(p.key));
 
@@ -47,7 +47,7 @@ export function AccountPage() {
 }
 
 function PasswordCard() {
-  const me = useCurrentUser()!;
+  const me = useMe();
   const [old, setOld] = useState('');
   const [pwd, setPwd] = useState('');
   const [pwd2, setPwd2] = useState('');
@@ -77,7 +77,7 @@ function PasswordCard() {
 }
 
 function SecretCard() {
-  const me = useCurrentUser()!;
+  const me = useMe();
   const known = SECRET_QUESTIONS.includes(me.secretQuestion || '');
   const [question, setQuestion] = useState(known ? me.secretQuestion! : me.secretQuestion ? '__custom' : SECRET_QUESTIONS[0]);
   const [custom, setCustom] = useState(known ? '' : me.secretQuestion || '');

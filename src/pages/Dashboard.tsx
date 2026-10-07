@@ -1,5 +1,5 @@
 // Accueil : résumé adapté au rôle. Les chiffres de vente arriveront avec les étapes suivantes.
-import { managesOwnPassword, roleOf, SUPERADMIN_ID, useCan, useCurrentUser, type User } from '../lib/auth';
+import { managesOwnPassword, roleOf, SUPERADMIN_ID, useCan, useCurrentUser, type User, useMe } from '../lib/auth';
 import { useMeta, useTable } from '../lib/db';
 import type { Order } from '../lib/orders';
 import { DEFAULT_COMPANY, useCompany } from '../lib/settings';
@@ -8,7 +8,7 @@ import { PageHead, timeAgo } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 export function DashboardPage() {
-  const me = useCurrentUser()!;
+  const me = useMe();
   const can = useCan();
   const company = useCompany();
   const users = useTable<User>('users');

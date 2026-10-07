@@ -1,6 +1,6 @@
 // Structure de l'application : démarrage, accès, menu adapté au rôle, pages.
 import { useEffect, useState, type ReactNode } from 'react';
-import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout } from './lib/auth';
+import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } from './lib/auth';
 import { getMeta, setMeta, useMeta } from './lib/db';
 import { useApplyAppearance, useCompany } from './lib/settings';
 import { syncNow, useSyncStatus } from './lib/sync';
@@ -100,7 +100,7 @@ function SyncPill() {
 }
 
 function Shell() {
-  const user = useCurrentUser()!;
+  const user = useMe();
   const can = useCan();
   const company = useCompany();
   const route = useRoute();
@@ -108,6 +108,8 @@ function Shell() {
   const items = NAV.filter((n) => !n.perm || can(n.perm));
   const current = [...items].sort((a, b) => b.path.length - a.path.length).find((n) => n.path === '/' ? route === '/' : route.startsWith(n.path)) ?? items[0];
   useEffect(() => { setOpen(false); window.scrollTo(0, 0); }, [route]);
+  // Menu ouvert sur téléphone : la page derrière ne défile plus, seul le menu défile.
+  useEffect(() => { document.body.classList.toggle('nav-lock', open); return () => document.body.classList.remove('nav-lock'); }, [open]);
   const groups = [...new Set(items.map((i) => i.group))].filter((g) => g !== 'hidden');
   const mobileItems = items.filter((i) => i.mobile).slice(0, 4);
 

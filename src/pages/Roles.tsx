@@ -1,6 +1,6 @@
 // Rôles et matrice des droits : l'admin coche ce que chaque rôle peut faire.
 import { Fragment, useState } from 'react';
-import { audit, useCurrentUser, type Role, type User } from '../lib/auth';
+import { audit, useCurrentUser, type Role, type User, useMe } from '../lib/auth';
 import { remove, save, useTable } from '../lib/db';
 import { PERMISSIONS, SUPERADMIN_ROLE } from '../lib/permissions';
 import { Badge, Button, Confirm, IconButton, Modal, PageHead, SelectField, TextField, toast } from '../ui/kit';
@@ -8,7 +8,7 @@ import { Badge, Button, Confirm, IconButton, Modal, PageHead, SelectField, TextF
 export function RolesPage() {
   const roles = useTable<Role>('roles');
   const users = useTable<User>('users');
-  const me = useCurrentUser()!;
+  const me = useMe();
   const [editing, setEditing] = useState<Role | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Role | null>(null);
   const ordered = [...roles].sort((a, b) => Number(!!b.system) - Number(!!a.system) || a.createdAt.localeCompare(b.createdAt));

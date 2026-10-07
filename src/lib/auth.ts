@@ -82,6 +82,13 @@ export function useCurrentUser(): User | undefined {
   const u = s ? get<User>('users', s.userId) : undefined;
   return u && u.active ? u : undefined;
 }
+/** Utilisateur connecté pour les écrans internes : garde le dernier connu pendant la déconnexion (évite un écran blanc). */
+let lastUser: User | undefined;
+export function useMe(): User {
+  const u = useCurrentUser();
+  if (u) lastUser = u;
+  return (u ?? lastUser)!;
+}
 export function roleOf(user?: User): Role | undefined {
   return user ? get<Role>('roles', user.roleId) : undefined;
 }
