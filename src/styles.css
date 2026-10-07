@@ -369,3 +369,16 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .variant-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
 .variant-cell { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface-2); }
 @media (max-width: 640px) { .hide-sm { display: none; } }
+
+/* ---- Étape 4 : commandes et livraisons ---- */
+.tab-count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--brand); color: var(--brand-ink); font-size: .75rem; }
+.summary-box { display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--radius-m); background: var(--surface-2); border: 1px solid var(--line); max-width: 420px; margin-left: auto; width: 100%; }
+.summary-box > div { display: flex; justify-content: space-between; gap: 12px; }
+.summary-box .summary-total { border-top: 1px solid var(--line-strong); padding-top: 6px; font-weight: 700; font-size: 1.05rem; }
+.action-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px; border-top: 1px solid var(--line); padding-top: 14px; }
+.btn-reset { width: 100%; text-align: left; background: none; border: 0; font: inherit; color: inherit; }
+.variant-cell.is-out { opacity: .75; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--line); display: grid; gap: 8px; }
+.timeline li { position: relative; }
+.timeline li::before { content: ''; position: absolute; left: -20px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); }
+.hours-row { gap: 10px; flex-wrap: wrap; }

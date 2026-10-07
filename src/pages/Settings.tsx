@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { getMeta, requeueAll, save, setMeta, useMeta, type BaseRecord } from '../lib/db';
-import { BRAND_SWATCHES, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
+import { BRAND_SWATCHES, DEFAULT_COMPANY, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
 import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus } from '../lib/sync';
 import { cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
 import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate } from '../ui/kit';
@@ -74,6 +74,21 @@ function CompanyTab() {
       <TextField label="Message en bas du ticket de caisse" value={form.ticketFooter ?? ''} onChange={set('ticketFooter')} />
       <SelectField label="Verrouillage automatique après inactivité" value={String(form.autoLockMinutes)} onChange={(v) => setForm({ ...form, autoLockMinutes: Number(v) })}
         options={[5, 10, 15, 30, 60, 120, 0].map((m) => ({ value: String(m), label: m ? `${m} minutes` : 'Jamais' }))} />
+      <div className="card stack" style={{ background: 'var(--surface-2)' }}>
+        <div><h3>Horaires d'ouverture</h3><p className="small muted">Les commandes reçues en dehors de ces horaires sont marquées « hors heures » et attendent l'ouverture pour être préparées. Les commandes sont acceptées tous les jours.</p></div>
+        {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+          const h = (form.hours ?? DEFAULT_COMPANY.hours!)[String(d)];
+          const setH = (v: { open: string; close: string } | null) => setForm({ ...form, hours: { ...(form.hours ?? DEFAULT_COMPANY.hours!), [String(d)]: v } });
+          return (
+            <div key={d} className="row hours-row">
+              <span style={{ width: 90 }}><strong>{['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][d]}</strong></span>
+              <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={!!h} onChange={(e) => setH(e.target.checked ? { open: '08:00', close: '17:00' } : null)} /> Ouvert</label>
+              {h && <><input className="cell-input" style={{ width: 110 }} type="time" aria-label="Ouverture" value={h.open} onChange={(e) => setH({ ...h, open: e.target.value })} /> à <input className="cell-input" style={{ width: 110 }} type="time" aria-label="Fermeture" value={h.close} onChange={(e) => setH({ ...h, close: e.target.value })} /></>}
+            </div>
+          );
+        })}
+      </div>
+      <TextField label="Prix de gros à partir de (pièces)" value={String(form.wholesaleMinQty ?? 3)} onChange={(v) => setForm({ ...form, wholesaleMinQty: Number(v.replace(/\D/g, '')) || 0 })} inputMode="numeric" hint="Le vendeur peut aussi accorder le prix de gros à la main, commande par commande." />
       <div className="row">
         <Button busy={busy} disabled={!form.name.trim()} onClick={async () => {
           setBusy(true);

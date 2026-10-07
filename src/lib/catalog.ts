@@ -26,7 +26,7 @@ export interface Variant extends BaseRecord {
   priceWholesale?: number;
   active: boolean;
 }
-export type MoveType = 'initial' | 'reception' | 'sale' | 'return' | 'adjust' | 'inventory';
+export type MoveType = 'initial' | 'reception' | 'sale' | 'return' | 'adjust' | 'inventory' | 'dispatch' | 'delivery_return' | 'exchange_in';
 export interface StockMove extends BaseRecord {
   variantId: string;
   qty: number;          // + entrée, − sortie
@@ -42,6 +42,7 @@ export interface StockMove extends BaseRecord {
 
 export const MOVE_LABELS: Record<MoveType, string> = {
   initial: 'Stock initial', reception: 'Réception', sale: 'Vente', return: 'Retour client', adjust: 'Ajustement', inventory: 'Inventaire',
+  dispatch: 'Sortie livraison', delivery_return: 'Retour de livraison', exchange_in: 'Retour échange',
 };
 export const ADJUST_REASONS = ['Correction de saisie', 'Casse / abîmé', 'Perte', 'Vol', 'Cadeau / échantillon', 'Usage interne', 'Retour fournisseur', 'Autre'];
 
@@ -229,7 +230,7 @@ export async function createProduct(data: Partial<Product> & { code: string; nam
   return p as Product;
 }
 
-export function nextNumber(prefix: string, table: 'purchases' | 'receptions') {
+export function nextNumber(prefix: string, table: 'purchases' | 'receptions' | 'orders') {
   const nums = all(table).map((r: any) => parseInt(String(r.number || '').replace(/\D/g, ''), 10)).filter((n) => !isNaN(n));
   return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
 }

@@ -16,7 +16,7 @@ let toasts: Toast[] = [];
 const toastSubs = new Set<() => void>();
 export function toast(text: string, kind: Toast['kind'] = 'ok') {
   const t = { id: Date.now() + Math.random(), text, kind };
-  toasts = [...toasts, t];
+  toasts = [...toasts.slice(-2), t];
   toastSubs.forEach((f) => f());
   setTimeout(() => { toasts = toasts.filter((x) => x !== t); toastSubs.forEach((f) => f()); }, kind === 'error' ? 6000 : 3500);
 }

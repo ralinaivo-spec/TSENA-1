@@ -3,10 +3,10 @@
 import { useSyncExternalStore } from 'react';
 
 export const DB_NAME = 'tsena';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 /** Tables métier synchronisées. Ajouter un nom ici (et augmenter DB_VERSION) crée la table. */
-export const TABLES = ['users', 'roles', 'settings', 'audit', 'categories', 'products', 'variants', 'stockMoves', 'suppliers', 'purchases', 'receptions'] as const;
+export const TABLES = ['users', 'roles', 'settings', 'audit', 'categories', 'products', 'variants', 'stockMoves', 'suppliers', 'purchases', 'receptions', 'zones', 'couriers', 'customers', 'orders'] as const;
 export type TableName = (typeof TABLES)[number];
 
 export interface BaseRecord {

@@ -13,10 +13,13 @@ export interface Company extends BaseRecord {
   stat?: string;
   ticketFooter?: string;
   autoLockMinutes: number;
+  wholesaleMinQty?: number;
+  hours?: Record<string, { open: string; close: string } | null>; // clé 0 = dimanche … 6 = samedi
 }
 
 export const DEFAULT_COMPANY: Company = {
-  id: 'company', name: 'Ma boutique', brandColor: '#17695A', autoLockMinutes: 30,
+  id: 'company', name: 'Ma boutique', brandColor: '#17695A', autoLockMinutes: 30, wholesaleMinQty: 3,
+  hours: { 1: { open: '08:00', close: '17:00' }, 2: { open: '08:00', close: '17:00' }, 3: { open: '08:00', close: '17:00' }, 4: { open: '08:00', close: '17:00' }, 5: { open: '08:00', close: '17:00' }, 6: { open: '08:00', close: '14:00' }, 0: null },
   ticketFooter: 'Misaotra tompoko ! Merci de votre visite.', createdAt: '2000-01-01T00:00:00.000Z', updatedAt: '2000-01-01T00:00:00.000Z',
 };
 

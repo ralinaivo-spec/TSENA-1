@@ -1,6 +1,7 @@
 // Accueil : résumé adapté au rôle. Les chiffres de vente arriveront avec les étapes suivantes.
 import { managesOwnPassword, roleOf, SUPERADMIN_ID, useCan, useCurrentUser, type User } from '../lib/auth';
 import { useMeta, useTable } from '../lib/db';
+import type { Order } from '../lib/orders';
 import { DEFAULT_COMPANY, useCompany } from '../lib/settings';
 import { useSyncStatus } from '../lib/sync';
 import { PageHead, timeAgo } from '../ui/kit';
@@ -11,6 +12,7 @@ export function DashboardPage() {
   const can = useCan();
   const company = useCompany();
   const users = useTable<User>('users');
+  const orders = useTable<Order>('orders');
   const status = useSyncStatus();
   const cloud = useMeta('cloud', null);
   const lastFile = useMeta<string | null>('lastFileBackup', null);
@@ -43,6 +45,16 @@ export function DashboardPage() {
         </div>
       )}
 
+      {can('orders.create') && (
+        <div className="stat-grid">
+          {([['new', 'À confirmer', 'confirmer'], ['confirmed', 'À préparer', 'preparer'], ['ready', 'Prêtes à livrer', 'pretes'], ['out', 'En livraison', 'livraison']] as const).map(([st, label, tab]) => (
+            <a key={st} className="card stat" href={`#/commandes/${tab}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+              <span className="muted small">{label}</span>
+              <span className="stat-value">{orders.filter((o) => o.status === st).length}</span>
+            </a>
+          ))}
+        </div>
+      )}
       <div className="grid-2">
         {can('users.manage') && (
           <a className="card stat" href="#/utilisateurs" style={{ textDecoration: 'none', color: 'inherit' }}>

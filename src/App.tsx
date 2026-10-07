@@ -19,15 +19,21 @@ import { StockPage } from './pages/Stock';
 import { PurchasesPage } from './pages/Purchases';
 import { ReceptionsPage } from './pages/Receptions';
 import { ImportPage } from './pages/Import';
+import { OrdersPage } from './pages/Orders';
+import { DeliveriesPage } from './pages/Deliveries';
+import { CustomersPage } from './pages/Customers';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
 const NAV: NavItem[] = [
   { path: '/', label: 'Accueil', icon: 'home', group: '', page: () => <DashboardPage />, mobile: true },
+  { path: '/commandes', label: 'Commandes', icon: 'list', perm: 'orders.create', group: 'Ventes', page: () => <OrdersPage />, mobile: true },
+  { path: '/livraisons', label: 'Livraisons', icon: 'truck', perm: 'deliveries.manage', group: 'Ventes', page: () => <DeliveriesPage />, mobile: true },
+  { path: '/clients', label: 'Clients', icon: 'users', perm: 'orders.create', group: 'Ventes', page: () => <CustomersPage /> },
   { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Stock', page: () => <ProductsPage />, mobile: true },
-  { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage />, mobile: true },
-  { path: '/achats', label: 'Achats Chine', icon: 'truck', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage />, mobile: true },
-  { path: '/receptions', label: 'Réceptions', icon: 'inbox', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
+  { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage /> },
+  { path: '/achats', label: 'Achats Chine', icon: 'inbox', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage /> },
+  { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
   { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage /> },
   { path: '/roles', label: 'Rôles et accès', icon: 'shield', perm: 'users.manage', group: 'Administration', page: () => <RolesPage /> },
   { path: '/journal', label: "Journal d'activité", icon: 'list', perm: 'audit.view', group: 'Administration', page: () => <AuditPage /> },

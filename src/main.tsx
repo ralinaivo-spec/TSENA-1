@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { getMeta, newId, openDb, setMeta } from './lib/db';
 import { seedAccounts } from './lib/auth';
+import { seedZones } from './lib/orders';
 import { startSync } from './lib/sync';
 import { App } from './App';
 
@@ -31,6 +32,7 @@ async function boot() {
       await setMeta('deviceName', guessDeviceName());
     }
     await seedAccounts();
+    await seedZones();
     startSync();
     root.render(<App />);
   } catch (e: any) {
