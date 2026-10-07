@@ -399,3 +399,4 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .cart-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pos-total { font-size: 1.4rem; color: var(--brand); }
 @media (max-width: 900px) { .pos-layout { grid-template-columns: 1fr; } .pos-cart { position: static; } .pos-grid { max-height: none; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); } }
+.btn-compact { padding: 0 12px; } @media (max-width: 640px) { .btn-compact { padding: 0; width: 44px; } }

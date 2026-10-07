@@ -5,6 +5,7 @@ import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
 import { courierAccount, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, TextField, Toggle, navigate, toast, useRoute } from '../ui/kit';
+import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReturnModal, OrderRow } from './Orders';
 
@@ -200,51 +201,69 @@ function CourierForm({ courier, onClose }: { courier?: Courier; onClose: () => v
 export function Zones() {
   const can = useCan();
   const zones = useTable<Zone>('zones');
-  const [name, setName] = useState('');
-  const [fee, setFee] = useState('');
+  const [form, setForm] = useState<Zone | 'new' | null>(null);
   const [del, setDel] = useState<Zone | null>(null);
-  const [vals, setVals] = useState<Record<string, { name?: string; fee?: string }>>({});
   const sorted = [...zones].sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name));
-  const edit = can('couriers.manage');
+  const edit = can('couriers.manage') || can('settings.company');
   return (
     <>
-      <div className="card stack">
-        <p className="small muted">Les frais de chaque zone sont proposés automatiquement dans les commandes, et restent modifiables commande par commande.</p>
-        {edit && (
-          <form className="row" style={{ alignItems: 'flex-end' }} onSubmit={async (e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            await save('zones', { name: name.trim(), fee: parseNum(fee) || 0, order: sorted.length, active: true });
-            setName(''); setFee('');
-          }}>
-            <div style={{ flex: '2 1 220px' }}><TextField label="Nouvelle zone / axe" value={name} onChange={setName} placeholder="Ex. Ivandry – Ambatobe" /></div>
-            <div style={{ flex: '1 1 120px' }}><TextField label="Frais (Ar)" value={fee} onChange={setFee} inputMode="numeric" /></div>
-            <Button type="submit" icon="plus" disabled={!name.trim()}>Ajouter</Button>
-          </form>
-        )}
+      <div className="card row-between">
+        <p className="small muted" style={{ flex: '1 1 260px' }}>Les frais de chaque zone sont proposés automatiquement dans les commandes, et restent modifiables commande par commande.</p>
+        {edit ? <Button icon="plus" onClick={() => setForm('new')}>Ajouter une zone</Button> : <Badge>Modification réservée au gérant</Badge>}
       </div>
       <div className="card card-flush">
-        <div className="table-wrap">
-          <table className="table">
-            <thead><tr><th>Zone</th><th style={{ width: 140 }}>Frais (Ar)</th><th>Type</th><th>État</th><th></th></tr></thead>
-            <tbody>
-              {sorted.map((z) => (
-                <tr key={z.id} style={{ opacity: z.active === false ? .55 : 1 }}>
-                  <td>{edit ? <input className="cell-input" aria-label="Nom" value={vals[z.id]?.name ?? z.name} onChange={(e) => setVals({ ...vals, [z.id]: { ...vals[z.id], name: e.target.value } })} onBlur={async () => { const v = vals[z.id]?.name; if (v != null && v.trim() && v !== z.name) await save('zones', { id: z.id, name: v.trim() }); }} /> : z.name}</td>
-                  <td>{edit ? <input className="cell-input" inputMode="numeric" aria-label="Frais" value={vals[z.id]?.fee ?? String(z.fee)} onChange={(e) => setVals({ ...vals, [z.id]: { ...vals[z.id], fee: e.target.value } })} onBlur={async () => { const v = parseNum(vals[z.id]?.fee); if (v != null && v !== z.fee) { await save('zones', { id: z.id, fee: v }); toast('Frais enregistrés'); } }} /> : fmtAr(z.fee)}</td>
-                  <td>{edit ? <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={isPickupZone(z)} disabled={z.id === 'zone-retrait'} onChange={(e) => save('zones', { id: z.id, pickup: e.target.checked, ...(e.target.checked ? { fee: 0 } : {}) })} /> Sur boutique</label> : isPickupZone(z) ? 'Sur boutique' : 'Livraison'}</td>
-                  <td>{z.active === false ? <Badge>Masquée</Badge> : <Badge tone="ok">Active</Badge>}</td>
-                  <td className="t-actions">{edit && <>
-                    <Button variant="quiet" onClick={() => save('zones', { id: z.id, active: z.active === false })}>{z.active === false ? 'Réactiver' : 'Masquer'}</Button>
-                    <IconButton icon="trash" label="Supprimer" onClick={() => setDel(z)} />
-                  </>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {sorted.length === 0 ? <Empty icon="truck" title="Aucune zone">{edit && <Button icon="plus" onClick={() => setForm('new')}>Ajouter une zone</Button>}</Empty> : (
+          <ul className="list">
+            {sorted.map((z) => (
+              <li key={z.id} className="list-item" style={{ opacity: z.active === false ? .55 : 1 }}>
+                <span className="avatar"><Icon name={isPickupZone(z) ? 'store' : 'truck'} size={18} /></span>
+                <div className="list-item-main">
+                  <div className="row" style={{ gap: 8 }}><span className="list-item-title">{z.name}</span>{z.active === false && <Badge>Masquée</Badge>}</div>
+                  <p className="small"><strong className="num">{fmtAr(z.fee)}</strong> <span className="muted">· {isPickupZone(z) ? 'Sur boutique, sans livreur' : 'Livraison'}</span></p>
+                </div>
+                {edit && <div className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+                  <Button variant="ghost" icon="edit" className="btn-compact" onClick={() => setForm(z)}><span className="hide-sm">Modifier</span></Button>
+                  {z.id !== 'zone-retrait' && <IconButton icon="trash" label="Supprimer" onClick={() => setDel(z)} />}
+                </div>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      {del && <Confirm title="Supprimer la zone" danger confirmLabel="Supprimer" message={<p>La zone « {del.name} » sera supprimée. Les commandes déjà saisies gardent leurs frais.</p>} onClose={() => setDel(null)} onConfirm={async () => { await remove('zones', del.id); }} />}
+      {form && <ZoneForm zone={form === 'new' ? undefined : form} count={sorted.length} onClose={() => setForm(null)} />}
+      {del && <Confirm title="Supprimer la zone" danger confirmLabel="Supprimer" message={<p>La zone « {del.name} » sera supprimée. Les commandes déjà saisies gardent leurs frais.</p>} onClose={() => setDel(null)} onConfirm={async () => { await remove('zones', del.id); await audit('Zone supprimée', del.name); toast('Zone supprimée'); }} />}
     </>
+  );
+}
+
+function ZoneForm({ zone, count, onClose }: { zone?: Zone; count: number; onClose: () => void }) {
+  const [name, setName] = useState(zone?.name ?? '');
+  const [fee, setFee] = useState(zone ? String(zone.fee) : '');
+  const [pickup, setPickup] = useState(zone ? isPickupZone(zone) : false);
+  const [active, setActive] = useState(zone?.active !== false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fixedPickup = zone?.id === 'zone-retrait';
+  return (
+    <Modal title={zone ? 'Modifier la zone' : 'Nouvelle zone de livraison'} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={async () => {
+        setError(null);
+        if (!name.trim()) return setError('Indiquez le nom de la zone.');
+        const f = pickup ? 0 : parseNum(fee);
+        if (!pickup && !(f != null && f > 0)) return setError('Indiquez les frais de livraison de cette zone.');
+        setBusy(true);
+        await save('zones', { id: zone?.id, name: name.trim(), fee: f ?? 0, pickup: pickup || undefined, active, order: zone?.order ?? count });
+        await audit(zone ? 'Zone modifiée' : 'Zone ajoutée', `${name.trim()} — ${f ?? 0} Ar`);
+        toast(zone ? 'Zone modifiée' : 'Zone ajoutée');
+        setBusy(false); onClose();
+      }}>{zone ? 'Enregistrer' : 'Ajouter la zone'}</Button></>}>
+      <div className="stack">
+        <TextField label="Nom de la zone / de l’axe" value={name} onChange={setName} placeholder="Ex. Ivandry – Ambatobe" autoFocus />
+        {!pickup && <TextField label="Frais de livraison (Ar)" value={fee} onChange={setFee} inputMode="numeric" placeholder="Ex. 4000" />}
+        <Toggle checked={pickup} onChange={setPickup} disabled={fixedPickup} label="Sur boutique (le client vient chercher : 0 Ar, sans livreur)" />
+        {zone && <Toggle checked={active} onChange={setActive} label="Zone active (décochez pour la masquer dans les commandes)" />}
+        {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
+      </div>
+    </Modal>
   );
 }
