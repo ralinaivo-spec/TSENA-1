@@ -96,7 +96,7 @@ export async function cloudBackup(label: string) {
 }
 
 export async function listCloudBackups(): Promise<{ id: string; created_at: string; label: string; device: string }[]> {
-  const res = await cloudFetch('backups?select=id,created_at,label,device&order=created_at.desc&limit=60');
+  const res = await cloudFetch('backups?select=id,created_at,label,device&order=created_at.desc&limit=200');
   return res.json();
 }
 

@@ -5,11 +5,13 @@ import { getMeta, requeueAll, save, setMeta, useMeta, type BaseRecord } from '..
 import { BRAND_SWATCHES, DEFAULT_COMPANY, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
 import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus } from '../lib/sync';
 import { cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
-import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate } from '../ui/kit';
+import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CloudFields } from './Auth';
 import { Zones } from './Deliveries';
 import { PrintersTab } from './Printers';
+import { ClearDataCard, ToolsTab } from './Tools';
+import { KEEP, deleteCloudBackup, pruneBackups } from '../lib/maintenance';
 
 const TABS = [
   { key: 'societe', label: 'Société', perm: 'settings.company' },
@@ -18,6 +20,7 @@ const TABS = [
   { key: 'zones', label: 'Zones de livraison', perm: 'couriers.view' },
   { key: 'cloud', label: 'Cloud et synchronisation', perm: 'backup.manage' },
   { key: 'sauvegarde', label: 'Sauvegardes', perm: 'backup.manage' },
+  { key: 'outils', label: 'Outils', perm: 'users.manage' },
   { key: 'systeme', label: 'Système', perm: 'system.admin' },
 ];
 
@@ -40,6 +43,7 @@ export function SettingsPage() {
       {current.key === 'zones' && <Zones />}
       {current.key === 'cloud' && <CloudTab />}
       {current.key === 'sauvegarde' && <BackupTab />}
+      {current.key === 'outils' && <ToolsTab />}
       {current.key === 'systeme' && <SystemTab />}
     </>
   );
@@ -242,7 +246,7 @@ function BackupTab() {
 
       <div className="card stack">
         <div className="row-between">
-          <div><h3>Copies dans le cloud</h3><p className="muted small">Une copie est faite automatiquement chaque jour par l'appareil de l'admin.</p></div>
+          <div><h3>Copies dans le cloud</h3><p className="muted small">Faites automatiquement chaque jour par l'appareil d'un admin ou du gérant. On garde les {KEEP.daily} dernières quotidiennes, {KEEP.weekly} hebdomadaires et {KEEP.monthly} mensuelles ; les plus anciennes sont effacées toutes seules. Les copies manuelles ne sont jamais effacées automatiquement.</p></div>
           {hasCloud && <Badge tone={lastCloud ? 'ok' : 'warn'}>Dernière : {timeAgo(lastCloud ?? undefined)}</Badge>}
         </div>
         {hasCloud ? (
@@ -269,7 +273,7 @@ function BackupTab() {
       )}
 
       {cloudList && (
-        <Modal title="Copies dans le cloud" onClose={() => setCloudList(null)} wide>
+        <Modal title="Copies dans le cloud" onClose={() => setCloudList(null)} wide footer={<Button variant="ghost" onClick={async () => { try { const n = await pruneBackups(); setCloudList(await listCloudBackups()); toast(n ? `${n} ancienne(s) copie(s) effacée(s)` : 'Rien à nettoyer'); } catch (e: any) { toast(e.message, 'error'); } }}>Nettoyer les anciennes copies automatiques</Button>}>
           {cloudList.length === 0 ? <Empty icon="cloud" title="Aucune copie pour l'instant" /> : (
             <ul className="list">
               {cloudList.map((b) => (
@@ -282,6 +286,10 @@ function BackupTab() {
                     try { setPick({ label: `la copie cloud du ${fmtDateTime(b.created_at)}`, data: await fetchCloudBackup(b.id) }); setCloudList(null); }
                     catch (e: any) { toast(e.message, 'error'); }
                   }}>Restaurer</Button>
+                  <IconButton icon="trash" label="Supprimer cette copie" onClick={async () => {
+                    if (!confirm(`Supprimer la copie du ${fmtDateTime(b.created_at)} ?`)) return;
+                    try { await deleteCloudBackup(b.id, b.label); setCloudList(cloudList.filter((x) => x.id !== b.id)); toast('Copie supprimée'); } catch (e: any) { toast(e.message, 'error'); }
+                  }} />
                 </li>
               ))}
             </ul>
@@ -358,6 +366,7 @@ function SystemTab() {
         <div><h3>Réparer la synchronisation</h3><p className="small muted">Retélécharge toutes les données du cloud et renvoie toutes celles de cet appareil. À utiliser si un appareil semble ne pas avoir les mêmes données que les autres.</p></div>
         <div><Button variant="ghost" icon="refresh" onClick={() => setResyncOpen(true)}>Tout resynchroniser</Button></div>
       </div>
+      <ClearDataCard />
       <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
         <div><h3>Remettre à l'état d'origine</h3><p className="small muted">Efface toutes les données et tous les comptes sur tous les appareils, et remet le compte super-admin avec son mot de passe d'origine. Une sauvegarde est faite juste avant.</p></div>
         <div><Button variant="danger" icon="trash" onClick={() => setResetOpen(true)}>Remettre à l'état d'origine</Button></div>

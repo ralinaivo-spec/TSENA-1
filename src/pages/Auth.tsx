@@ -1,7 +1,9 @@
 // Écrans d'accès : connexion, première connexion, mot de passe oublié, verrouillage.
 import { useState, type ReactNode } from 'react';
 import { checkPasswordStrength, checkSecretAnswer, findUser, managesOwnPassword, login, logout, roleOf, SECRET_QUESTIONS, setPassword, setSecretQuestion, audit, type User } from '../lib/auth';
-import { save, setMeta } from '../lib/db';
+import { all, save, setMeta, useMeta, useTable } from '../lib/db';
+import { checkPin, hasPin, maskEmail, resetByEmail, sendResetLink } from '../lib/maintenance';
+import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import { connectCloud } from '../lib/sync';
 import { Button, PasswordField, SelectField, TextField, toast } from '../ui/kit';
@@ -52,6 +54,7 @@ function LoginForm({ onForgot, onCloud }: { onForgot: () => void; onCloud: () =>
         <h2>Connexion</h2>
         <p className="muted">Entrez le nom d'utilisateur et le mot de passe donnés par votre admin.</p>
       </div>
+      <ResetErrorNotice />
       <form className="stack" onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true); setError(null);
@@ -74,6 +77,9 @@ function LoginForm({ onForgot, onCloud }: { onForgot: () => void; onCloud: () =>
 function ForgotScreen({ onBack }: { onBack: () => void }) {
   const [username, setUsername] = useState('');
   const [user, setUser] = useState<User | null>(null);
+  const [method, setMethod] = useState<'' | 'question' | 'email'>('');
+  const [sent, setSent] = useState(false);
+  const cloud = getCloud();
   const [answer, setAnswer] = useState('');
   const [verified, setVerified] = useState(false);
   const [pwd, setPwd] = useState('');
@@ -86,7 +92,7 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
     <AuthShell>
       <div>
         <h2>Mot de passe oublié</h2>
-        <p className="muted">Répondez à votre question secrète pour choisir un nouveau mot de passe.</p>
+        <p className="muted">{!user ? 'Indiquez votre nom d’utilisateur.' : method === 'email' ? 'Un lien va être envoyé à l’adresse e-mail de la société.' : method === 'question' ? 'Répondez à votre question secrète pour choisir un nouveau mot de passe.' : 'Comment voulez-vous retrouver l’accès ?'}</p>
       </div>
       {!user && (
         <form className="stack" onSubmit={(e) => {
@@ -94,15 +100,37 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
           const u = findUser(username);
           if (!u) return setError("Ce nom d'utilisateur n'existe pas sur cet appareil.");
           if (!managesOwnPassword(u)) return setError("Votre mot de passe est donné par le gérant : demandez-lui de vous le redonner.");
-          if (!u.secretAnswerHash) return setError("Ce compte n'a pas de question secrète. Demandez à l'admin de réinitialiser votre mot de passe.");
+          if (!u.secretAnswerHash && !getCloud()) return setError("Ce compte n'a pas de question secrète et l'appareil n'est pas relié au cloud. Demandez au super-admin de réinitialiser votre mot de passe.");
           setError(null); setUser(u);
+          setMethod(!getCloud() ? 'question' : !u.secretAnswerHash ? 'email' : '');
         }}>
           <TextField label="Nom d'utilisateur" value={username} onChange={setUsername} autoCapitalize="none" autoFocus />
           {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
           <Button type="submit" block disabled={!username}>Continuer</Button>
         </form>
       )}
-      {user && !verified && (
+      {user && !method && (
+        <div className="stack">
+          <Button block variant="ghost" icon="key" onClick={() => setMethod('question')}>Répondre à ma question secrète</Button>
+          <Button block variant="ghost" icon="cloud" onClick={() => setMethod('email')}>Recevoir un lien par e-mail</Button>
+        </div>
+      )}
+      {user && method === 'email' && (
+        sent ? (
+          <div className="notice notice-ok"><Icon name="check" /><span>E-mail envoyé à <strong>{maskEmail(cloud?.email || '')}</strong>. Ouvrez-le <strong>sur cet appareil</strong> (ou un autre appareil où TSENA est relié au cloud) et touchez le lien : vous pourrez choisir un nouveau mot de passe. Le lien est valable 1 heure. Pensez à regarder dans les spams.</span></div>
+        ) : (
+          <form className="stack" onSubmit={async (e) => {
+            e.preventDefault(); setBusy(true); setError(null);
+            try { await sendResetLink(user); setSent(true); } catch (err: any) { setError(err.message); } finally { setBusy(false); }
+          }}>
+            <div className="card"><p className="small muted">Le lien sera envoyé à l’adresse du compte cloud de la société</p><p><strong>{maskEmail(cloud?.email || '')}</strong></p></div>
+            {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
+            <Button type="submit" block busy={busy}>Envoyer le lien</Button>
+          </form>
+        )
+      )}
+      {user && method === 'question' && !user.secretAnswerHash && <div className="notice notice-danger"><Icon name="alert" /><span>Ce compte n’a pas de question secrète.</span></div>}
+      {user && method === 'question' && user.secretAnswerHash && !verified && (
         <form className="stack" onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
@@ -243,9 +271,15 @@ export function FirstSetupScreen({ user }: { user: User }) {
 
 /** Écran de verrouillage après inactivité. */
 export function LockScreen({ user, onUnlock }: { user: User; onUnlock: () => void }) {
+  const pins = useMeta<Record<string, string>>('pins', {});
+  const withPin = !!pins[user.id];
+  const [usePwd, setUsePwd] = useState(!withPin);
   const [pwd, setPwd] = useState('');
+  const [pin, setPin] = useState('');
+  const [tries, setTries] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const unlock = async () => { await setMeta('lastActivity', Date.now()); onUnlock(); };
   return (
     <AuthShell>
       <div className="row">
@@ -255,18 +289,71 @@ export function LockScreen({ user, onUnlock }: { user: User; onUnlock: () => voi
           <p className="muted small">{roleOf(user)?.name} · session verrouillée</p>
         </div>
       </div>
+      {!usePwd ? (
+        <form className="stack" onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true); setError(null);
+          if (await checkPin(user.id, pin)) { await unlock(); }
+          else { const t = tries + 1; setTries(t); setPin(''); if (t >= 5) { setUsePwd(true); setError('Trop d’essais : entrez votre mot de passe.'); } else setError(`Code incorrect (${5 - t} essai(s) restant(s)).`); }
+          setBusy(false);
+        }}>
+          <div className="field"><label htmlFor="pin">Code PIN</label>
+            <input id="pin" className="pin-input" type="password" inputMode="numeric" autoComplete="off" maxLength={6} value={pin} autoFocus onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} /></div>
+          {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
+          <Button type="submit" busy={busy} block icon="lock" disabled={pin.length < 4}>Déverrouiller</Button>
+          <Button variant="quiet" type="button" onClick={() => { setUsePwd(true); setError(null); }}>Utiliser mon mot de passe</Button>
+        </form>
+      ) : (
+        <form className="stack" onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true); setError(null);
+          try { await login(user.username, pwd); await unlock(); }
+          catch (err: any) { setError(err.message); }
+          finally { setBusy(false); }
+        }}>
+          <PasswordField label="Mot de passe" value={pwd} onChange={setPwd} autoFocus />
+          {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
+          <Button type="submit" busy={busy} block icon="lock" disabled={!pwd}>Déverrouiller</Button>
+        </form>
+      )}
+      <Button variant="quiet" onClick={() => logout()}>Changer d'utilisateur</Button>
+    </AuthShell>
+  );
+}
+
+function ResetErrorNotice() {
+  const err = useMeta<string | null>('resetError', null);
+  if (!err) return null;
+  return <div className="notice notice-danger"><Icon name="alert" /><span>Mot de passe oublié : {err} <button className="link-btn" onClick={() => setMeta('resetError', null)}>OK</button></span></div>;
+}
+
+/** Après le lien reçu par e-mail : choisir le compte et son nouveau mot de passe. */
+export function EmailResetScreen() {
+  useTable('users');
+  const pending = useMeta<{ userId: string } | null>('pendingReset', null);
+  const accounts = all<User>('users').filter((u) => managesOwnPassword(u) && u.active !== false);
+  const [userId, setUserId] = useState(pending?.userId && accounts.some((a) => a.id === pending.userId) ? pending.userId : accounts[0]?.id ?? '');
+  const [pwd, setPwd] = useState('');
+  const [pwd2, setPwd2] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const strength = pwd ? checkPasswordStrength(pwd) : null;
+  return (
+    <AuthShell>
+      <div><h2>Nouveau mot de passe</h2><p className="muted">Le lien reçu par e-mail est valide. Choisissez le compte et son nouveau mot de passe.</p></div>
       <form className="stack" onSubmit={async (e) => {
         e.preventDefault();
-        setBusy(true); setError(null);
-        try { await login(user.username, pwd); await setMeta('lastActivity', Date.now()); onUnlock(); }
-        catch (err: any) { setError(err.message); }
-        finally { setBusy(false); }
+        if (strength) return;
+        if (pwd !== pwd2) return setError('Les deux mots de passe ne sont pas identiques.');
+        setBusy(true);
+        try { await resetByEmail(userId, pwd); toast('Mot de passe changé. Connectez-vous.'); } catch (err: any) { setError(err.message); } finally { setBusy(false); }
       }}>
-        <PasswordField label="Mot de passe" value={pwd} onChange={setPwd} autoFocus />
-        {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
-        <Button type="submit" busy={busy} block icon="lock" disabled={!pwd}>Déverrouiller</Button>
+        <SelectField label="Compte" value={userId} onChange={setUserId} options={accounts.map((u) => ({ value: u.id, label: `${u.fullName} (${u.username})` }))} />
+        <PasswordField label="Nouveau mot de passe" value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
+        <PasswordField label="Retapez le mot de passe" value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
+        <Button type="submit" block busy={busy} disabled={!pwd || !pwd2 || !userId}>Enregistrer le mot de passe</Button>
       </form>
-      <Button variant="quiet" onClick={() => logout()}>Changer d'utilisateur</Button>
+      <Button variant="quiet" onClick={() => setMeta('resetGranted', null)}>Annuler</Button>
     </AuthShell>
   );
 }

@@ -8,7 +8,8 @@ import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } fro
 import { getMeta, setMeta, useMeta } from './lib/db';
 import { useApplyAppearance, useCompany } from './lib/settings';
 import { syncNow, useSyncStatus } from './lib/sync';
-import { autoCloudBackup } from './lib/backup';
+import { autoBackups } from './lib/maintenance';
+import { EmailResetScreen } from './pages/Auth';
 import { Icon, type IconName } from './ui/icons';
 import { Button, IconButton, Toasts, navigate, useRoute } from './ui/kit';
 import { BrandLogo, FirstSetupScreen, LockScreen, LoginScreen } from './pages/Auth';
@@ -77,10 +78,13 @@ export function App() {
     return () => { events.forEach((e) => window.removeEventListener(e, throttled)); clearInterval(t); document.removeEventListener('visibilitychange', check); };
   }, [user?.id, company.autoLockMinutes, locked]);
 
-  useEffect(() => { if (user) autoCloudBackup(); }, [user?.id]);
+  // Copies automatiques dans le cloud (quotidienne / hebdomadaire / mensuelle), vérifiées toutes les heures.
+  useEffect(() => { if (!user) return; autoBackups(); const t = setInterval(autoBackups, 3600_000); return () => clearInterval(t); }, [user?.id]);
+  const resetGranted = useMeta<{ at: number } | null>('resetGranted', null);
 
   let screen: ReactNode;
-  if (!user) screen = <LoginScreen />;
+  if (resetGranted && Date.now() - resetGranted.at < 30 * 60_000) screen = <EmailResetScreen />;
+  else if (!user) screen = <LoginScreen />;
   else if (locked) screen = <LockScreen user={user} onUnlock={() => setLocked(false)} />;
   else if (managesOwnPassword(user) && (user.mustChangePassword || !user.secretAnswerHash) && !setupSkipped) screen = <FirstSetupScreen user={user} />;
   else screen = <Shell />;

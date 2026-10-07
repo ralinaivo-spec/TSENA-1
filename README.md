@@ -18,7 +18,7 @@ Logiciel de gestion commerciale : achats (Chine), stock, ventes en ligne et en b
 | 5 | Vente sur place (comptoir), paiements, impression des tickets 58 mm, bons de livraison, feuilles de route | ✅ terminé |
 | 6 | Trésorerie, dépenses, comptes livreurs, clôture, récapitulatif | ✅ terminé |
 | 7 | Tableaux de bord, rapports, bénéfice / perte | ✅ terminé |
-| 8 | Sauvegardes avancées, réinitialisation par e-mail, outils | à venir |
+| 8 | Sauvegardes avancées, réinitialisation par e-mail, outils | ✅ terminé |
 
 ## Première connexion
 

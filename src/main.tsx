@@ -5,6 +5,7 @@ import { getMeta, newId, openDb, setMeta } from './lib/db';
 import { seedAccounts } from './lib/auth';
 import { seedZones } from './lib/orders';
 import { seedFinance } from './lib/money';
+import { consumeEmailLink } from './lib/maintenance';
 import { startSync } from './lib/sync';
 import { App } from './App';
 
@@ -28,6 +29,8 @@ function guessDeviceName() {
 async function boot() {
   try {
     await openDb();
+    await consumeEmailLink(); // retour depuis le lien « mot de passe oublié » reçu par e-mail
+    window.addEventListener('hashchange', () => { if (/access_token=|error_description=/.test(location.hash)) consumeEmailLink(); });
     if (!getMeta('deviceId')) {
       await setMeta('deviceId', newId());
       await setMeta('deviceName', guessDeviceName());

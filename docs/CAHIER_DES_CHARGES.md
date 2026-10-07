@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.4, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.5, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -285,6 +285,15 @@ Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…),
 | **Transfert** | Nouveau téléphone / ordinateur : il suffit de se connecter, les données se chargent. |
 | **Réinitialisation** | (a) vider les données de test en gardant les paramètres ; (b) **remise à l'état d'origine** complète. Réservées au super-admin, double confirmation + sauvegarde automatique juste avant. |
 | **Outils de réparation** | Forcer la resynchronisation, recalculer les stocks à partir des mouvements, vérifier la cohérence. |
+
+### 14.1 Réalisé (étape 8)
+- **Copies automatiques dans le cloud** : une par jour, faite par l'appareil d'un admin ou du gérant (vérifié toutes les heures). Conservation : **7 quotidiennes, 5 hebdomadaires, 12 mensuelles** ; les plus anciennes sont effacées automatiquement, les copies manuelles jamais. Liste des copies avec restauration, suppression et nettoyage (Paramètres → Sauvegardes).
+- **Fichier de sauvegarde** chiffré par mot de passe (facultatif), restauration par fichier ou depuis le cloud (super-admin, mot à taper « RESTAURER », sauvegarde de l'état actuel juste avant).
+- **Effacer les données de test** (super-admin, Paramètres → Système) : choix des données (ventes, clients, trésorerie, mouvements de stock, achats, impressions, et si voulu articles, fournisseurs, livreurs, journal), en gardant toujours paramètres, utilisateurs, rôles, zones, catégories de dépenses, opérations récurrentes et imprimantes. Mot à taper « EFFACER », fichier + copie cloud juste avant, effacement envoyé à tous les appareils.
+- **Remise à l'état d'origine** (super-admin) inchangée.
+- **Mot de passe oublié par e-mail** (super-admin et gérant) : un lien est envoyé à l'adresse e-mail du **compte cloud de la société** ; en l'ouvrant sur un appareil relié au cloud, on choisit le nouveau mot de passe (lien valable 1 heure, réinitialisation tracée). Réglage nécessaire une fois dans Supabase : Authentication → URL Configuration → Site URL = adresse de l'application. La question secrète et la réinitialisation par le gérant restent possibles.
+- **Code PIN** (4 à 6 chiffres, propre à chaque appareil, Mon compte) pour déverrouiller après le verrouillage automatique ; après 5 erreurs, le mot de passe est demandé.
+- **Outils** (admin, Paramètres → Outils) : vérification de la cohérence (stock recalculé depuis les mouvements, stocks négatifs avec correction tracée, variantes orphelines, articles sans coût, commandes sans livreur, trop-perçus, impayés, numéros en double), **export complet en Excel** (sans mots de passe ni photos), espace utilisé et nombre d'enregistrements ; **Tout resynchroniser** et **Chercher une mise à jour** (Système).
 
 ---
 
