@@ -4,7 +4,9 @@ import { audit, currentUser } from './auth';
 import { addMoves, stockOf, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
 
-export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean }
+export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean; pickup?: boolean }
+/** Zone « Sur boutique » : le client vient chercher, pas de frais ni de livreur. */
+export const isPickupZone = (z?: Zone | string) => { const zone = typeof z === 'string' ? get<Zone>('zones', z) : z; return !!zone && (zone.pickup || zone.id === 'zone-retrait'); };
 export interface Courier extends BaseRecord { name: string; phone?: string; zoneIds?: string[]; active: boolean; notes?: string }
 export interface Customer extends BaseRecord { phone: string; phone2?: string; name?: string; facebook?: string; place?: string; zoneId?: string; notes?: string }
 
@@ -74,7 +76,10 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: 'neutral' 
   refused: { label: 'Refusée', tone: 'danger' },
   cancelled: { label: 'Annulée', tone: 'neutral' },
 };
-export const CHANNELS = { facebook: 'Facebook', phone: 'Téléphone', shop: 'Boutique', other: 'Autre' };
+export const CHANNELS = { facebook: 'Facebook', phone: 'Téléphone', shop: 'Vente sur place (boutique)', other: 'Autre' };
+export const isWalkIn = (o: Pick<Order, 'channel'>) => o.channel === 'shop';
+/** Nom affiché : client, sinon téléphone, sinon « Vente sur place ». */
+export const orderLabel = (o: Pick<Order, 'name' | 'phone' | 'channel'>) => o.name || (o.phone ? fmtPhone(o.phone) : o.channel === 'shop' ? 'Vente sur place' : '—');
 
 // ---------- Téléphones ----------
 export function normPhone(p: string) {
@@ -96,11 +101,11 @@ export function findCustomer(phone: string) {
 // ---------- Zones par défaut (identifiants fixes : identiques sur tous les appareils) ----------
 const SEED = '2000-01-01T00:00:00.000Z';
 const DEFAULT_ZONES = [
-  ['zone-retrait', 'Retrait à la boutique', 0], ['zone-centre', 'Tana centre-ville', 3000], ['zone-proche', 'Tana périphérie proche', 4000],
+  ['zone-retrait', 'Sur boutique (retrait par le client)', 0], ['zone-centre', 'Tana centre-ville', 3000], ['zone-proche', 'Tana périphérie proche', 4000],
   ['zone-peripherie', 'Tana périphérie', 5000], ['zone-loin', 'Tana grande périphérie', 7000], ['zone-province', 'Province (envoi taxi-brousse / coopérative)', 5000],
 ] as const;
 export async function seedZones() {
-  await applyRemote(DEFAULT_ZONES.map(([id, name, fee], i) => ({ tbl: 'zones', id, data: { id, name, fee, order: i, active: true, createdAt: SEED, updatedAt: SEED } as BaseRecord })));
+  await applyRemote(DEFAULT_ZONES.map(([id, name, fee], i) => ({ tbl: 'zones', id, data: { id, name, fee, order: i, active: true, pickup: id === 'zone-retrait' || undefined, createdAt: SEED, updatedAt: SEED } as BaseRecord })));
 }
 
 // ---------- Horaires ----------
@@ -213,6 +218,18 @@ export async function completeAtShop(o: Order, pay?: { amount: number; method: P
   const u = currentUser();
   const pays = pay?.amount ? [{ id: newId(), at, amount: pay.amount, method: pay.method, ref: pay.ref, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
   await setStatus(o, 'delivered', { lines: o.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), feeCharged: 0, deliveryFee: 0, payments: [...(o.payments || []), ...pays], returnedAt: at, dispatchedAt: at });
+}
+
+/** Retrait en boutique : le client repart avec ses articles et paie sur place. */
+export async function handOverAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
+  const at = nowIso();
+  await addMoves(o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — retiré en boutique`, at })));
+  const u = currentUser();
+  const pays = pay?.amount ? [{ id: newId(), at, amount: pay.amount, method: pay.method, ref: pay.ref, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
+  if (o.kind === 'exchange' && o.returnLines?.length) {
+    await addMoves(o.returnLines.map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })));
+  }
+  await setStatus(o, 'delivered', { lines: o.lines.map((l) => ({ ...l, qtyKept: l.isChoice ? 0 : l.qty, qtyReturned: 0 })), feeCharged: 0, payments: [...(o.payments || []), ...pays], returnedAt: at, dispatchedAt: at });
 }
 
 export async function cancelOrder(o: Order, reason: string) {

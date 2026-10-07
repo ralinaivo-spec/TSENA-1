@@ -5,12 +5,12 @@ import { get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
-  isOutsideHours, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
+  isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Zone,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
@@ -91,12 +91,12 @@ export function OrderRow({ o }: { o: Order }) {
         <Thumb src={firstP?.photo} />
         <div className="list-item-main">
           <div className="row" style={{ gap: 8 }}>
-            <span className="list-item-title">{o.name || fmtPhone(o.phone)}</span>
+            <span className="list-item-title">{orderLabel(o)}</span>
             <OrderStatusBadge o={o} />
             {o.outsideHours && ['new', 'confirmed'].includes(o.status) && <Badge>Hors heures</Badge>}
-            {o.placeToConfirm && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status) && <Badge tone="warn">Lieu à confirmer</Badge>}
+            {isPickupZone(o.zoneId) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status) && <Badge>Sur boutique</Badge>}
           </div>
-          <p className="small muted">{o.number} · {fmtPhone(o.phone)} · {zone?.name || 'Zone ?'}{o.place ? ` — ${o.place}` : ''}</p>
+          <p className="small muted">{o.number}{o.phone ? ` · ${fmtPhone(o.phone)}` : ''} · {zone?.name || 'Zone ?'}{o.place ? ` — ${o.place}` : ''}</p>
           <p className="small muted">{fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ` + ${o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0)} en choix` : ''}{courier ? ` · ${courier.name}` : ''} · {fmtDateTime(o.createdAt)}</p>
         </div>
         <div className="list-item-side">
@@ -120,7 +120,9 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
   const [channel, setChannel] = useState<Order['channel']>(order?.channel ?? base?.channel ?? 'facebook');
   const [zoneId, setZoneId] = useState(order?.zoneId ?? base?.zoneId ?? '');
   const [place, setPlace] = useState(order?.place ?? base?.place ?? '');
-  const [toConfirm, setToConfirm] = useState(order?.placeToConfirm ?? false);
+  const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false);
+  const [courierId, setCourierId] = useState(order?.courierId ?? '');
+  const [newCourier, setNewCourier] = useState('');
   const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : '')));
   const [wantedDate, setWantedDate] = useState(order?.wantedDate ?? '');
   const [lines, setLines] = useState<OrderLine[]>(order?.lines ?? []);
@@ -149,24 +151,46 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
       if (!place && c.place) setPlace(c.place);
     }
   }
-  function onZone(id: string) { setZoneId(id); const z = get<Zone>('zones', id); if (z) setFee(String(z.fee)); }
+  const pickup = isPickupZone(zoneId);
+  const walkIn = channel === 'shop';
+  function onChannel(v: string) {
+    setChannel(v as Order['channel']);
+    if (v === 'shop') {
+      const z = zones.find((x) => isPickupZone(x));
+      if (z) { setZoneId(z.id); setFee('0'); }
+    }
+  }
+  function onZone(id: string) {
+    setZoneId(id);
+    const z = get<Zone>('zones', id);
+    if (z) setFee(isPickupZone(z) ? '0' : String(z.fee));
+    if (!courierId && z && !isPickupZone(z)) { const c = couriers.find((x) => x.zoneIds?.includes(z.id)); if (c) setCourierId(c.id); }
+  }
 
   async function submit() {
     setError(null);
     const p = normPhone(phone);
-    if (p.length < 9) return setError('Le contact du client est obligatoire (numéro de téléphone).');
-    if (!zoneId && !toConfirm) return setError('Choisissez la zone de livraison, ou cochez « Lieu à confirmer ».');
+    if (!walkIn && p.length < 9) return setError('Le contact du client est obligatoire (numéro de téléphone).');
+    if (walkIn && phone.trim() && p.length < 9) return setError('Numéro de téléphone incomplet (ou laissez-le vide).');
+    if (!zoneId) return setError('Le lieu de livraison est obligatoire : choisissez une zone (ou « Sur boutique »).');
+    if (!pickup) {
+      if (!place.trim()) return setError('Indiquez le lieu précis de livraison.');
+      if (!((parseNum(fee) ?? 0) > 0)) return setError('Les frais de livraison sont obligatoires pour une livraison.');
+      if (!courierId || (courierId === '__new' && !newCourier.trim())) return setError('Choisissez le livreur de cette commande.');
+    }
     if (!priced.length && !exchangeOf) return setError('Ajoutez au moins un article.');
     if (priced.some((l) => l.qty <= 0)) return setError('Chaque article doit avoir une quantité.');
     setBusy(true);
     try {
       // Fiche client : créée ou complétée automatiquement.
-      let cust = findCustomer(p);
-      if (!cust) { const [c] = await save('customers', { phone: p, name: name.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
-      else await save('customers', { id: cust.id, name: cust.name || name.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
+      let cid = courierId;
+      if (!pickup && cid === '__new') { const [c] = await save('couriers', { name: newCourier.trim(), active: true }); cid = c.id; }
+      let cust = p ? findCustomer(p) : undefined;
+      if (p && !cust) { const [c] = await save('customers', { phone: p, name: name.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
+      else if (cust) await save('customers', { id: cust.id, name: cust.name || name.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
       const data: Partial<Order> = {
-        phone: p, name: name.trim() || undefined, channel, customerId: cust.id, zoneId: zoneId || undefined, place: place.trim() || undefined, placeToConfirm: toConfirm,
-        deliveryFee: parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, wholesale, discount: parseNum(discount) || 0, notes: notes.trim() || undefined,
+        phone: p, name: name.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,
+        courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, wholesale, discount: parseNum(discount) || 0, notes: notes.trim() || undefined,
       };
       if (order) {
         await save('orders', { id: order.id, ...data });
@@ -193,17 +217,20 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
       footer={<><span className="small" style={{ marginRight: 'auto' }}>{exchangeOf ? (total >= 0 ? 'Le client paie ' : 'À rendre au client ') : 'Total à payer '}<strong className="num">{fmtAr(Math.abs(total))}</strong></span><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={submit}>{order ? 'Enregistrer' : 'Enregistrer la commande'}</Button></>}>
       <div className="stack">
         <div className="grid-2">
+          <SelectField label="Type de vente" value={channel} onChange={onChannel} options={Object.entries(CHANNELS).map(([value, label]) => ({ value, label }))} />
+          <div />
           <div className="stack-s">
-            <TextField label="Contact du client (obligatoire)" value={phone} onChange={onPhone} type="tel" inputMode="tel" autoFocus={!order} placeholder="034 00 000 00" />
+            <TextField label={walkIn ? 'Contact du client (facultatif)' : 'Contact du client (obligatoire)'} value={phone} onChange={onPhone} type="tel" inputMode="tel" autoFocus={!order} placeholder="034 00 000 00" />
             {known && !order && <p className="small"><Icon name="check" size={14} /> Client connu : <strong>{known.name || fmtPhone(known.phone)}</strong>{known.place ? ` · ${known.place}` : ''}</p>}
           </div>
           <TextField label="Nom du client (facultatif)" value={name} onChange={setName} />
           <SelectField label="Zone de livraison" value={zoneId} onChange={onZone} options={[{ value: '', label: '— Choisir —' }, ...zones.map((z) => ({ value: z.id, label: `${z.name} (${fmtAr(z.fee)})` }))]} />
-          <TextField label="Lieu précis" value={place} onChange={setPlace} placeholder="Ex. Analakely, devant la pharmacie" />
-          <TextField label="Frais de livraison (Ar)" value={fee} onChange={setFee} inputMode="numeric" hint="Rempli selon la zone, modifiable." />
-          <SelectField label="Reçue par" value={channel} onChange={(v) => setChannel(v as any)} options={Object.entries(CHANNELS).map(([value, label]) => ({ value, label }))} />
+          <TextField label={pickup ? 'Lieu (facultatif)' : 'Lieu précis (obligatoire)'} value={place} onChange={setPlace} placeholder={pickup ? 'Boutique' : 'Ex. Analakely, devant la pharmacie'} />
+          <TextField label="Frais de livraison (Ar)" value={pickup ? '0' : fee} onChange={setFee} inputMode="numeric" disabled={pickup} hint={pickup ? 'Retrait en boutique : pas de frais.' : 'Obligatoire. Rempli selon la zone, modifiable.'} />
+          {!pickup && <SelectField label="Livreur (obligatoire)" value={courierId} onChange={setCourierId} options={[{ value: '', label: '— Choisir —' }, ...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />}
+          {!pickup && courierId === '__new' && <TextField label="Nom du nouveau livreur" value={newCourier} onChange={setNewCourier} />}
         </div>
-        <Toggle checked={toConfirm} onChange={setToConfirm} label="Lieu à confirmer (le client le donnera à l’appel de confirmation)" />
+        <p className="small muted">Zone manquante ou frais à changer ? <a href="#/parametres/zones" onClick={onClose}>Gérer les zones de livraison</a></p>
 
         {exchangeOf && (
           <div className="notice"><Icon name="refresh" /><span>Articles repris au client : {exchangeOf.returnLines.map((r) => `${r.qty} × ${variantLabel(get<Variant>('variants', r.variantId))}`).join(', ')} — valeur {fmtAr(draft.credit)} déduite.</span></div>
@@ -346,7 +373,7 @@ function OrderDetail({ id }: { id: string }) {
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
-  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop'>('');
+  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup'>('');
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
   const courier = couriers.find((c) => c.id === o.courierId);
@@ -371,9 +398,9 @@ function OrderDetail({ id }: { id: string }) {
           </div>
         </div>
         <div className="kv-row">
-          <div><span className="small muted">Client</span><strong>{o.name || '—'}</strong></div>
-          <div><span className="small muted">Contact</span><a href={`tel:${o.phone}`}><strong>{fmtPhone(o.phone)}</strong></a></div>
-          <div><span className="small muted">Livraison</span><strong>{zone?.name || '—'}{o.place ? ` — ${o.place}` : ''}</strong>{o.placeToConfirm && <Badge tone="warn">Lieu à confirmer</Badge>}</div>
+          <div><span className="small muted">Client</span><strong>{orderLabel(o)}</strong></div>
+          {o.phone && <div><span className="small muted">Contact</span><a href={`tel:${o.phone}`}><strong>{fmtPhone(o.phone)}</strong></a></div>}
+          <div><span className="small muted">Livraison</span><strong>{zone?.name || '—'}{o.place && !isPickupZone(zone) ? ` — ${o.place}` : ''}</strong></div>
           {o.wantedDate && <div><span className="small muted">Souhaitée le</span><strong>{fmtDate(o.wantedDate)}</strong></div>}
           {courier && <div><span className="small muted">Livreur</span><strong>{courier.name}</strong></div>}
         </div>
@@ -382,10 +409,10 @@ function OrderDetail({ id }: { id: string }) {
         {children.map((c) => <p key={c.id} className="small">Échange lié : <a href={`#/commandes/${c.id}`}>{c.number}</a> ({ORDER_STATUS[c.status].label})</p>)}
 
         <div className="action-bar">
-          {o.status === 'new' && can('orders.prepare') && <Button icon="check" disabled={!o.zoneId && o.placeToConfirm} onClick={act(async () => { await confirmOrder(o); }, 'Commande confirmée')}>Confirmer (client joint)</Button>}
-          {o.status === 'new' && !o.zoneId && <span className="small muted">Indiquez la zone (Modifier) pour pouvoir confirmer.</span>}
+          {o.status === 'new' && can('orders.prepare') && <Button icon="check" onClick={act(async () => { await confirmOrder(o); }, 'Commande confirmée')}>Confirmer (client joint)</Button>}
           {o.status === 'confirmed' && can('orders.prepare') && <Button icon="package" onClick={act(async () => { await markReady(o); }, 'Commande prête')}>Commande préparée</Button>}
-          {o.status === 'ready' && can('orders.dispatch') && <Button icon="truck" onClick={() => setModal('dispatch')}>Remettre au livreur</Button>}
+          {o.status === 'ready' && !isPickupZone(o.zoneId) && can('orders.dispatch') && <Button icon="truck" onClick={() => setModal('dispatch')}>Remettre au livreur</Button>}
+          {(o.status === 'ready' || (isWalkIn(o) && ['new', 'confirmed'].includes(o.status))) && isPickupZone(o.zoneId) && can('orders.create') && <Button icon="store" onClick={() => setModal('pickup')}>Remis au client en boutique</Button>}
           {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Remise en préparation')}>Revenir à « à préparer »</Button>}
           {o.status === 'out' && can('deliveries.manage') && <Button icon="inbox" onClick={() => setModal('return')}>Enregistrer le retour du livreur</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
@@ -458,6 +485,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'pay' && <PayModal order={o} onClose={() => setModal('')} />}
       {modal === 'exchange' && <ExchangeStart order={o} onClose={() => setModal('')} />}
       {modal === 'shop' && <ShopExchangeModal order={o} onClose={() => setModal('')} />}
+      {modal === 'pickup' && <PickupModal order={o} onClose={() => setModal('')} />}
       {modal === 'cancel' && <CancelModal order={o} onClose={() => setModal('')} />}
     </>
   );
@@ -466,7 +494,8 @@ function OrderDetail({ id }: { id: string }) {
 export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
   const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false);
   const zoneIds = new Set(orders.map((o) => o.zoneId));
-  const suggested = couriers.find((c) => c.zoneIds?.some((z) => zoneIds.has(z)));
+  const preset = orders.every((o) => o.courierId && o.courierId === orders[0].courierId) ? orders[0].courierId : undefined;
+  const suggested = couriers.find((c) => c.id === preset) ?? couriers.find((c) => c.zoneIds?.some((z) => zoneIds.has(z)));
   const [courierId, setCourierId] = useState(suggested?.id ?? couriers[0]?.id ?? '');
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -483,7 +512,7 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
         <SelectField label="Livreur" value={courierId} onChange={setCourierId} options={[...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />
         {courierId === '__new' && <TextField label="Nom du livreur" value={newName} onChange={setNewName} autoFocus />}
         <p className="small muted">Les articles (y compris ceux en choix) sortent du stock de la boutique. Ce qui revient sera remis en stock au retour du livreur.</p>
-        <ul className="small">{orders.map((o) => <li key={o.id}>{o.number} — {o.name || fmtPhone(o.phone)} — à encaisser {fmtAr(Math.max(0, remaining(o)))}</li>)}</ul>
+        <ul className="small">{orders.map((o) => <li key={o.id}>{o.number} — {orderLabel(o)} — à encaisser {fmtAr(Math.max(0, remaining(o)))}</li>)}</ul>
       </div>
     </Modal>
   );
@@ -618,6 +647,29 @@ function ShopExchangeModal({ order: o, onClose }: { order: Order; onClose: () =>
         <p><strong>{bal > 0 ? `Le client paie ${fmtAr(bal)}` : bal < 0 ? `À rendre au client : ${fmtAr(-bal)}` : 'Aucune différence à payer.'}</strong></p>
         {bal !== 0 && <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />}
         {bal !== 0 && method !== 'cash' && <TextField label="Référence" value={ref} onChange={setRef} />}
+      </div>
+    </Modal>
+  );
+}
+
+function PickupModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const rest = Math.max(0, remaining(o));
+  const [amount, setAmount] = useState(String(rest));
+  const [method, setMethod] = useState<PayMethod>('cash');
+  const [ref, setRef] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title={`Remis au client — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={async () => {
+        setBusy(true);
+        await handOverAtShop(o, parseNum(amount) ? { amount: parseNum(amount)!, method, ref: ref.trim() || undefined } : undefined);
+        toast('Commande remise au client'); setBusy(false); onClose();
+      }}>Valider</Button></>}>
+      <div className="stack">
+        <p>Le client est venu chercher sa commande en boutique. Les articles sortent du stock, sans frais de livraison.</p>
+        <TextField label="Montant encaissé (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={`Reste à payer : ${fmtAr(rest)}`} />
+        <SelectField label="Moyen de paiement" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
+        {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
       </div>
     </Modal>
   );

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
-import { courierAccount, fmtPhone, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { courierAccount, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, TextField, Toggle, navigate, toast, useRoute } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReturnModal, OrderRow } from './Orders';
@@ -38,7 +38,7 @@ function ToDeliver() {
   const zones = useTable<Zone>('zones');
   const [sel, setSel] = useState<string[]>([]);
   const [dispatch, setDispatch] = useState(false);
-  const ready = orders.filter((o) => o.status === 'ready');
+  const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId));
   const preparing = orders.filter((o) => o.status === 'confirmed').length;
   const groups = useMemo(() => {
     const m = new Map<string, Order[]>();
@@ -63,7 +63,7 @@ function ToDeliver() {
               <li key={o.id} className="list-item">
                 <input type="checkbox" className="perm-check" checked={sel.includes(o.id)} onChange={() => toggle(o.id)} aria-label={`Choisir ${o.number}`} />
                 <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                  <span className="list-item-title">{o.name || fmtPhone(o.phone)}</span>
+                  <span className="list-item-title">{orderLabel(o)}</span>
                   <p className="small muted">{o.number} · {fmtPhone(o.phone)} · {o.place || 'lieu non précisé'} · {fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ' + choix' : ''}</p>
                 </a>
                 <div className="list-item-side"><strong className="num">{fmtAr(Math.max(0, remaining(o)))}</strong><span className="small muted">à encaisser</span></div>
@@ -99,7 +99,7 @@ function OutNow() {
               {list.map((o) => (
                 <li key={o.id} className="list-item">
                   <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    <span className="list-item-title">{o.name || fmtPhone(o.phone)} <span className="muted small">{o.number}</span></span>
+                    <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span></span>
                     <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser {fmtAr(Math.max(0, remaining(o)))}</p>
                   </a>
                   <Button variant="ghost" onClick={() => setRet(o)}>Retour</Button>
@@ -197,7 +197,7 @@ function CourierForm({ courier, onClose }: { courier?: Courier; onClose: () => v
   );
 }
 
-function Zones() {
+export function Zones() {
   const can = useCan();
   const zones = useTable<Zone>('zones');
   const [name, setName] = useState('');
@@ -226,12 +226,13 @@ function Zones() {
       <div className="card card-flush">
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>Zone</th><th style={{ width: 140 }}>Frais (Ar)</th><th>État</th><th></th></tr></thead>
+            <thead><tr><th>Zone</th><th style={{ width: 140 }}>Frais (Ar)</th><th>Type</th><th>État</th><th></th></tr></thead>
             <tbody>
               {sorted.map((z) => (
                 <tr key={z.id} style={{ opacity: z.active === false ? .55 : 1 }}>
                   <td>{edit ? <input className="cell-input" aria-label="Nom" value={vals[z.id]?.name ?? z.name} onChange={(e) => setVals({ ...vals, [z.id]: { ...vals[z.id], name: e.target.value } })} onBlur={async () => { const v = vals[z.id]?.name; if (v != null && v.trim() && v !== z.name) await save('zones', { id: z.id, name: v.trim() }); }} /> : z.name}</td>
                   <td>{edit ? <input className="cell-input" inputMode="numeric" aria-label="Frais" value={vals[z.id]?.fee ?? String(z.fee)} onChange={(e) => setVals({ ...vals, [z.id]: { ...vals[z.id], fee: e.target.value } })} onBlur={async () => { const v = parseNum(vals[z.id]?.fee); if (v != null && v !== z.fee) { await save('zones', { id: z.id, fee: v }); toast('Frais enregistrés'); } }} /> : fmtAr(z.fee)}</td>
+                  <td>{edit ? <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={isPickupZone(z)} disabled={z.id === 'zone-retrait'} onChange={(e) => save('zones', { id: z.id, pickup: e.target.checked, ...(e.target.checked ? { fee: 0 } : {}) })} /> Sur boutique</label> : isPickupZone(z) ? 'Sur boutique' : 'Livraison'}</td>
                   <td>{z.active === false ? <Badge>Masquée</Badge> : <Badge tone="ok">Active</Badge>}</td>
                   <td className="t-actions">{edit && <>
                     <Button variant="quiet" onClick={() => save('zones', { id: z.id, active: z.active === false })}>{z.active === false ? 'Réactiver' : 'Masquer'}</Button>

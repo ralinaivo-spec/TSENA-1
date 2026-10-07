@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 1.6, validée le 05/10/2026)
+# TSENA — Cahier des charges (version 1.7, validée le 05/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -110,7 +110,11 @@
 
 ### 7.0 Saisie (validé avec le gérant, reprend le cahier des vendeurs)
 - **Contact du client : obligatoire.** Nom : facultatif. La fiche client est créée ou complétée automatiquement.
-- **Lieu de livraison : obligatoire**, mais il peut être marqué **« à confirmer »** quand le client ne le donne qu'à l'appel de confirmation (client en déplacement). Une commande ne peut pas être confirmée tant que la zone n'est pas indiquée.
+- **Lieu de livraison : obligatoire** avant d'enregistrer la commande (l'option « lieu à confirmer » a été retirée).
+  - **Sur boutique** (retrait par le client) : frais de livraison **0 Ar automatiquement**, **aucun livreur** ; la commande se termine par « Remis au client en boutique ».
+  - **Livraison** : lieu précis, **frais obligatoires** et **livreur obligatoire**.
+- **Vente sur place** (vente directe en boutique) : client, contact et lieu **facultatifs** ; la commande est affichée « Vente sur place » et peut être remise au client immédiatement.
+- Les zones et leurs frais se gèrent dans **Paramètres → Zones de livraison** (ou Livraisons → Zones et frais).
 - Articles, quantités, prix (détail, ou gros dès 3 pièces / accordé à la main), frais de livraison (selon la zone, modifiables), récapitulatif « total + frais », observations.
 - **Horaires** : lundi–vendredi 8 h–17 h, samedi 8 h–14 h. Les commandes sont reçues **tous les jours, dimanche compris** ; celles reçues hors horaires sont marquées « hors heures » et préparées à l'ouverture.
 
