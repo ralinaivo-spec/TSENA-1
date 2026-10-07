@@ -15,7 +15,7 @@ Logiciel de gestion commerciale : achats (Chine), stock, ventes en ligne et en b
 | 2 | Catégories, articles, variantes, stock, inventaire, modèles Excel et import | ✅ |
 | 3 | Fournisseurs, commandes Chine, paiements, réception avec facture transit, coût de revient | ✅ |
 | 4 | Clients, commandes, préparation, livraisons, livreurs, zones, retours, échanges | ✅ |
-| 5 | Caisse boutique, paiements, tickets 58 mm | à venir |
+| 5 | Vente sur place (comptoir), paiements ✅ — tickets 58 mm | en cours |
 | 6 | Trésorerie, dépenses, comptes livreurs, clôture, récapitulatif | à venir |
 | 7 | Tableaux de bord, rapports, bénéfice / perte | à venir |
 | 8 | Sauvegardes avancées, réinitialisation par e-mail, outils | à venir |

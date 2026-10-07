@@ -382,3 +382,20 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .timeline li { position: relative; }
 .timeline li::before { content: ''; position: absolute; left: -20px; top: 7px; width: 10px; height: 10px; border-radius: 50%; background: var(--brand); }
 .hours-row { gap: 10px; flex-wrap: wrap; }
+
+/* ---- Vente sur place (comptoir) ---- */
+.pos-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.pos-cart { position: sticky; top: 16px; }
+.pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 70vh; overflow: auto; padding: 2px; }
+.pos-tile { display: grid; justify-items: start; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.pos-tile:hover { border-color: var(--brand); }
+.pos-tile:active { transform: scale(.98); }
+.pos-tile.is-out { opacity: .55; }
+.pos-tile .thumb { width: 100% !important; height: 96px !important; }
+.pos-tile-name { font-weight: 700; font-size: .9rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pos-tile-foot { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 6px; }
+.cart-line { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.cart-line:first-child { border-top: 0; }
+.cart-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pos-total { font-size: 1.4rem; color: var(--brand); }
+@media (max-width: 900px) { .pos-layout { grid-template-columns: 1fr; } .pos-cart { position: static; } .pos-grid { max-height: none; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); } }

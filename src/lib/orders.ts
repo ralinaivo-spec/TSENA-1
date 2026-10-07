@@ -232,6 +232,34 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
   await setStatus(o, 'delivered', { lines: o.lines.map((l) => ({ ...l, qtyKept: l.isChoice ? 0 : l.qty, qtyReturned: 0 })), feeCharged: 0, payments: [...(o.payments || []), ...pays], returnedAt: at, dispatchedAt: at });
 }
 
+/** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
+export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean }) {
+  const at = nowIso();
+  const u = currentUser();
+  const pickup = all<Zone>('zones').find((z) => isPickupZone(z));
+  const phone = d.phone ? normPhone(d.phone) : '';
+  let customerId: string | undefined;
+  if (phone.length >= 9) {
+    const c = findCustomer(phone);
+    if (c) customerId = c.id;
+    else { const [nc] = await save('customers', { phone, name: d.name || undefined }); customerId = nc.id; }
+  }
+  const number = nextOrderNumber('V');
+  const [o] = await save('orders', {
+    number, kind: 'order', channel: 'shop', customerId, phone, name: d.name || undefined, zoneId: pickup?.id, deliveryFee: 0, feeCharged: 0,
+    wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), discount: d.discount, notes: d.notes,
+    payments: d.payments.filter((p) => p.amount).map((p) => ({ id: newId(), at, amount: p.amount, method: p.method, ref: p.ref, receivedBy: 'shop' as const, userName: u?.fullName })),
+    status: 'delivered', statusDates: { delivered: at }, dispatchedAt: at, returnedAt: at, outsideHours: d.outsideHours, createdBy: u?.id, createdByName: u?.fullName,
+  });
+  await addMoves(d.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'sale' as const, refType: 'order', refId: o.id, reason: `${number} — vente sur place`, at })));
+  await audit('Vente sur place', `${number} — ${d.lines.reduce((s, l) => s + l.qty, 0)} article(s)`, 'orders', o.id);
+  return o as Order;
+}
+function nextOrderNumber(prefix: string) {
+  const nums = all<Order>('orders').filter((o) => o.number.startsWith(prefix + '-')).map((o) => parseInt(o.number.slice(prefix.length + 1), 10)).filter((n) => !isNaN(n));
+  return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
+}
+
 export async function cancelOrder(o: Order, reason: string) {
   if (o.status === 'out') {
     await addMoves(o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, type: 'delivery_return' as const, refType: 'order', refId: o.id, reason: `${o.number} annulée — retour en boutique` })));

@@ -231,7 +231,7 @@ export async function createProduct(data: Partial<Product> & { code: string; nam
 }
 
 export function nextNumber(prefix: string, table: 'purchases' | 'receptions' | 'orders') {
-  const nums = all(table).map((r: any) => parseInt(String(r.number || '').replace(/\D/g, ''), 10)).filter((n) => !isNaN(n));
+  const nums = all(table).filter((r: any) => String(r.number || '').startsWith(prefix + '-')).map((r: any) => parseInt(String(r.number).slice(prefix.length + 1), 10)).filter((n) => !isNaN(n));
   return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
 }
 

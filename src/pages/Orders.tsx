@@ -44,11 +44,12 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const [period, setPeriod] = useState<Period>(defaultPeriod('30d'));
-  const tab = TABS.find((t) => t.key === tabKey) ?? TABS.find((t) => orders.some((o) => t.statuses.includes(o.status) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status))) ?? TABS[0];
+  const tab = TABS.find((t) => t.key === tabKey) ?? TABS.find((t) => orders.some((o) => !isWalkIn(o) && t.statuses.includes(o.status) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status))) ?? TABS[0];
   const done = ['terminees', 'annulees'].includes(tab.key);
   const list = useMemo(() => {
     const n = q.trim().toLowerCase(); const np = normPhone(q);
     return orders
+      .filter((o) => !isWalkIn(o))
       .filter((o) => (n ? true : tab.statuses.includes(o.status)))
       .filter((o) => !done || n || inPeriod(o.createdAt, period))
       .filter((o) => !n || o.number.toLowerCase().includes(n) || (o.name || '').toLowerCase().includes(n) || (np.length >= 3 && normPhone(o.phone).includes(np)) || (o.place || '').toLowerCase().includes(n))
@@ -61,7 +62,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
         actions={can('orders.create') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button>} />
       <div className="tabs" role="tablist">
         {TABS.map((t) => {
-          const n = orders.filter((o) => t.statuses.includes(o.status)).length;
+          const n = orders.filter((o) => !isWalkIn(o) && t.statuses.includes(o.status)).length;
           return <button key={t.key} role="tab" aria-selected={tab.key === t.key} onClick={() => navigate('/commandes/' + t.key)}>{t.label}{!['terminees', 'annulees'].includes(t.key) && n ? <span className="tab-count">{n}</span> : null}</button>;
         })}
       </div>
@@ -152,7 +153,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
     }
   }
   const pickup = isPickupZone(zoneId);
-  const walkIn = channel === 'shop';
+  const walkIn = false;
   function onChannel(v: string) {
     setChannel(v as Order['channel']);
     if (v === 'shop') {
@@ -217,7 +218,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
       footer={<><span className="small" style={{ marginRight: 'auto' }}>{exchangeOf ? (total >= 0 ? 'Le client paie ' : 'À rendre au client ') : 'Total à payer '}<strong className="num">{fmtAr(Math.abs(total))}</strong></span><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={submit}>{order ? 'Enregistrer' : 'Enregistrer la commande'}</Button></>}>
       <div className="stack">
         <div className="grid-2">
-          <SelectField label="Type de vente" value={channel} onChange={onChannel} options={Object.entries(CHANNELS).map(([value, label]) => ({ value, label }))} />
+          <SelectField label="Commande reçue par" value={channel} onChange={onChannel} options={Object.entries(CHANNELS).filter(([k]) => k !== 'shop').map(([value, label]) => ({ value, label }))} />
           <div />
           <div className="stack-s">
             <TextField label={walkIn ? 'Contact du client (facultatif)' : 'Contact du client (obligatoire)'} value={phone} onChange={onPhone} type="tel" inputMode="tel" autoFocus={!order} placeholder="034 00 000 00" />
@@ -308,11 +309,11 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
 }
 
 /** Choisir des articles : recherche, puis quantité par taille/couleur avec le stock disponible. */
-export function ItemPicker({ excludeOrderId, onClose, onAdd }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void }) {
+export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialProduct }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; noChoice?: boolean; initialProduct?: Product }) {
   const { products } = useCatalog();
   const reserved = useMemo(() => reservedIndex(excludeOrderId), [excludeOrderId]);
   const [q, setQ] = useState('');
-  const [prod, setProd] = useState<Product | null>(null);
+  const [prod, setProd] = useState<Product | null>(initialProduct ?? null);
   const [qty, setQty] = useState<Record<string, string>>({});
   const [choice, setChoice] = useState<Record<string, string>>({});
   const n = q.trim().toLowerCase();
@@ -345,15 +346,15 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd }: { excludeOrderId?
       ) : (
         <div className="stack">
           <div className="row" style={{ gap: 12 }}><Thumb src={prod.photo} size={64} /><div><strong>{prod.code}</strong><p className="small muted">{fmtAr(prod.priceRetail)}{prod.priceWholesale ? ` · gros ${fmtAr(prod.priceWholesale)}` : ''}</p></div></div>
-          <p className="small muted">« Vendu » : ce que le client achète. « En choix » : les tailles ou couleurs envoyées en plus pour qu’il choisisse sur place.</p>
+          {!noChoice && <p className="small muted">« Vendu » : ce que le client achète. « En choix » : les tailles ou couleurs envoyées en plus pour qu’il choisisse sur place.</p>}
           <div className="variant-grid">
             {variants.map((v) => {
               const a = availableOf(v.id, reserved);
               return (
                 <div key={v.id} className={`variant-cell ${a <= 0 ? 'is-out' : ''}`}>
                   <span className="small"><strong>{variantLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
-                  <label className="small">Vendu<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
-                  <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>
+                  <label className="small">{noChoice ? 'Quantité' : 'Vendu'}<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
+                  {!noChoice && <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>}
                 </div>
               );
             })}
