@@ -9,10 +9,12 @@ import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectFi
 import { Icon } from '../ui/icons';
 import { CloudFields } from './Auth';
 import { Zones } from './Deliveries';
+import { PrintersTab } from './Printers';
 
 const TABS = [
   { key: 'societe', label: 'Société', perm: 'settings.company' },
   { key: 'apparence', label: 'Apparence', perm: '' },
+  { key: 'imprimantes', label: 'Imprimantes', perm: '' },
   { key: 'zones', label: 'Zones de livraison', perm: 'couriers.view' },
   { key: 'cloud', label: 'Cloud et synchronisation', perm: 'backup.manage' },
   { key: 'sauvegarde', label: 'Sauvegardes', perm: 'backup.manage' },
@@ -34,6 +36,7 @@ export function SettingsPage() {
       </div>
       {current.key === 'societe' && <CompanyTab />}
       {current.key === 'apparence' && <AppearanceTab />}
+      {current.key === 'imprimantes' && <PrintersTab />}
       {current.key === 'zones' && <Zones />}
       {current.key === 'cloud' && <CloudTab />}
       {current.key === 'sauvegarde' && <BackupTab />}

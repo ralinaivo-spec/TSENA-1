@@ -1,5 +1,6 @@
 // Structure de l'application : démarrage, accès, menu adapté au rôle, pages.
 import { useEffect, useState, type ReactNode } from 'react';
+import { usePrintStationWorker } from './lib/print';
 import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } from './lib/auth';
 import { getMeta, setMeta, useMeta } from './lib/db';
 import { useApplyAppearance, useCompany } from './lib/settings';
@@ -101,6 +102,7 @@ function SyncPill() {
 
 function Shell() {
   const user = useMe();
+  usePrintStationWorker();
   const can = useCan();
   const company = useCompany();
   const route = useRoute();

@@ -8,6 +8,9 @@ import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, TextField, 
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
+import { useCompany } from '../lib/settings';
+import { deliveryNoteDoc, joinDocs, routeSheetDoc } from '../lib/print';
+import { PrintButton } from '../ui/print';
 
 const TABS = [
   { key: 'a-livrer', label: 'À livrer', perm: 'orders.dispatch' },
@@ -79,6 +82,7 @@ function ToDeliver() {
 }
 
 function OutNow() {
+  const company = useCompany();
   const orders = useTable<Order>('orders');
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
@@ -95,7 +99,13 @@ function OutNow() {
           <div key={cid} className="card card-flush">
             <div className="row-between card-pad">
               <div><h3>{c?.name || 'Livreur ?'}</h3><p className="small muted">{list.length} commande(s) · {fmtNum(list.reduce((s, o) => s + o.lines.reduce((t, l) => t + l.qty, 0), 0))} article(s) dehors</p></div>
-              <div className="total-box"><span className="small muted">À encaisser</span><strong className="num">{fmtAr(list.reduce((s, o) => s + Math.max(0, remaining(o)), 0))}</strong></div>
+              <div className="row" style={{ alignItems: 'center' }}>
+                <PrintButton label="Feuille de route" docs={[
+                  { key: 'route', label: 'Feuille de route', build: () => routeSheetDoc(c, list, company) },
+                  { key: 'bons', label: `Bons de livraison (${list.length})`, build: () => joinDocs(`Bons de livraison ${c?.name ?? ''}`, list.map((o) => deliveryNoteDoc(o, company))) },
+                ]} />
+                <div className="total-box"><span className="small muted">À encaisser</span><strong className="num">{fmtAr(list.reduce((s, o) => s + Math.max(0, remaining(o)), 0))}</strong></div>
+              </div>
             </div>
             <ul className="list">
               {list.map((o) => (

@@ -14,6 +14,8 @@ import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
+import { deliveryNoteDoc, ticketDoc } from '../lib/print';
+import { PrintButton, type DocChoice } from '../ui/print';
 
 const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
   { key: 'confirmer', label: 'À confirmer', statuses: ['new'] },
@@ -367,8 +369,16 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
 }
 
 // ---------- Détail d'une commande ----------
+/** Documents imprimables d'une commande : ticket, et bon de livraison si elle part avec un livreur. */
+function printDocs(o: Order, company: ReturnType<typeof useCompany>): DocChoice[] {
+  const d: DocChoice[] = [{ key: 'ticket', label: isWalkIn(o) ? 'Ticket de caisse' : 'Ticket client', build: () => ticketDoc(o, company) }];
+  if (!isWalkIn(o) && !isPickupZone(o.zoneId)) d.unshift({ key: 'bon', label: 'Bon de livraison', build: () => deliveryNoteDoc(o, company) });
+  return d;
+}
+
 function OrderDetail({ id }: { id: string }) {
   const can = useCan();
+  const company = useCompany();
   useCatalog();
   const orders = useTable<Order>('orders');
   const couriers = useTable<Courier>('couriers');
@@ -395,6 +405,7 @@ function OrderDetail({ id }: { id: string }) {
             <p className="muted">{CHANNELS[o.channel]} · {fmtDateTime(o.createdAt)}{o.createdByName ? ` · par ${o.createdByName}` : ''}</p>
           </div>
           <div className="page-actions">
+            <PrintButton docs={printDocs(o, company)} />
             {can('orders.create') && ['new', 'confirmed', 'ready'].includes(o.status) && <Button variant="ghost" icon="edit" onClick={() => setModal('edit')}>Modifier</Button>}
           </div>
         </div>

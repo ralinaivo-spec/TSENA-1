@@ -1,7 +1,7 @@
 // Vente sur place : écran de comptoir rapide (recherche, panier, encaissement, monnaie à rendre).
 import { useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
-import { get, newId, useTable } from '../lib/db';
+import { get, getMeta, newId, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
   availableOf, createWalkInSale, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
@@ -11,6 +11,8 @@ import { useCompany } from '../lib/settings';
 import { Badge, Button, Empty, IconButton, Modal, PageHead, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ItemPicker } from './Orders';
+import { defaultTarget, printTo, ticketDoc } from '../lib/print';
+import { PrintButton, PrintDialog } from '../ui/print';
 import { Thumb } from './Products';
 
 export function PosPage() {
@@ -27,6 +29,7 @@ export function PosPage() {
   const [picking, setPicking] = useState<Product | null>(null);
   const [paying, setPaying] = useState(false);
   const [last, setLast] = useState<Order | null>(null);
+  const [printFor, setPrintFor] = useState<Order | null>(null);
   const reserved = useMemo(() => reservedIndex(), [orders]);
   const minQty = company.wholesaleMinQty ?? 3;
   const isGros = useWholesale({ lines, wholesale }, minQty);
@@ -66,7 +69,7 @@ export function PosPage() {
     <>
       <PageHead title="Vente sur place" subtitle={`Aujourd’hui : ${todaySales.length} vente(s) · ${fmtAr(todayTotal)}`} />
       {last && (
-        <div className="notice notice-ok"><Icon name="check" /><span><strong>Vente {last.number} enregistrée</strong> — {fmtAr(Math.max(0, keptTotal(last) - (last.discount || 0)))}. Le stock est mis à jour.</span></div>
+        <div className="notice notice-ok"><Icon name="check" /><span style={{ flex: 1 }}><strong>Vente {last.number} enregistrée</strong> — {fmtAr(Math.max(0, keptTotal(last) - (last.discount || 0)))}. Le stock est mis à jour.</span><PrintButton label="Ticket" docs={[{ key: 'ticket', label: 'Ticket de caisse', build: () => ticketDoc(get<Order>('orders', last.id) ?? last, company) }]} /></div>
       )}
       <div className="pos-layout">
         <section className="pos-catalog card stack">
@@ -132,7 +135,7 @@ export function PosPage() {
         {todaySales.length === 0 ? <Empty icon="list" title="Aucune vente sur place aujourd’hui" /> : (
           <ul className="list">
             {todaySales.map((o) => (
-              <li key={o.id}>
+              <li key={o.id} className="li-with-action">
                 <a className="list-item list-link" href={`#/commandes/${o.id}`}>
                   <div className="list-item-main">
                     <span className="list-item-title">{o.number} · {orderLabel(o)}</span>
@@ -140,6 +143,7 @@ export function PosPage() {
                   </div>
                   <div className="list-item-side"><strong className="num">{fmtAr(Math.max(0, keptTotal(o) - (o.discount || 0)))}</strong>{paidTotal(o) < keptTotal(o) - (o.discount || 0) && <span className="small neg">reste {fmtAr(keptTotal(o) - (o.discount || 0) - paidTotal(o))}</span>}</div>
                 </a>
+                <IconButton icon="printer" label={`Imprimer le ticket ${o.number}`} onClick={() => setPrintFor(o)} />
               </li>
             ))}
           </ul>
@@ -147,16 +151,20 @@ export function PosPage() {
       </div>
 
       {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} />}
-      {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments) => {
-        const o = await createWalkInSale({ lines: priced, discount: parseNum(discount) || 0, wholesale, phone: phone.trim() || undefined, name: name.trim() || undefined, payments, outsideHours: isOutsideHours(new Date(), company) });
+      {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments, cashGiven) => {
+        const o = await createWalkInSale({ lines: priced, discount: parseNum(discount) || 0, wholesale, phone: phone.trim() || undefined, name: name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company) });
         setLast(o); reset(); setPaying(false); toast(`Vente ${o.number} enregistrée`);
+        if (getMeta('printAutoTicket', false)) {
+          printTo(defaultTarget(), ticketDoc(o, company)).then((m) => toast(m)).catch((e) => toast(`Ticket non imprimé : ${e?.message ?? e}`, 'error'));
+        }
       }} />}
+      {printFor && <PrintDialog docs={[{ key: 'ticket', label: 'Ticket de caisse', build: () => ticketDoc(printFor, company) }]} onClose={() => setPrintFor(null)} />}
     </>
   );
 }
 
 /** Encaissement : un ou plusieurs moyens de paiement, calcul de la monnaie à rendre. */
-function PayDialog({ total, onClose, onPaid }: { total: number; onClose: () => void; onPaid: (p: { amount: number; method: PayMethod; ref?: string }[]) => Promise<void> }) {
+function PayDialog({ total, onClose, onPaid }: { total: number; onClose: () => void; onPaid: (p: { amount: number; method: PayMethod; ref?: string }[], cashGiven?: number) => Promise<void> }) {
   const [pays, setPays] = useState<{ method: PayMethod; amount: string; ref: string }[]>([{ method: 'cash', amount: String(total), ref: '' }]);
   const [given, setGiven] = useState('');
   const [busy, setBusy] = useState(false);
@@ -169,7 +177,7 @@ function PayDialog({ total, onClose, onPaid }: { total: number; onClose: () => v
     <Modal title={`Encaisser ${fmtAr(total)}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={sum <= 0 || sum > total} onClick={async () => {
         setBusy(true);
-        try { await onPaid(pays.map((p) => ({ amount: parseNum(p.amount) || 0, method: p.method, ref: p.ref.trim() || undefined }))); } finally { setBusy(false); }
+        try { await onPaid(pays.map((p) => ({ amount: parseNum(p.amount) || 0, method: p.method, ref: p.ref.trim() || undefined })), parseNum(given) || undefined); } finally { setBusy(false); }
       }}>{missing > 0 ? `Valider (reste ${fmtAr(missing)})` : 'Valider la vente'}</Button></>}>
       <div className="stack">
         {pays.map((p, i) => (

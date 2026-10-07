@@ -62,6 +62,7 @@ export interface Order extends BaseRecord {
   courierId?: string;
   dispatchedAt?: string;
   returnedAt?: string;
+  cashGiven?: number;             // espèces données par le client (vente sur place), pour la monnaie sur le ticket
   courierSettledAt?: string;      // versement du livreur validé (étape 6) : plus de changement de livreur
   events?: { at: string; text: string; user?: string }[];
   createdBy?: string;
@@ -235,7 +236,7 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
 }
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
-export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean }) {
+export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number }) {
   const at = nowIso();
   const u = currentUser();
   const pickup = all<Zone>('zones').find((z) => isPickupZone(z));
@@ -251,7 +252,7 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
     number, kind: 'order', channel: 'shop', customerId, phone, name: d.name || undefined, zoneId: pickup?.id, deliveryFee: 0, feeCharged: 0,
     wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), discount: d.discount, notes: d.notes,
     payments: d.payments.filter((p) => p.amount).map((p) => ({ id: newId(), at, amount: p.amount, method: p.method, ref: p.ref, receivedBy: 'shop' as const, userName: u?.fullName })),
-    status: 'delivered', statusDates: { delivered: at }, dispatchedAt: at, returnedAt: at, outsideHours: d.outsideHours, createdBy: u?.id, createdByName: u?.fullName,
+    status: 'delivered', statusDates: { delivered: at }, dispatchedAt: at, returnedAt: at, outsideHours: d.outsideHours, cashGiven: d.cashGiven || undefined, createdBy: u?.id, createdByName: u?.fullName,
   });
   await addMoves(d.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'sale' as const, refType: 'order', refId: o.id, reason: `${number} — vente sur place`, at })));
   await audit('Vente sur place', `${number} — ${d.lines.reduce((s, l) => s + l.qty, 0)} article(s)`, 'orders', o.id);

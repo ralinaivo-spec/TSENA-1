@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 1.9, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.0, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -248,11 +248,17 @@ Un résumé court, envoyé en un clic (WhatsApp, Messenger, SMS, e-mail ou PDF) 
 
 ## 13. Impression
 
-- **Ticket de caisse** sur imprimante thermique **58 mm**.
-- Bon de commande / bon de livraison, **feuille de route livreur**, liste de préparation.
-- Étiquettes articles avec code-barres et prix *(ajout)*.
-- Récapitulatif de clôture, rapports en PDF.
-- Logo, nom, téléphone, adresse et message de pied de ticket personnalisables.
+- **Documents** : ticket de caisse (vente sur place, avec espèces reçues et monnaie rendue), ticket client d'une commande, **bon de livraison** (remis au livreur : client, lieu, articles et choix, **montant à encaisser**, signature), **feuille de route livreur** (toutes ses commandes en cours et le total à encaisser) et bons de livraison groupés.
+- Format **58 mm** (32 colonnes) par défaut, 80 mm ou A4 possibles. Logo, nom, slogan, téléphone, adresse, NIF/STAT et message de pied de ticket repris de Paramètres → Société.
+- **Choix de l'imprimante par son nom** au moment d'imprimer, depuis n'importe quel téléphone ou ordinateur, avec aperçu et nombre d'exemplaires. Le dernier choix devient l'imprimante par défaut de l'appareil.
+- **Moyens d'impression** (Paramètres → Imprimantes, propres à chaque appareil) :
+  - **Bluetooth direct** (Android Chrome, ordinateur Chrome/Edge), **USB direct** et **port série / Bluetooth appairé** (ordinateur) : impression ESC/POS, jeu de caractères réglable pour les accents, coupe papier en option, page de test ;
+  - **fenêtre d'impression de l'appareil** (AirPrint sur iPhone/Mac, imprimantes installées sur Windows, PDF) : toujours disponible ;
+  - **partage en image** (WhatsApp, Messenger, photos).
+- **Poste d'impression partagé** : un appareil relié à l'imprimante (ex. téléphone Android ou ordinateur de la caisse) reçoit par le cloud les tickets envoyés par les autres appareils (iPhone compris) et les imprime automatiquement ; état en ligne / hors ligne visible et historique des impressions.
+- Option par appareil : **ticket imprimé automatiquement après chaque vente sur place**.
+- Imprimante conseillée : thermique 58 mm ESC/POS, Bluetooth + USB.
+- *Plus tard* : étiquettes articles avec code-barres et prix, récapitulatif de clôture et rapports en PDF.
 
 ---
 
