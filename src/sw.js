@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
   }
   // Fichiers de l'application : cache d'abord, sinon réseau (et mise en cache).
   event.respondWith((async () => {
-    const hit = await caches.match(req);
+    const hit = await caches.match(req, { ignoreSearch: url.pathname.includes('/assets/') });
     if (hit) return hit;
     const res = await fetch(req);
     if (res.ok && url.pathname.includes('/assets/')) (await caches.open(APP_CACHE)).put(req, res.clone());

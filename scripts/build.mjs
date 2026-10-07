@@ -21,7 +21,7 @@ const result = await esbuild.build({
   target: ['es2020', 'safari15', 'chrome90', 'firefox90'],
   jsx: 'automatic',
   outdir: join(dist, 'assets'),
-  entryNames: 'app-[hash]',
+  entryNames: 'app',
   assetNames: '[name]-[hash]',
   metafile: true,
   define: {
@@ -32,15 +32,24 @@ const result = await esbuild.build({
   logLevel: 'warning',
 });
 
+// Noms de fichiers fixes (app.js, app.css) + ?v=empreinte : une ancienne page garde en mémoire
+// trouve toujours les fichiers (jamais d'erreur 404 après une mise à jour).
 const outputs = Object.keys(result.metafile.outputs).map((p) => relative(dist, join(root, p)));
 const js = outputs.find((p) => p.endsWith('.js'));
 const css = outputs.find((p) => p.endsWith('.css'));
+const stamp = (f) => createHash('sha256').update(readFileSync(join(dist, f))).digest('hex').slice(0, 10);
 
 let html = readFileSync(join(root, 'src/index.html'), 'utf8');
 html = html
-  .replace('<!--CSS-->', css ? `<link rel="stylesheet" href="./${css}">` : '')
-  .replace('<!--JS-->', `<script type="module" src="./${js}"></script>`);
+  .replace('<!--CSS-->', css ? `<link rel="stylesheet" href="./${css}?v=${stamp(css)}">` : '')
+  .replace('<!--JS-->', `<script type="module" src="./${js}?v=${stamp(js)}"></script>`);
 writeFileSync(join(dist, 'index.html'), html);
+
+// Anciens noms encore demandés par des pages gardées en mémoire avant le passage aux noms fixes :
+// on y met la version actuelle, qui installe ensuite le nouveau service worker et répare l'appareil.
+const LEGACY = { js: ['app-UI4LVUPG.js'], css: ['app-LQEIZ6LC.css'] };
+for (const f of LEGACY.js) cpSync(join(dist, js), join(dist, 'assets', f));
+if (css) for (const f of LEGACY.css) cpSync(join(dist, css), join(dist, 'assets', f));
 
 // Liste de tout ce qu'il faut garder en cache pour fonctionner sans connexion.
 function walk(dir) {
