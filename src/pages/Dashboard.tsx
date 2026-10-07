@@ -1,4 +1,13 @@
-// Accueil : résumé adapté au rôle. Les chiffres de vente arriveront avec les étapes suivantes.
+// Accueil : tableau de bord adapté au rôle (chiffres de la période, trésorerie, stock, livreurs, meilleurs articles).
+import { useMemo } from 'react';
+import { setMeta } from '../lib/db';
+import { fmtAr } from '../lib/catalog';
+import { ACCOUNTS, balances, courierBalance, today as todayYmd, type AccountId } from '../lib/money';
+import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabel, salesLedger, series, stockValue, dormant } from '../lib/analytics';
+import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
+import { BarChart } from '../ui/chart';
+import { Delta } from './Reports';
+import type { Courier } from '../lib/orders';
 import { managesOwnPassword, roleOf, SUPERADMIN_ID, useCan, useCurrentUser, type User, useMe } from '../lib/auth';
 import { useMeta, useTable } from '../lib/db';
 import type { Order } from '../lib/orders';
@@ -82,6 +91,8 @@ export function DashboardPage() {
         )}
       </div>
 
+      {(can('reports.view') || can('treasury.view')) ? <ManagerBoard /> : can('orders.create') ? <SellerBoard name={me.fullName} /> : null}
+
       {steps.length > 0 && doneCount < steps.length && (
         <div className="card stack">
           <div className="row-between">
@@ -110,6 +121,121 @@ export function DashboardPage() {
           <p className="muted">Vous êtes connecté(e) en tant que <strong>{roleOf(me)?.name}</strong>. {roleOf(me)?.description}</p>
         </div>
       )}
+    </>
+  );
+}
+
+const pct = (n: number) => (n * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
+
+function usePeriod() {
+  const saved = useMeta<Period | null>('dashPeriod', null);
+  const p = saved?.key && saved.key !== 'custom' ? defaultPeriod(saved.key) : saved ?? defaultPeriod('today');
+  return [p, (v: Period) => setMeta('dashPeriod', v)] as const;
+}
+
+function ManagerBoard() {
+  const can = useCan();
+  const cost = can('costs.view');
+  const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); useTable('variants'); useTable('stockMoves'); useTable('purchases'); useTable('courierSettlements');
+  const couriers = useTable<Courier>('couriers');
+  const [period, setPeriod] = usePeriod();
+  const from = period.from ?? '2000-01-01', to = period.to ?? todayYmd();
+  const lines = useMemo(() => salesLedger(from, to), [from, to, orders, moves]);
+  const k = kpis(lines, from, to);
+  const prev = previousPeriod(from, to);
+  const kp = useMemo(() => kpis(salesLedger(prev.from, prev.to), prev.from, prev.to), [prev.from, prev.to, orders, moves]);
+  const bucket = bucketFor(from, to);
+  const pts = series(lines, from, to, bucket);
+  const top = groupBy(lines, (l) => l.productId, productLabel).slice(0, 5);
+  const bal = balances();
+  const stock = stockValue();
+  const purchases = pendingPurchases();
+  const courierDue = couriers.reduce((t, c) => t + Math.max(0, courierBalance(c.id).due), 0);
+  const out = orders.filter((o) => o.status === 'out');
+  const dorm = useMemo(() => dormant(60).slice(0, 5), [orders]);
+  const tiles = [
+    { label: "Chiffre d'affaires", value: fmtAr(k.revenue), cur: k.revenue, prev: kp.revenue, show: true },
+    { label: 'Bénéfice brut', value: fmtAr(k.gross), cur: k.gross, prev: kp.gross, show: cost },
+    { label: 'Dépenses', value: fmtAr(k.expenses), cur: k.expenses, prev: kp.expenses, show: true, invert: true },
+    { label: k.net >= 0 ? 'Bénéfice net' : 'Perte nette', value: fmtAr(k.net), cur: k.net, prev: kp.net, show: cost, strong: true },
+    { label: 'Taux de marge', value: pct(k.margin), cur: k.margin, prev: kp.margin, show: cost, isPct: true },
+    { label: `Ventes (${k.shopOrders} sur place · ${k.onlineOrders} en ligne)`, value: String(k.orders), cur: k.orders, prev: kp.orders, show: true },
+    { label: 'Panier moyen', value: fmtAr(k.avgBasket), cur: k.avgBasket, prev: kp.avgBasket, show: true },
+    { label: 'Taux de retour', value: pct(k.returnRate), cur: k.returnRate, prev: kp.returnRate, show: true, isPct: true, invert: true },
+  ].filter((t) => t.show);
+  return (
+    <>
+      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports">Tous les rapports</a>}</div>
+      <div className="stat-grid">
+        {tiles.map((t) => (
+          <div key={t.label} className={`card stat ${t.strong ? 'stat-strong' : ''}`}>
+            <span className="small muted">{t.label}</span>
+            <strong className={`stat-value num ${t.cur < 0 ? 'neg' : ''}`}>{t.value}</strong>
+            <span className="small muted"><Delta cur={t.cur} prev={t.prev} pct={t.isPct} invert={t.invert} /> vs période précédente</span>
+          </div>
+        ))}
+      </div>
+      <div className="card stack-s">
+        <h2>{cost ? 'Bénéfice net' : "Chiffre d'affaires"} par {bucket === 'hour' ? 'heure' : bucket === 'day' ? 'jour' : 'mois'}</h2>
+        <BarChart title="Évolution" bars={pts.map((p) => ({ key: p.key, label: p.label, long: p.long, value: cost ? p.gross - p.expenses : p.revenue, extra: `${p.orders} vente(s) · CA ${fmtAr(p.revenue)}` }))} format={fmtAr} />
+      </div>
+      <div className="grid-2" style={{ alignItems: 'start' }}>
+        {can('treasury.view') && (
+          <a className="card stack-s" href="#/tresorerie" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <h2>Trésorerie</h2>
+            <table className="kv-table"><tbody>
+              {(['cash', 'mvola', 'orange', 'airtel', 'bank'] as AccountId[]).filter((a) => a !== 'bank' || bal.bank).map((a) => <tr key={a}><td>{ACCOUNTS[a]}</td><td className={bal[a] < 0 ? 'neg' : ''}>{fmtAr(bal[a])}</td></tr>)}
+              <tr><td>À verser par les livreurs</td><td>{fmtAr(courierDue)}</td></tr>
+              <tr className="total"><td>Total</td><td>{fmtAr(Object.values(bal).reduce((t, v) => t + v, 0) + courierDue)}</td></tr>
+            </tbody></table>
+          </a>
+        )}
+        <div className="card stack-s">
+          <h2>Stock et arrivages</h2>
+          <table className="kv-table"><tbody>
+            <tr><td>Pièces en stock</td><td>{stock.pieces.toLocaleString('fr-FR')}</td></tr>
+            {cost && <tr><td>Valeur du stock (coût)</td><td>{fmtAr(stock.value)}</td></tr>}
+            <tr><td>Valeur du stock (prix de vente)</td><td>{fmtAr(stock.retail)}</td></tr>
+            <tr><td>Arrivages en attente</td><td>{purchases.count} commande(s) · {purchases.pieces.toLocaleString('fr-FR')} pcs</td></tr>
+            {cost && purchases.unpaidAr > 0 && <tr><td>Reste à payer aux fournisseurs</td><td>{fmtAr(purchases.unpaidAr)}</td></tr>}
+            <tr><td>En livraison maintenant</td><td>{out.length} commande(s)</td></tr>
+          </tbody></table>
+        </div>
+        <div className="card stack-s">
+          <h2>Meilleurs articles</h2>
+          {top.length === 0 ? <p className="small muted">Aucune vente sur la période.</p> : (
+            <table className="kv-table"><tbody>{top.map((g) => <tr key={g.key}><td>{g.label} <span className="muted small">· {g.qty} pcs</span></td><td>{fmtAr(g.revenue)}</td></tr>)}</tbody></table>
+          )}
+        </div>
+        <div className="card stack-s">
+          <h2>Articles dormants</h2>
+          <p className="small muted">En stock, aucune vente depuis 60 jours.</p>
+          {dorm.length === 0 ? <p className="small muted">Aucun.</p> : (
+            <table className="kv-table"><tbody>{dorm.map((d) => <tr key={d.p.id}><td>{d.p.name} <span className="muted small">· {d.p.code}</span></td><td>{d.qty} pcs</td></tr>)}</tbody></table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Vendeur : ses propres ventes de la période (sans les marges). */
+function SellerBoard({ name }: { name: string }) {
+  const orders = useTable<Order>('orders');
+  const [period, setPeriod] = usePeriod();
+  const from = period.from ?? '2000-01-01', to = period.to ?? todayYmd();
+  const lines = useMemo(() => salesLedger(from, to).filter((l) => l.userName === name), [from, to, orders, name]);
+  const k = kpis(lines);
+  const pts = series(lines, from, to, bucketFor(from, to));
+  return (
+    <>
+      <div className="card"><PeriodPicker value={period} onChange={setPeriod} /></div>
+      <div className="stat-grid">
+        <div className="card stat"><span className="small muted">Mes ventes</span><strong className="stat-value num">{k.orders}</strong><span className="small muted">{k.shopOrders} sur place · {k.onlineOrders} en ligne</span></div>
+        <div className="card stat"><span className="small muted">Montant vendu</span><strong className="stat-value num">{fmtAr(k.revenue)}</strong></div>
+        <div className="card stat"><span className="small muted">Pièces</span><strong className="stat-value num">{k.pieces}</strong></div>
+      </div>
+      {lines.length > 0 && <div className="card stack-s"><h2>Mes ventes dans le temps</h2><BarChart title="Mes ventes" bars={pts.map((p) => ({ key: p.key, label: p.label, long: p.long, value: p.revenue, extra: `${p.orders} vente(s)` }))} format={fmtAr} /></div>}
     </>
   );
 }

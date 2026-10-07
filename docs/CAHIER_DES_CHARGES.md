@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.3, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.4, validée le 07/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -232,6 +232,12 @@ Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…),
 - État du stock et valorisation, mouvements de stock par article.
 - Rapport livreurs, rapport achats/arrivages, rapport clients.
 - Comparaison entre périodes (ce mois vs mois dernier).
+
+### 11.4 Réalisé (étape 7)
+- **Accueil (admin, gérant, propriétaire)** : période au choix (retenue sur l'appareil) ; chiffre d'affaires, bénéfice brut, dépenses, **bénéfice ou perte nette**, taux de marge, nombre de ventes (sur place / en ligne), panier moyen, taux de retour, chacun **comparé à la période précédente** ; graphique du bénéfice net par heure / jour / mois (barres rouges = perte) ; trésorerie par compte + à verser par les livreurs ; stock (pièces, valeur au coût et au prix de vente), arrivages en attente, reste à payer aux fournisseurs ; meilleurs articles ; articles dormants (60 jours sans vente).
+- **Accueil (vendeur)** : ses ventes de la période (nombre, montant, pièces, graphique), sans les marges.
+- **Menu Argent → Rapports** (droit « Voir les rapports complets ») : Bénéfice et perte (compte de résultat avec comparaison, graphique, mois par mois), Journal des ventes (filtres canal, vendeur, livreur, zone, paiement, recherche), Articles (par article ou catégorie, marge, retours, stock ; articles dormants), Clients, Livreurs (livraisons, taux de réussite, à encaisser sans les frais, frais à reverser, versé, solde), Vendeurs, Stock (valorisation), Achats. Tri sur chaque colonne, ligne de total, **export Excel**.
+- Les montants de coût et de marge ne s'affichent qu'avec le droit « Voir les prix d'achat, marges et bénéfices ». Les frais de livraison ne sont jamais dans le chiffre d'affaires.
 
 ---
 

@@ -463,3 +463,23 @@ a.btn { text-decoration: none; }
 .stat-strong { border-color: var(--brand); background: var(--brand-soft); }
 .table tr.t-total td { font-weight: 700; background: var(--surface-2); }
 .table tr.is-checked td { background: var(--brand-soft); }
+
+/* ---- Étape 7 : graphiques, tableaux de bord, rapports ---- */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; overflow: visible; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-base { stroke: var(--line-strong); stroke-width: 1; }
+.chart-axis { fill: var(--muted); font: 11px var(--font-body); font-variant-numeric: tabular-nums; }
+.chart-bar { fill: var(--brand); transition: opacity .12s; }
+.chart-bar.is-neg { fill: var(--danger); }
+.chart svg:hover .chart-bar:not(.is-hover) { opacity: .55; }
+.chart-tip { position: absolute; top: 0; width: 170px; pointer-events: none; display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--radius-m); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: .85rem; }
+.chart-tip strong:first-child { font-size: .8rem; color: var(--muted); font-weight: 700; text-transform: capitalize; }
+.kpi-delta { font-size: .8rem; font-weight: 700; }
+.kpi-delta.up { color: var(--ok); }
+.kpi-delta.down { color: var(--danger); }
+.th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.th-sort:hover { color: var(--ink); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.filters .field { min-width: 160px; flex: 1; max-width: 240px; }
+.table-report td { white-space: nowrap; } .table-report td:nth-child(n) { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }

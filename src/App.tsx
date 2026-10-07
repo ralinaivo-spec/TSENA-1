@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { usePrintStationWorker } from './lib/print';
 import { TreasuryPage } from './pages/Treasury';
 import { RecapPage } from './pages/Recap';
+import { ReportsPage } from './pages/Reports';
 import { managesOwnPassword, roleOf, useCan, useCurrentUser, logout, useMe } from './lib/auth';
 import { getMeta, setMeta, useMeta } from './lib/db';
 import { useApplyAppearance, useCompany } from './lib/settings';
@@ -41,6 +42,7 @@ const NAV: NavItem[] = [
   { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
   { path: '/tresorerie', label: 'Trésorerie', icon: 'wallet', perm: 'treasury.view', group: 'Argent', page: () => <TreasuryPage /> },
   { path: '/recapitulatif', label: 'Récapitulatifs', icon: 'list', perm: 'treasury.view', group: 'Argent', page: () => <RecapPage /> },
+  { path: '/rapports', label: 'Rapports', icon: 'chart', perm: 'reports.view', group: 'Argent', page: () => <ReportsPage /> },
   { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage /> },
   { path: '/roles', label: 'Rôles et accès', icon: 'shield', perm: 'users.manage', group: 'Administration', page: () => <RolesPage /> },
   { path: '/journal', label: "Journal d'activité", icon: 'list', perm: 'audit.view', group: 'Administration', page: () => <AuditPage /> },
