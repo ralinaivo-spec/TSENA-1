@@ -119,9 +119,10 @@ export function ticketDoc(o: Order, c: Company, opts: { cashGiven?: number } = {
   const zone = get<Zone>('zones', o.zoneId || '');
   const courier = get<Courier>('couriers', o.courierId || '');
   const b: Block[] = [...header(c), L('=')];
-  b.push(T(`${walkIn ? 'TICKET' : o.kind === 'exchange' ? 'ÉCHANGE' : 'COMMANDE'} ${o.number}`, { align: 'center', bold: true }));
+  b.push(T(`${o.internal ? 'VENTE INTERNE' : walkIn ? 'TICKET' : o.kind === 'exchange' ? 'ÉCHANGE' : 'COMMANDE'} ${o.number}`, { align: 'center', bold: true }));
   b.push(T(dt(o.createdAt), { align: 'center' }));
   if (o.createdByName) b.push(T(`Vendeur : ${o.createdByName}`, { align: 'center' }));
+  if (o.internal) { b.push(L()); b.push(T(`Employé : ${o.employeeName || '?'}`, { bold: true })); b.push(T('Prix de revient arrondi')); }
   if (o.name || o.phone) {
     b.push(L());
     if (o.name) b.push(T(`Client : ${o.name}`));

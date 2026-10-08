@@ -69,6 +69,10 @@ export interface Order extends BaseRecord {
   events?: { at: string; text: string; user?: string }[];
   createdBy?: string;
   createdByName?: string;
+  /** Vente interne : achat d'un employé, au prix de revient arrondi. */
+  internal?: boolean;
+  employeeId?: string;
+  employeeName?: string;
 }
 
 export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: 'neutral' | 'brand' | 'warn' | 'ok' | 'danger' }> = {
@@ -83,8 +87,19 @@ export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: 'neutral' 
 };
 export const CHANNELS = { facebook: 'Facebook', phone: 'Téléphone', shop: 'Vente sur place (boutique)', other: 'Autre' };
 export const isWalkIn = (o: Pick<Order, 'channel'>) => o.channel === 'shop';
+export const isInternal = (o: Pick<Order, 'internal'>) => !!o.internal;
 /** Nom affiché : client, sinon téléphone, sinon « Vente sur place ». */
-export const orderLabel = (o: Pick<Order, 'name' | 'phone' | 'channel'>) => o.name || (o.phone ? fmtPhone(o.phone) : o.channel === 'shop' ? 'Vente sur place' : '—');
+export const orderLabel = (o: Pick<Order, 'name' | 'phone' | 'channel'> & Partial<Pick<Order, 'internal' | 'employeeName'>>) =>
+  o.internal ? `Vente interne · ${o.employeeName || '?'}` : o.name || (o.phone ? fmtPhone(o.phone) : o.channel === 'shop' ? 'Vente sur place' : '—');
+
+/** Prix d'une vente interne : prix de revient arrondi au palier supérieur (1 Ar par défaut, ou 100, 500…). */
+export function internalPrice(variantId: string, step = 1) {
+  const v = get<Variant>('variants', variantId);
+  const cost = v?.costAvg ?? 0;
+  if (cost <= 0) return 0;
+  const st = step > 0 ? step : 1;
+  return Math.ceil(Math.round(cost * 1000) / 1000 / st) * st;
+}
 
 // ---------- Téléphones ----------
 export function normPhone(p: string) {
@@ -259,7 +274,7 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
 }
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
-export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number }) {
+export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number; employee?: { id: string; name: string } }) {
   const at = bizNow();
   const u = currentUser();
   const pickup = all<Zone>('zones').find((z) => isPickupZone(z));
@@ -270,15 +285,17 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
     if (c) customerId = c.id;
     else { const [nc] = await save('customers', { phone, name: d.name || undefined }); customerId = nc.id; }
   }
-  const number = nextOrderNumber('V');
+  const internal = !!d.employee;
+  const number = nextOrderNumber(internal ? 'VI' : 'V');
   const [o] = await save('orders', {
     number, kind: 'order', channel: 'shop', customerId, phone, name: d.name || undefined, zoneId: pickup?.id, deliveryFee: 0, feeCharged: 0,
     wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), discount: d.discount, notes: d.notes,
     payments: d.payments.filter((p) => p.amount).map((p) => ({ id: newId(), at, amount: p.amount, method: p.method, ref: p.ref, receivedBy: 'shop' as const, userName: u?.fullName })),
     status: 'delivered', statusDates: { delivered: at }, dispatchedAt: at, returnedAt: at, outsideHours: d.outsideHours, cashGiven: d.cashGiven || undefined, createdBy: u?.id, createdByName: u?.fullName,
+    ...(internal ? { internal: true, employeeId: d.employee!.id, employeeName: d.employee!.name, wholesale: 'no' as const } : {}),
   });
-  await addMoves(d.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'sale' as const, refType: 'order', refId: o.id, reason: `${number} — vente sur place`, at })));
-  await audit('Vente sur place', `${number} — ${d.lines.reduce((s, l) => s + l.qty, 0)} article(s)`, 'orders', o.id);
+  await addMoves(d.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'sale' as const, refType: 'order', refId: o.id, reason: `${number} — ${internal ? `vente interne (${d.employee!.name})` : 'vente sur place'}`, at })));
+  await audit(internal ? 'Vente interne' : 'Vente sur place', `${number} — ${d.lines.reduce((s, l) => s + l.qty, 0)} article(s)${internal ? ` — employé : ${d.employee!.name}` : ''}`, 'orders', o.id);
   return o as Order;
 }
 function nextOrderNumber(prefix: string) {

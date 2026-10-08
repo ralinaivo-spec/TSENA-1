@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.9, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 3.0, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -155,6 +155,7 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - **Prix de gros** : appliqué automatiquement **à partir de 3 pièces** (seuil réglable dans les paramètres). Le vendeur peut aussi **l'accorder à la main** à un client qui en prend moins (ex. 2 pièces) ; ce choix est enregistré avec la vente.
 - Impression du ticket de caisse.
 - Mise en attente d'un panier, reprise plus tard.
+- **Vente interne (employés)** *(ajout du 08/10/2026)* : achat d'un employé en boutique. Dans la caisse, choisir « Vente interne (employé) » puis l'employé qui achète. Chaque article est vendu à son **prix de revient arrondi au palier supérieur** : à l'ariary supérieur par défaut (ex. 2 562,55 → 2 563 Ar), ou aux 50 / 100 / 500 / 1 000 Ar supérieurs (réglage dans Paramètres → Société). Prix non modifiable, pas de remise ni de prix de gros ; vente impossible si un article n'a pas de prix de revient. Numéro **VI-xxxx**, ticket « VENTE INTERNE » avec le nom de l'employé, stock mis à jour comme une vente normale. Les ventes internes comptent dans les ventes sur place et apparaissent à part (« dont ventes internes ») dans la synthèse, le récapitulatif envoyé au responsable et le rapport des ventes (filtre « Ventes internes »).
 
 ---
 

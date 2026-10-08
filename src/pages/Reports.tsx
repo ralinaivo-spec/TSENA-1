@@ -167,7 +167,7 @@ function SalesJournal({ from, to }: { from: string; to: string }) {
   const couriers = all<Courier>('couriers');
   const zones = all<Zone>('zones');
   const n = q.trim().toLowerCase();
-  const rows = entries.filter((e) => (!channel || (channel === 'shop' ? e.o.channel === 'shop' : e.o.channel !== 'shop'))
+  const rows = entries.filter((e) => (!channel || (channel === 'internal' ? !!e.o.internal : channel === 'shop' ? e.o.channel === 'shop' : e.o.channel !== 'shop'))
     && (!seller || e.o.createdByName === seller) && (!courier || e.o.courierId === courier) && (!zone || e.o.zoneId === zone)
     && (!method || (e.o.payments || []).some((p) => p.method === method))
     && (!n || `${e.o.number} ${e.o.name || ''} ${e.o.phone}`.toLowerCase().includes(n)));
@@ -175,7 +175,7 @@ function SalesJournal({ from, to }: { from: string; to: string }) {
     { key: 'at', label: 'Date', value: (e) => e.at, render: (e) => fmtDateTime(e.at), width: 18 },
     { key: 'n', label: 'N°', value: (e) => e.o.number, render: (e) => <a href={`#/commandes/${e.o.id}`}>{e.o.number}</a> },
     { key: 'k', label: 'Type', value: (e) => (e.kind === 'sale' ? 'Vente' : 'Retour'), render: (e) => e.kind === 'sale' ? 'Vente' : <Badge tone="danger">Retour</Badge> },
-    { key: 'c', label: 'Canal', value: (e) => (e.o.channel === 'shop' ? 'Sur place' : 'En ligne') },
+    { key: 'c', label: 'Canal', value: (e) => (e.o.internal ? 'Vente interne' : e.o.channel === 'shop' ? 'Sur place' : 'En ligne') },
     { key: 'cl', label: 'Client', value: (e) => orderLabel(e.o) },
     { key: 's', label: 'Vendeur', value: (e) => e.o.createdByName ?? '' },
     { key: 'lv', label: 'Livreur', value: (e) => (e.o.courierId ? get<Courier>('couriers', e.o.courierId)?.name ?? '' : '') },
@@ -189,7 +189,7 @@ function SalesJournal({ from, to }: { from: string; to: string }) {
       <div className="card-pad stack-s">
         <div className="row-between"><h2>Journal des ventes</h2><ExportBtn onClick={() => exportTables(`journal-ventes_${fileDate(from, to)}.xlsx`, [{ name: 'Ventes', cols, rows }])} /></div>
         <div className="filters">
-          <SelectField label="Canal" value={channel} onChange={setChannel} options={[{ value: '', label: 'Tous' }, { value: 'shop', label: 'Vente sur place' }, { value: 'online', label: 'Commandes en ligne' }]} />
+          <SelectField label="Canal" value={channel} onChange={setChannel} options={[{ value: '', label: 'Tous' }, { value: 'shop', label: 'Vente sur place' }, { value: 'online', label: 'Commandes en ligne' }, { value: 'internal', label: 'Ventes internes (employés)' }]} />
           <SelectField label="Vendeur" value={seller} onChange={setSeller} options={[{ value: '', label: 'Tous' }, ...sellers.map((s) => ({ value: s, label: s }))]} />
           <SelectField label="Livreur" value={courier} onChange={setCourier} options={[{ value: '', label: 'Tous' }, ...couriers.map((c) => ({ value: c.id, label: c.name }))]} />
           <SelectField label="Zone" value={zone} onChange={setZone} options={[{ value: '', label: 'Toutes' }, ...zones.map((z) => ({ value: z.id, label: z.name }))]} />

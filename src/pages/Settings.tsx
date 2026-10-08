@@ -101,6 +101,8 @@ function CompanyTab() {
         })}
       </div>
       <TextField label="Prix de gros à partir de (pièces)" value={String(form.wholesaleMinQty ?? 3)} onChange={(v) => setForm({ ...form, wholesaleMinQty: Number(v.replace(/\D/g, '')) || 0 })} inputMode="numeric" hint="Le vendeur peut aussi accorder le prix de gros à la main, commande par commande." />
+      <SelectField label="Vente interne (employés) : prix de revient arrondi" value={String(form.internalRounding ?? 1)} onChange={(v) => setForm({ ...form, internalRounding: Number(v) || 1 })}
+        options={[1, 50, 100, 500, 1000].map((n) => ({ value: String(n), label: n === 1 ? 'à l’ariary supérieur (ex. 2 562,5 → 2 563 Ar)' : `aux ${n.toLocaleString('fr-FR')} Ar supérieurs (ex. 2 563 → ${(Math.ceil(2563 / n) * n).toLocaleString('fr-FR')} Ar)` }))} />
       <div className="row">
         <Button busy={busy} disabled={!form.name.trim()} onClick={async () => {
           setBusy(true);

@@ -34,6 +34,7 @@ function common(r: Report, withProfit: boolean): Section[] {
   const out: Section[] = [];
   out.push({ title: 'Ventes', lines: [
     { label: `Ventes sur place (${t.walkInCount})`, value: fmtAr(t.walkIn) },
+    ...(r.sales.internalCount ? [{ label: `dont ventes internes, employés (${r.sales.internalCount})`, value: fmtAr(r.sales.internalAmount), sub: true }] : []),
     { label: `Livraisons (${t.delivCount})`, value: fmtAr(t.deliv) },
     ...(r.returns.amount ? [{ label: `Retours (${r.returns.count})`, value: neg(r.returns.amount) }] : []),
     { label: 'Total des ventes', value: fmtAr(r.netSales), strong: true },
@@ -76,6 +77,7 @@ export function synthSections(s: Synthesis): Section[] {
   const sa = (a: number, b: number) => (a === b ? fmtAr(a) : `${fmtAr(a)} → ${fmtAr(b)}`);
   const out: Section[] = [{ title: 'Synthèse (sans retour → avec retour)', lines: [
     { label: `Ventes sur place (${s.walk.count})`, value: sa(s.walk.sans, s.walk.avec) },
+    ...(s.internal?.count ? [{ label: `dont ventes internes, employés (${s.internal.count})`, value: fmtAr(s.internal.amount), sub: true }] : []),
     { label: `Livraisons (${s.deliv.count})${s.deliv.pending ? `, ${s.deliv.pending} pas encore confirmée(s)` : ''}`, value: sa(s.deliv.sans, s.deliv.avec) },
     ...(s.pickup.count ? [{ label: `Retraits en boutique (${s.pickup.count})`, value: sa(s.pickup.sans, s.pickup.avec) }] : []),
     { label: 'TOTAL SANS RETOUR', value: fmtAr(s.total.sans), strong: true },

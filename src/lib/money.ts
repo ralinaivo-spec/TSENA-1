@@ -83,7 +83,7 @@ export function flows(from?: string, to?: string, account?: AccountId): Flow[] {
     if (p.receivedBy !== 'shop' || !inR(p.at)) continue;
     const acc = ACCOUNT_OF_METHOD[p.method];
     if (account && acc !== account) continue;
-    list.push({ id: p.id, at: p.at, account: acc, amount: p.amount, label: p.amount < 0 ? `Remboursement ${o.number}` : `${isWalkIn(o) ? 'Vente' : 'Paiement'} ${o.number}`, detail: [o.name, p.ref, p.userName].filter(Boolean).join(' · '), orderId: o.id });
+    list.push({ id: p.id, at: p.at, account: acc, amount: p.amount, label: p.amount < 0 ? `Remboursement ${o.number}` : `${o.internal ? 'Vente interne' : isWalkIn(o) ? 'Vente' : 'Paiement'} ${o.number}`, detail: [o.name, p.ref, p.userName].filter(Boolean).join(' · '), orderId: o.id });
   }
   const cats = new Map(all<FinanceCategory>('financeCategories').map((c) => [c.id, c.name]));
   for (const m of all<CashMove>('cashMoves')) {
@@ -212,7 +212,7 @@ export interface DeliveryRow { o: Order; courierId: string; value: number; colle
 export interface CourierRow { courierId: string; name: string; count: number; value: number; collect: number; clientPays: number; fees: number; feeOwed: number; net: number; delivered: number; refused: number; out: number; paidIn: number; carry: number; pending: number; balance: number }
 export interface Report {
   from: string; to: string;
-  sales: { count: number; amount: number; shopCount: number; shopAmount: number; onlineCount: number; onlineAmount: number };
+  sales: { count: number; amount: number; shopCount: number; shopAmount: number; onlineCount: number; onlineAmount: number; internalCount: number; internalAmount: number };
   returns: { count: number; amount: number };
   netSales: number; cost: number; grossProfit: number;
   walkIns: Order[];
@@ -240,12 +240,13 @@ export function report(from: string, to: string): Report {
   const z = () => Object.fromEntries(ACCOUNT_IDS.map((a) => [a, 0])) as Record<AccountId, number>;
   const inR = (iso?: string) => { if (!iso) return false; const d = dayOf(iso); return d >= from && d <= to; };
   const s: Report = {
-    from, to, sales: { count: 0, amount: 0, shopCount: 0, shopAmount: 0, onlineCount: 0, onlineAmount: 0 }, returns: { count: 0, amount: 0 },
+    from, to, sales: { count: 0, amount: 0, shopCount: 0, shopAmount: 0, onlineCount: 0, onlineAmount: 0, internalCount: 0, internalAmount: 0 }, returns: { count: 0, amount: 0 },
     netSales: 0, cost: 0, grossProfit: 0, walkIns: [], deliveries: [], couriers: [], expenses: 0, expensesByCat: [], expenseMoves: [], incomes: 0, otherMoves: [],
     receipts: z(), fromCouriers: z(), collectedByCouriers: 0, courierFees: 0, courierDue: 0, balancesEnd: z(),
   };
   const addSale = (o: Order, amount: number, cost: number, count: boolean) => {
     s.sales.amount += amount; s.cost += cost;
+    if (o.internal) { s.sales.internalAmount += amount; if (count) s.sales.internalCount++; }
     if (isWalkIn(o)) { s.sales.shopAmount += amount; if (count) s.sales.shopCount++; } else { s.sales.onlineAmount += amount; if (count) s.sales.onlineCount++; }
     if (count) s.sales.count++;
   };

@@ -84,7 +84,7 @@ function DayTables({ r }: { r: Report }) {
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Vente</th><th>Heure</th><th className="t-num">Articles</th><th>Paiement</th><th className="t-num">Montant</th></tr></thead>
             <tbody>{r.walkIns.map((o) => (
-              <tr key={o.id}><td><a href={`#/commandes/${o.id}`}>{o.number}</a> <span className="muted small">{o.name || ''}</span></td><td>{new Date(o.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
+              <tr key={o.id}><td><a href={`#/commandes/${o.id}`}>{o.number}</a> <span className="muted small">{o.internal ? `Vente interne · ${o.employeeName || '?'}` : o.name || ''}</span></td><td>{new Date(o.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                 <td className="t-num">{o.lines.reduce((s, l) => s + (l.qtyKept ?? l.qty), 0)}</td><td>{[...new Set(o.payments.map((p) => PAY_METHODS[p.method]))].join(' + ') || 'non payé'}</td><td className="t-num">{fmtAr(keptTotal(o) - (o.discount || 0))}</td></tr>
             ))}</tbody>
           </table></div>
@@ -248,6 +248,7 @@ function SynthesisCard({ date }: { date: string }) {
         <thead><tr><th></th><th className="t-num">Nombre</th><th className="t-num">Montant sans retour</th><th className="t-num">Montant avec retour</th></tr></thead>
         <tbody>
           <tr><td>Ventes sur place</td><td className="t-num">{s.walk.count}</td><td className="t-num">{fmtAr(s.walk.sans)}</td><td className="t-num">{fmtAr(s.walk.avec)}</td></tr>
+          {s.internal.count > 0 && <tr className="muted"><td style={{ paddingLeft: 24 }}>dont ventes internes (employés)</td><td className="t-num">{s.internal.count}</td><td className="t-num">{fmtAr(s.internal.amount)}</td><td className="t-num">{fmtAr(s.internal.amount)}</td></tr>}
           <tr><td>Livraisons{s.deliv.returns ? <span className="small muted"> · {s.deliv.returns} avec retour</span> : null}</td><td className="t-num">{s.deliv.count}</td><td className="t-num">{fmtAr(s.deliv.sans)}</td><td className="t-num">{fmtAr(s.deliv.avec)}{diff(s.deliv.sans, s.deliv.avec)}</td></tr>
           {s.pickup.count > 0 && <tr><td>Retraits en boutique</td><td className="t-num">{s.pickup.count}</td><td className="t-num">{fmtAr(s.pickup.sans)}</td><td className="t-num">{fmtAr(s.pickup.avec)}</td></tr>}
           <tr className="synth-total"><td>TOTAL GÉNÉRAL</td><td className="t-num">{s.walk.count + s.deliv.count + s.pickup.count}</td><td className="t-num">{fmtAr(s.total.sans)}</td><td className="t-num">{fmtAr(s.total.avec)}{diff(s.total.sans, s.total.avec)}</td></tr>

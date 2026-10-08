@@ -388,7 +388,9 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 
 /* ---- Vente sur place (comptoir) ---- */
 .pos-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
-.pos-cart { position: sticky; top: 16px; }
+.pos-cart { position: sticky; top: 16px; min-width: 0; }
+.pos-cart > * { min-width: 0; max-width: 100%; }
+.pos-cart .list, .cart-line > div { min-width: 0; }
 .pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 70vh; overflow: auto; padding: 2px; }
 .pos-tile { display: grid; justify-items: start; gap: 4px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius-m); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
 .pos-tile:hover { border-color: var(--brand); }

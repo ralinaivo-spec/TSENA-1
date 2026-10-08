@@ -11,6 +11,7 @@ export interface SynthCategory { id: string; name: string; sellers: string[]; sa
 export interface Synthesis {
   date: string;
   walk: { count: number; sans: number; avec: number };
+  internal: { count: number; amount: number };
   deliv: { count: number; sans: number; avec: number; pending: number; returns: number };
   pickup: { count: number; sans: number; avec: number };
   total: { sans: number; avec: number; diff: number };
@@ -49,7 +50,7 @@ function orderLines(o: Order) {
 
 export function daySynthesis(date: string): Synthesis {
   const s: Synthesis = {
-    date, walk: { count: 0, sans: 0, avec: 0 }, deliv: { count: 0, sans: 0, avec: 0, pending: 0, returns: 0 }, pickup: { count: 0, sans: 0, avec: 0 },
+    date, walk: { count: 0, sans: 0, avec: 0 }, internal: { count: 0, amount: 0 }, deliv: { count: 0, sans: 0, avec: 0, pending: 0, returns: 0 }, pickup: { count: 0, sans: 0, avec: 0 },
     total: { sans: 0, avec: 0, diff: 0 }, couriers: [], categories: [], fees: 0, corrected: false,
   };
   const couriers = new Map<string, SynthCourier>();
@@ -72,7 +73,7 @@ export function daySynthesis(date: string): Synthesis {
     const hadReturn = o.status === 'cancelled' || o.status === 'refused' || o.lines.some((l) => !l.isChoice && (l.qtyReturned ?? 0) > 0);
     const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
     if (back && dayOf(back) > date && avec !== sans) { s.corrected = true; if (!s.lastUpdate || back > s.lastUpdate) s.lastUpdate = back; }
-    if (walk) { s.walk.count++; s.walk.sans += sans; s.walk.avec += avec; continue; }
+    if (walk) { s.walk.count++; s.walk.sans += sans; s.walk.avec += avec; if (o.internal) { s.internal.count++; s.internal.amount += avec; } continue; }
     if (isPickupZone(o.zoneId)) { s.pickup.count++; s.pickup.sans += sans; s.pickup.avec += avec; continue; }
     s.deliv.count++; s.deliv.sans += sans; s.deliv.avec += avec;
     if (x.pending) s.deliv.pending++;

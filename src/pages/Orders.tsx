@@ -419,7 +419,7 @@ function OrderDetail({ id }: { id: string }) {
         <div className="row-between" style={{ alignItems: 'flex-start' }}>
           <div className="stack-s">
             <div className="row" style={{ gap: 8 }}><h1 style={{ fontSize: '1.6rem' }}>{o.number}</h1><OrderStatusBadge o={o} />{o.outsideHours && <Badge>Reçue hors heures</Badge>}</div>
-            <p className="muted">{CHANNELS[o.channel]} · {fmtDateTime(o.createdAt)}{o.createdByName ? ` · par ${o.createdByName}` : ''}</p>
+            <p className="muted">{o.internal ? `Vente interne — employé : ${o.employeeName || '?'} (prix de revient arrondi)` : CHANNELS[o.channel]} · {fmtDateTime(o.createdAt)}{o.createdByName ? ` · par ${o.createdByName}` : ''}</p>
           </div>
           <div className="page-actions">
             <PrintButton docs={printDocs(o, company)} />

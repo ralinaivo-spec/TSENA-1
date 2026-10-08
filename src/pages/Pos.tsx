@@ -1,16 +1,16 @@
 // Vente sur place : écran de comptoir rapide (recherche, panier, encaissement, monnaie à rendre).
 import { useMemo, useState } from 'react';
-import { useCan, useMe } from '../lib/auth';
+import { useCan, useMe, type User } from '../lib/auth';
 import { useMyScope } from '../lib/scope';
 import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
-  availableOf, createWalkInSale, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
+  availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
   type Order, type OrderLine, type PayMethod,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Button, Empty, IconButton, Modal, PageHead, TextField, fmtDateTime, toast } from '../ui/kit';
+import { Badge, Button, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ItemPicker } from './Orders';
 import { defaultTarget, printTo, ticketDoc } from '../lib/print';
@@ -32,16 +32,23 @@ export function PosPage() {
   const [paying, setPaying] = useState(false);
   const [last, setLast] = useState<Order | null>(null);
   const [printFor, setPrintFor] = useState<Order | null>(null);
+  // Vente interne : achat d'un employé, au prix de revient arrondi (pas de remise ni de prix de gros).
+  const [internal, setInternal] = useState(false);
+  const [employeeId, setEmployeeId] = useState('');
+  const users = useTable<User>('users').filter((u) => u.active !== false).sort((a, b) => a.fullName.localeCompare(b.fullName, 'fr'));
   const reserved = useMemo(() => reservedIndex(), [orders]);
   const scope = useMyScope();
   // Ventes du jour : chaque vendeur voit d'abord les siennes (l'admin voit tout).
   const [allSales, setAllSales] = useState(can('reports.view'));
   const me = useMe();
   const minQty = company.wholesaleMinQty ?? 3;
-  const isGros = useWholesale({ lines, wholesale }, minQty);
-  const priced = repriceLines(lines, isGros);
+  const step = company.internalRounding ?? 1;
+  const isGros = !internal && useWholesale({ lines, wholesale }, minQty);
+  const priced = internal ? lines.map((l) => ({ ...l, priceManual: false, unitPrice: internalPrice(l.variantId, step) })) : repriceLines(lines, isGros);
+  const noCost = internal ? priced.filter((l) => !l.unitPrice) : [];
   const items = priced.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const total = Math.max(0, items - (parseNum(discount) || 0));
+  const total = Math.max(0, items - (internal ? 0 : parseNum(discount) || 0));
+  const employee = users.find((u) => u.id === employeeId);
   const count = priced.reduce((s, l) => s + l.qty, 0);
 
   const n = q.trim().toLowerCase();
@@ -68,7 +75,8 @@ export function PosPage() {
     if (vs.length === 1) add([{ variantId: vs[0].id, qty: 1 }]); else setPicking(p);
   }
   const setLine = (id: string, patch: Partial<OrderLine>) => setLines(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)).filter((l) => l.qty > 0));
-  const reset = () => { setLines([]); setDiscount(''); setPhone(''); setName(''); setWholesale('auto'); setQ(''); };
+  const reset = () => { setLines([]); setDiscount(''); setPhone(''); setName(''); setWholesale('auto'); setQ(''); setInternal(false); setEmployeeId(''); };
+  const tilePrice = (p: Product) => internal ? Math.min(...productVariants(p.id).map((v) => internalPrice(v.id, step) || Infinity)) : p.priceRetail;
 
   if (!can('pos.sell')) return <Empty icon="lock" title="Accès réservé" />;
   return (
@@ -88,7 +96,7 @@ export function PosPage() {
                   <Thumb src={p.photo} size={140} />
                   <span className="pos-tile-name">{p.name}</span>
                   <span className="small muted">{p.code}</span>
-                  <span className="pos-tile-foot"><strong className="num">{fmtAr(p.priceRetail)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span></span>
+                  <span className="pos-tile-foot"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span></span>
                 </button>
               ))}
             </div>
@@ -97,6 +105,14 @@ export function PosPage() {
 
         <aside className="pos-cart card stack">
           <div className="row-between"><h2>Panier</h2>{lines.length > 0 && <Button variant="quiet" onClick={reset}>Vider</Button>}</div>
+          <div className="segmented" role="group" aria-label="Type de vente">
+            <button type="button" aria-pressed={!internal} onClick={() => setInternal(false)}>Client</button>
+            <button type="button" aria-pressed={internal} onClick={() => setInternal(true)}>Vente interne (employé)</button>
+          </div>
+          {internal && (
+            <div className="notice"><Icon name="tag" /><span style={{ flex: 1 }}>Achat d’un employé : chaque article est vendu à son <strong>prix de revient arrondi</strong>{step > 1 ? ` aux ${fmtNum(step)} Ar supérieurs` : ' à l’ariary supérieur'}. Pas de remise ni de prix de gros.</span></div>
+          )}
+          {internal && <SelectField label="Employé qui achète" value={employeeId} onChange={setEmployeeId} options={[{ value: '', label: 'Choisir l’employé…' }, ...users.map((u) => ({ value: u.id, label: u.fullName }))]} />}
           {priced.length === 0 ? <Empty icon="store" title="Touchez un article pour l’ajouter" /> : (
             <ul className="list">
               {priced.map((l) => {
@@ -106,11 +122,13 @@ export function PosPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong className="cart-name">{p?.name}</strong>
                       <div className="small muted">{p?.code} · {variantLabel(v)}</div>
-                      <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'nowrap' }}>
+                      <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: internal ? 'wrap' : 'nowrap' }}>
                         <IconButton icon="x" label="Retirer un" onClick={() => setLine(l.id, { qty: l.qty - 1 })} />
                         <span className="num" style={{ minWidth: 24, textAlign: 'center', fontWeight: 700 }}>{l.qty}</span>
                         <IconButton icon="plus" label="Ajouter un" onClick={() => setLine(l.id, { qty: l.qty + 1 })} />
-                        <input className="cell-input" style={{ maxWidth: 110 }} inputMode="numeric" aria-label="Prix unitaire" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} />
+                        {internal
+                          ? <span className="small muted">{l.unitPrice ? `${fmtAr(l.unitPrice)} (revient ${fmtAr(Math.round((v?.costAvg ?? 0) * 100) / 100)})` : <span className="neg">prix de revient manquant</span>}</span>
+                          : <input className="cell-input" style={{ maxWidth: 110 }} inputMode="numeric" aria-label="Prix unitaire" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} />}
                       </div>
                     </div>
                     <strong className="num">{fmtAr(l.qty * l.unitPrice)}</strong>
@@ -119,6 +137,7 @@ export function PosPage() {
               })}
             </ul>
           )}
+          {!internal && <>
           <div className="segmented" role="group" aria-label="Prix">
             {([['auto', `Gros dès ${minQty} pcs`], ['yes', 'Prix de gros'], ['no', 'Prix détail']] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={wholesale === k} onClick={() => setWholesale(k)}>{l}</button>)}
           </div>
@@ -128,12 +147,14 @@ export function PosPage() {
             <TextField label="Téléphone client (facultatif)" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
           </div>
           <TextField label="Nom du client (facultatif)" value={name} onChange={setName} />
+          </>}
+          {noCost.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>{noCost.length} article(s) sans prix de revient : impossible de calculer le prix interne. Renseignez le prix de revient dans la fiche article (ou retirez-le du panier).</span></div>}
           <div className="summary-box" style={{ maxWidth: 'none' }}>
             <div><span>{fmtNum(count)} article(s)</span><strong className="num">{fmtAr(items)}</strong></div>
-            {(parseNum(discount) || 0) > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(parseNum(discount))}</strong></div>}
+            {!internal && (parseNum(discount) || 0) > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(parseNum(discount))}</strong></div>}
             <div className="summary-total"><span>Total</span><strong className="num pos-total">{fmtAr(total)}</strong></div>
           </div>
-          <Button block icon="check" disabled={!priced.length} onClick={() => setPaying(true)}>Encaisser {fmtAr(total)}</Button>
+          <Button block icon="check" disabled={!priced.length || (internal && (!employee || noCost.length > 0))} onClick={() => setPaying(true)}>{internal ? (employee ? `Encaisser ${fmtAr(total)} — ${employee.fullName}` : 'Choisissez l’employé') : `Encaisser ${fmtAr(total)}`}</Button>
         </aside>
       </div>
 
@@ -146,7 +167,7 @@ export function PosPage() {
               <li key={o.id} className="li-with-action">
                 <a className="list-item list-link" href={`#/commandes/${o.id}`}>
                   <div className="list-item-main">
-                    <span className="list-item-title">{o.number} · {orderLabel(o)}</span>
+                    <span className="list-item-title">{o.number} · {orderLabel(o)}{o.internal && <> <Badge tone="warn">Interne</Badge></>}</span>
                     <p className="small muted">{fmtDateTime(o.createdAt)} · {o.lines.reduce((s, l) => s + l.qty, 0)} article(s) · {[...new Set(o.payments.map((p) => PAY_METHODS[p.method]))].join(' + ') || 'non payé'}{o.createdByName ? ` · ${o.createdByName}` : ''}</p>
                   </div>
                   <div className="list-item-side"><strong className="num">{fmtAr(Math.max(0, keptTotal(o) - (o.discount || 0)))}</strong>{paidTotal(o) < keptTotal(o) - (o.discount || 0) && <span className="small neg">reste {fmtAr(keptTotal(o) - (o.discount || 0) - paidTotal(o))}</span>}</div>
@@ -160,7 +181,7 @@ export function PosPage() {
 
       {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} />}
       {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments, cashGiven) => {
-        const o = await createWalkInSale({ lines: priced, discount: parseNum(discount) || 0, wholesale, phone: phone.trim() || undefined, name: name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company) });
+        const o = await createWalkInSale({ lines: priced, discount: internal ? 0 : parseNum(discount) || 0, wholesale, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
         setLast(o); reset(); setPaying(false); toast(`Vente ${o.number} enregistrée`);
         if (getMeta('printAutoTicket', false)) {
           printTo(defaultTarget(), ticketDoc(o, company)).then((m) => toast(m)).catch((e) => toast(`Ticket non imprimé : ${e?.message ?? e}`, 'error'));
