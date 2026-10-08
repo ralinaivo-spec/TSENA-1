@@ -4,6 +4,7 @@ import { fmtAr, fmtNum } from './catalog';
 import { ACCOUNTS, MOVE_TYPES, addDays, report, type AccountId, type Report } from './money';
 import type { Company } from './settings';
 import type { Block, PrintDoc } from './print/doc';
+import { daySynthesis, type Synthesis } from './synthesis';
 
 export interface Line { label: string; value: string; strong?: boolean; sub?: boolean }
 export interface Section { title: string; lines: Line[] }
@@ -70,7 +71,26 @@ function common(r: Report, withProfit: boolean): Section[] {
   return out;
 }
 
-export const daySections = (r: Report, withProfit: boolean) => common(r, withProfit);
+/** Tableau de synthèse : sans retour / avec retour, livreurs et frais, catégories (pages). */
+export function synthSections(s: Synthesis): Section[] {
+  const sa = (a: number, b: number) => (a === b ? fmtAr(a) : `${fmtAr(a)} → ${fmtAr(b)}`);
+  const out: Section[] = [{ title: 'Synthèse (sans retour → avec retour)', lines: [
+    { label: `Ventes sur place (${s.walk.count})`, value: sa(s.walk.sans, s.walk.avec) },
+    { label: `Livraisons (${s.deliv.count})${s.deliv.pending ? `, ${s.deliv.pending} pas encore confirmée(s)` : ''}`, value: sa(s.deliv.sans, s.deliv.avec) },
+    ...(s.pickup.count ? [{ label: `Retraits en boutique (${s.pickup.count})`, value: sa(s.pickup.sans, s.pickup.avec) }] : []),
+    { label: 'TOTAL SANS RETOUR', value: fmtAr(s.total.sans), strong: true },
+    { label: 'TOTAL AVEC RETOUR', value: fmtAr(s.total.avec), strong: true },
+    ...(s.total.diff ? [{ label: `Retours (${s.deliv.returns} livraison(s))`, value: '− ' + fmtAr(s.total.diff) }] : []),
+  ] }];
+  if (s.couriers.length) out.push({ title: 'Livreurs : livraisons et frais', lines: [
+    ...s.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)${c.returns ? `, ${c.returns} retour(s)` : ''}`, value: `frais ${fmtAr(c.fees)}` })),
+    { label: `Total : ${s.deliv.count} livraison(s)`, value: `frais ${fmtAr(s.fees)}`, strong: true },
+  ] });
+  if (s.categories.length) out.push({ title: 'Ventes par catégorie (page)', lines: s.categories.map((c) => ({ label: `${c.name}${c.sellers.length ? ` (${c.sellers.join(', ')})` : ''}`, value: sa(c.sans, c.avec) })) });
+  return out;
+}
+
+export const daySections = (r: Report, withProfit: boolean) => [...synthSections(daySynthesis(r.from)), ...common(r, withProfit).filter((x) => x.title !== 'Ventes')];
 
 /** Semaine : une ligne par jour, puis les totaux de la semaine. */
 export interface WeekDay { date: string; r: Report; t: ReturnType<typeof totals> }
@@ -80,7 +100,13 @@ export function weekDays(monday: string): WeekDay[] {
     .filter((x, i) => i < 6 || x.t.walkInCount || x.t.delivCount || x.r.expenses || x.t.cashIn || x.t.mmIn); // dimanche seulement s'il y a eu de l'activité
 }
 export function weekSections(r: Report, days: WeekDay[], withProfit: boolean): Section[] {
-  const perDay: Section = { title: 'Jour par jour', lines: days.map((d) => ({ label: `${shortDay(d.date)} : sur place ${fmtAr(d.t.walkIn)} · livraisons ${fmtAr(d.t.deliv)} · dépenses ${fmtAr(d.t.expenses)}`, value: fmtAr(d.r.netSales) })) };
+  const syn = days.map((d) => daySynthesis(d.date));
+  const perDay: Section = { title: 'Jour par jour (sans retour → avec retour)', lines: [
+    ...days.map((d, i) => ({ label: `${shortDay(d.date)} : ${syn[i].walk.count + syn[i].deliv.count + syn[i].pickup.count} vente(s) · dépenses ${fmtAr(d.t.expenses)}`, value: syn[i].total.sans === syn[i].total.avec ? fmtAr(syn[i].total.sans) : `${fmtAr(syn[i].total.sans)} → ${fmtAr(syn[i].total.avec)}` })),
+    { label: 'Semaine sans retour', value: fmtAr(syn.reduce((t, s) => t + s.total.sans, 0)), strong: true },
+    { label: 'Semaine avec retour', value: fmtAr(syn.reduce((t, s) => t + s.total.avec, 0)), strong: true },
+    { label: `Frais des livreurs (${syn.reduce((t, s) => t + s.deliv.count, 0)} livraisons)`, value: fmtAr(syn.reduce((t, s) => t + s.fees, 0)), sub: true },
+  ] };
   return [perDay, ...common(r, withProfit)];
 }
 
@@ -95,7 +121,11 @@ function toText(head: string[], sections: Section[]) {
   return out.join('\n').replace(/[  ]/g, ' ').replace(/\*\*/g, '').trim();
 }
 export function dayText(r: Report, company: Company, withProfit: boolean) {
-  return toText([`*${company.name} — Récapitulatif du ${longDate(r.from)}*`], daySections(r, withProfit));
+  const s = daySynthesis(r.from);
+  const head = [`*${company.name} — Récapitulatif du ${longDate(r.from)}*`];
+  if (s.corrected) head.push(`_Récapitulatif corrigé après les retours constatés (mise à jour du ${new Date(s.lastUpdate!).toLocaleDateString('fr-FR')})_`);
+  else if (s.deliv.pending) head.push(`_Provisoire : ${s.deliv.pending} livraison(s) pas encore confirmée(s) au versement_`);
+  return toText(head, daySections(r, withProfit));
 }
 export function weekText(r: Report, days: WeekDay[], company: Company, withProfit: boolean) {
   return toText([`*${company.name} — Récapitulatif de la semaine*`, `du ${longDate(r.from)} au ${longDate(r.to)}`], weekSections(r, days, withProfit));

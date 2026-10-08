@@ -9,6 +9,7 @@ import { fmtPhone, normPhone, orderLabel, ORDER_STATUS, PAY_METHODS, keptTotal, 
 import { ACCOUNTS, MOVE_TYPES, addDays, mondayOf, report, today, type AccountId, type Report } from '../lib/money';
 import { dayText, daySections, longDate, sectionsDoc, totals, weekDays, weekSections, weekText, type Section } from '../lib/recap';
 import { get } from '../lib/db';
+import { daySynthesis } from '../lib/synthesis';
 import { Badge, Button, Empty, IconButton, PageHead, fmtDate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PrintDialog } from '../ui/print';
@@ -76,6 +77,7 @@ function DayTables({ r }: { r: Report }) {
   for (const d of r.deliveries) { const k = d.courierId; if (!byCourier.has(k)) byCourier.set(k, []); byCourier.get(k)!.push(d); }
   return (
     <>
+      <SynthesisCard date={r.from} />
       <div className="card card-flush">
         <div className="card-pad row-between"><h2>Ventes sur place</h2><strong className="num">{fmtAr(r.sales.shopAmount)}</strong></div>
         {r.walkIns.length === 0 ? <p className="card-pad small muted">Aucune vente sur place.</p> : (
@@ -142,6 +144,7 @@ function CourierTable({ r, week }: { r: Report; week?: boolean }) {
 function WeekTables({ days, r }: { days: ReturnType<typeof weekDays>; r: Report }) {
   return (
     <>
+      <WeekSynth dates={days.map((d) => d.date)} />
       <div className="card card-flush">
         <div className="card-pad"><h2>Jour par jour</h2></div>
         <div className="table-wrap"><table className="table">
@@ -226,6 +229,80 @@ function Share({ text, title, sub, sections }: { text: string; title: string; su
       </div>
       {!company.bossPhone && <p className="small muted">Enregistrez le numéro WhatsApp du responsable dans Paramètres → Société pour l’envoyer en un clic.</p>}
       {print && <PrintDialog docs={[{ key: 'recap', label: title, build: () => sectionsDoc(title, sub, sections, company) }]} onClose={() => setPrint(false)} />}
+    </div>
+  );
+}
+
+/** Tableau de synthèse du jour : sans retour / avec retour, livreurs et frais, catégories (pages). */
+function SynthesisCard({ date }: { date: string }) {
+  const s = daySynthesis(date);
+  const diff = (a: number, b: number) => (a !== b ? <span className="small neg"> (−{fmtAr(a - b)})</span> : null);
+  return (
+    <div className="card card-flush synth">
+      <div className="card-pad row-between">
+        <div><h2>Synthèse de la journée</h2>
+          <p className="small muted">« Sans retour » : tout ce qui est vendu ou parti en livraison ce jour-là. « Avec retour » : corrigé par les retours constatés au versement des livreurs, même les jours suivants.</p></div>
+        {s.corrected ? <Badge tone="warn">Corrigé le {new Date(s.lastUpdate!).toLocaleDateString('fr-FR')}</Badge> : s.deliv.pending ? <Badge>{s.deliv.pending} livraison(s) à confirmer</Badge> : <Badge tone="ok">À jour</Badge>}
+      </div>
+      <div className="table-wrap"><table className="table synth-table">
+        <thead><tr><th></th><th className="t-num">Nombre</th><th className="t-num">Montant sans retour</th><th className="t-num">Montant avec retour</th></tr></thead>
+        <tbody>
+          <tr><td>Ventes sur place</td><td className="t-num">{s.walk.count}</td><td className="t-num">{fmtAr(s.walk.sans)}</td><td className="t-num">{fmtAr(s.walk.avec)}</td></tr>
+          <tr><td>Livraisons{s.deliv.returns ? <span className="small muted"> · {s.deliv.returns} avec retour</span> : null}</td><td className="t-num">{s.deliv.count}</td><td className="t-num">{fmtAr(s.deliv.sans)}</td><td className="t-num">{fmtAr(s.deliv.avec)}{diff(s.deliv.sans, s.deliv.avec)}</td></tr>
+          {s.pickup.count > 0 && <tr><td>Retraits en boutique</td><td className="t-num">{s.pickup.count}</td><td className="t-num">{fmtAr(s.pickup.sans)}</td><td className="t-num">{fmtAr(s.pickup.avec)}</td></tr>}
+          <tr className="synth-total"><td>TOTAL GÉNÉRAL</td><td className="t-num">{s.walk.count + s.deliv.count + s.pickup.count}</td><td className="t-num">{fmtAr(s.total.sans)}</td><td className="t-num">{fmtAr(s.total.avec)}{diff(s.total.sans, s.total.avec)}</td></tr>
+        </tbody>
+      </table></div>
+      <div className="synth-grid">
+        <div>
+          <h3 className="card-pad" style={{ paddingBottom: 0 }}>Livreurs</h3>
+          {s.couriers.length === 0 ? <p className="card-pad small muted">Aucune livraison ce jour.</p> : (
+            <div className="table-wrap"><table className="table">
+              <thead><tr><th>Livreur</th><th className="t-num">Livraisons</th><th className="t-num">Frais (pour lui)</th><th className="t-num">Sans retour</th><th className="t-num">Avec retour</th></tr></thead>
+              <tbody>
+                {s.couriers.map((c) => <tr key={c.id}><td><strong>{c.name}</strong>{c.returns ? <div className="small neg">{c.returns} retour(s)</div> : null}{c.pending ? <div className="small muted">{c.pending} à confirmer</div> : null}</td><td className="t-num">{c.count}</td><td className="t-num">{fmtAr(c.fees)}</td><td className="t-num">{fmtAr(c.sans)}</td><td className="t-num">{fmtAr(c.avec)}</td></tr>)}
+                <tr className="t-total"><td>Total</td><td className="t-num">{s.deliv.count}</td><td className="t-num">{fmtAr(s.fees)}</td><td className="t-num">{fmtAr(s.deliv.sans)}</td><td className="t-num">{fmtAr(s.deliv.avec)}</td></tr>
+              </tbody>
+            </table></div>
+          )}
+        </div>
+        <div>
+          <h3 className="card-pad" style={{ paddingBottom: 0 }}>Par catégorie (page)</h3>
+          {s.categories.length === 0 ? <p className="card-pad small muted">Aucune vente ce jour.</p> : (
+            <div className="table-wrap"><table className="table">
+              <thead><tr><th>Catégorie</th><th className="t-num">Sans retour</th><th className="t-num">Avec retour</th></tr></thead>
+              <tbody>
+                {s.categories.map((c) => <tr key={c.id}><td><strong>{c.name}</strong>{c.sellers.length ? <div className="small muted">{c.sellers.join(', ')}</div> : null}</td><td className="t-num">{fmtAr(c.sans)}</td><td className="t-num">{fmtAr(c.avec)}</td></tr>)}
+                <tr className="t-total"><td>Total</td><td className="t-num">{fmtAr(s.total.sans)}</td><td className="t-num">{fmtAr(s.total.avec)}</td></tr>
+              </tbody>
+            </table></div>
+          )}
+        </div>
+      </div>
+      <p className="card-pad small muted">Les frais de livraison reviennent aux livreurs : ils ne sont pas compris dans les montants. Les articles « en choix » gardés par le client s’ajoutent au montant avec retour.</p>
+    </div>
+  );
+}
+
+function WeekSynth({ dates }: { dates: string[] }) {
+  const rows = dates.map((d) => daySynthesis(d));
+  const sum = (f: (x: ReturnType<typeof daySynthesis>) => number) => rows.reduce((t, x) => t + f(x), 0);
+  return (
+    <div className="card card-flush synth">
+      <div className="card-pad"><h2>Synthèse de la semaine</h2><p className="small muted">Chaque jour : ce qui est parti (sans retour) et le montant corrigé par les retours constatés aux versements (avec retour).</p></div>
+      <div className="table-wrap"><table className="table synth-table">
+        <thead><tr><th>Jour</th><th className="t-num">Sur place</th><th className="t-num">Livraisons</th><th className="t-num">Frais livreurs</th><th className="t-num">Sans retour</th><th className="t-num">Avec retour</th></tr></thead>
+        <tbody>
+          {rows.map((x) => (
+            <tr key={x.date}>
+              <td><strong style={{ textTransform: 'capitalize' }}>{new Date(`${x.date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit' })}</strong>{x.deliv.pending ? <div className="small muted">{x.deliv.pending} à confirmer</div> : null}</td>
+              <td className="t-num">{x.walk.count}</td><td className="t-num">{x.deliv.count}</td><td className="t-num">{fmtAr(x.fees)}</td>
+              <td className="t-num">{fmtAr(x.total.sans)}</td><td className={`t-num ${x.total.diff ? 'neg' : ''}`}>{fmtAr(x.total.avec)}</td>
+            </tr>
+          ))}
+          <tr className="synth-total"><td>Semaine</td><td className="t-num">{sum((x) => x.walk.count)}</td><td className="t-num">{sum((x) => x.deliv.count)}</td><td className="t-num">{fmtAr(sum((x) => x.fees))}</td><td className="t-num">{fmtAr(sum((x) => x.total.sans))}</td><td className="t-num">{fmtAr(sum((x) => x.total.avec))}</td></tr>
+        </tbody>
+      </table></div>
     </div>
   );
 }

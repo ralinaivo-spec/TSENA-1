@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.6, validée le 07/10/2026)
+# TSENA — Cahier des charges (version 2.7, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -203,6 +203,8 @@ Les livreurs versent généralement le lendemain (ou en fin de semaine) : il n'y
 - **Paiements reçus** par compte (espèces boutique, MVola, Orange Money, Airtel Money, versements des livreurs), **dépenses** et **autres mouvements** (virements, apports, retraits, autres revenus, paiements fournisseurs).
 - Soldes en fin de journée et **espèces attendues** (caisse + à verser par les livreurs) ; bénéfice brut pour les utilisateurs autorisés.
 - Règle de comptage inchangée : un article parti chez un livreur (hors choix) est vendu le jour du départ ; ce qui revient est un retour le jour du retour.
+
+- **Synthèse de la journée** (en tête du récapitulatif, et dans le message envoyé au responsable) : ventes sur place, livraisons (nombre) et **total général**, avec deux colonnes **« Montant sans retour »** (ce qui est vendu ou parti en livraison ce jour-là) et **« Montant avec retour »** (corrigé automatiquement quand les retours sont constatés au versement des livreurs, même les jours suivants) ; **par livreur** : nombre de livraisons, **frais qui lui reviennent**, retours, montants ; **par catégorie (page)**, avec le ou les vendeurs : montants sans / avec retour. Le jour même les deux montants sont égaux ; dès qu'un retour est enregistré, le récapitulatif du jour concerné est marqué **« corrigé »** et peut être renvoyé. Même synthèse jour par jour dans le récapitulatif de la semaine.
 
 ### 10.2 Récapitulatif hebdomadaire (lundi → samedi)
 - Tableau **jour par jour** : sur place, livraisons, total des ventes, espèces reçues, mobile money, versements des livreurs, dépenses ; total de la semaine (le dimanche est ajouté seulement s'il y a eu de l'activité).

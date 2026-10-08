@@ -1,0 +1,95 @@
+// Tableau de synthèse d'une journée (comme le cahier Excel des ventes) :
+// montant « sans retour » (ce qui est parti ce jour-là) et « avec retour » (corrigé par les retours constatés
+// au versement des livreurs, même les jours suivants), par livreur et par catégorie (page).
+import { all, get } from './db';
+import type { Category, Product, Variant } from './catalog';
+import { courierSplit, isPickupZone, isWalkIn, type Courier, type Order } from './orders';
+import { dayOf } from './money';
+
+export interface SynthCourier { id: string; name: string; count: number; fees: number; returns: number; pending: number; sans: number; avec: number }
+export interface SynthCategory { id: string; name: string; sellers: string[]; sans: number; avec: number }
+export interface Synthesis {
+  date: string;
+  walk: { count: number; sans: number; avec: number };
+  deliv: { count: number; sans: number; avec: number; pending: number; returns: number };
+  pickup: { count: number; sans: number; avec: number };
+  total: { sans: number; avec: number; diff: number };
+  couriers: SynthCourier[];
+  categories: SynthCategory[];
+  fees: number;
+  corrected: boolean;       // des retours ont été constatés après ce jour
+  lastUpdate?: string;      // dernière mise à jour par un retour
+}
+
+/** Catégorie « page » : la catégorie principale de l'article (la plus haute). */
+function rootCategory(variantId: string): { id: string; name: string } {
+  const v = get<Variant>('variants', variantId);
+  const p = v && get<Product>('products', v.productId);
+  let c = p?.categoryId ? get<Category>('categories', p.categoryId) : undefined;
+  while (c?.parentId) { const up = get<Category>('categories', c.parentId); if (!up) break; c = up; }
+  return c ? { id: c.id, name: c.name } : { id: '', name: 'Sans catégorie' };
+}
+
+const CLOSED = ['delivered', 'partial', 'refused'];
+
+/** Valeurs d'une commande, ligne par ligne (remise répartie), sans retour et avec retour. */
+function orderLines(o: Order) {
+  const closed = CLOSED.includes(o.status) || isWalkIn(o);
+  const sansLines = o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, value: l.qty * l.unitPrice }));
+  const avecLines = o.status === 'cancelled' ? [] : closed
+    ? o.lines.map((l) => ({ variantId: l.variantId, value: (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice }))
+    : sansLines;
+  const spread = (lines: { variantId: string; value: number }[]) => {
+    const t = lines.reduce((s, l) => s + l.value, 0);
+    const disc = Math.min(o.discount || 0, t);
+    return lines.map((l) => ({ ...l, value: l.value - (t ? (disc * l.value) / t : 0) }));
+  };
+  return { sans: spread(sansLines), avec: spread(avecLines), pending: !closed && o.status !== 'cancelled' };
+}
+
+export function daySynthesis(date: string): Synthesis {
+  const s: Synthesis = {
+    date, walk: { count: 0, sans: 0, avec: 0 }, deliv: { count: 0, sans: 0, avec: 0, pending: 0, returns: 0 }, pickup: { count: 0, sans: 0, avec: 0 },
+    total: { sans: 0, avec: 0, diff: 0 }, couriers: [], categories: [], fees: 0, corrected: false,
+  };
+  const couriers = new Map<string, SynthCourier>();
+  const cats = new Map<string, SynthCategory & { sellerSet: Set<string> }>();
+  const cat = (variantId: string) => {
+    const c = rootCategory(variantId);
+    if (!cats.has(c.id)) cats.set(c.id, { id: c.id, name: c.name, sellers: [], sellerSet: new Set(), sans: 0, avec: 0 });
+    return cats.get(c.id)!;
+  };
+  for (const o of all<Order>('orders')) {
+    const walk = isWalkIn(o);
+    const day = walk ? dayOf(o.createdAt) : o.dispatchedAt ? dayOf(o.dispatchedAt) : '';
+    if (day !== date) continue;
+    if (walk && o.status === 'cancelled') continue;
+    const x = orderLines(o);
+    const sans = x.sans.reduce((t, l) => t + l.value, 0);
+    const avec = x.avec.reduce((t, l) => t + l.value, 0);
+    for (const l of x.sans) { const c = cat(l.variantId); c.sans += l.value; if (o.createdByName) c.sellerSet.add(o.createdByName); }
+    for (const l of x.avec) cat(l.variantId).avec += l.value;
+    const hadReturn = o.status === 'cancelled' || o.status === 'refused' || o.lines.some((l) => !l.isChoice && (l.qtyReturned ?? 0) > 0);
+    const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
+    if (back && dayOf(back) > date && avec !== sans) { s.corrected = true; if (!s.lastUpdate || back > s.lastUpdate) s.lastUpdate = back; }
+    if (walk) { s.walk.count++; s.walk.sans += sans; s.walk.avec += avec; continue; }
+    if (isPickupZone(o.zoneId)) { s.pickup.count++; s.pickup.sans += sans; s.pickup.avec += avec; continue; }
+    s.deliv.count++; s.deliv.sans += sans; s.deliv.avec += avec;
+    if (x.pending) s.deliv.pending++;
+    if (hadReturn) s.deliv.returns++;
+    const id = o.courierId || '';
+    if (!couriers.has(id)) couriers.set(id, { id, name: get<Courier>('couriers', id)?.name ?? 'Sans livreur', count: 0, fees: 0, returns: 0, pending: 0, sans: 0, avec: 0 });
+    const c = couriers.get(id)!;
+    const fee = o.status === 'cancelled' ? 0 : courierSplit(o).fee;
+    c.count++; c.fees += fee; c.sans += sans; c.avec += avec;
+    if (x.pending) c.pending++;
+    if (hadReturn) c.returns++;
+    s.fees += fee;
+  }
+  s.total.sans = s.walk.sans + s.deliv.sans + s.pickup.sans;
+  s.total.avec = s.walk.avec + s.deliv.avec + s.pickup.avec;
+  s.total.diff = s.total.sans - s.total.avec;
+  s.couriers = [...couriers.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  s.categories = [...cats.values()].map(({ sellerSet, ...c }) => ({ ...c, sellers: [...sellerSet] })).sort((a, b) => b.sans - a.sans);
+  return s;
+}
