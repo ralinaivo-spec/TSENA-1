@@ -1,9 +1,11 @@
 // Sauvegardes : fichier téléchargeable (chiffré ou non), copies dans le cloud, restauration, remise à zéro.
 import { DEFAULT_ROLES, PERMISSIONS } from './permissions';
-import { all, dumpAll, getMeta, restoreAll, save, setMeta, TABLES, type BaseRecord } from './db';
+import { all, getRaw, dumpAll, getMeta, restoreAll, save, setMeta, TABLES, type BaseRecord } from './db';
 import { decryptText, encryptText, hashSecret } from './crypto';
 import { audit, currentUser, SUPERADMIN_ID, type User } from './auth';
 import { getCloud, syncNow } from './sync';
+import { restoreDefaultZones } from './orders';
+import { restoreDefaultFinance } from './money';
 
 export interface BackupFile {
   app: 'TSENA';
@@ -128,6 +130,8 @@ export async function factoryReset() {
     if (rows.length) await save(t, rows.map((r) => ({ id: r.id, deleted: true, updatedAt: now })));
   }
   await save('roles', DEFAULT_ROLES.map((r) => ({ ...r, permsCatalog: PERMISSIONS.map((p) => p.key), deleted: false })));
+  await restoreDefaultZones();
+  await restoreDefaultFinance();
   await save('users', {
     id: SUPERADMIN_ID, username: 'super-adm', fullName: 'Super-admin', roleId: 'role-superadmin', active: true,
     passwordHash: await hashSecret('anosy'), mustChangePassword: true, secretQuestion: undefined, secretAnswerHash: undefined, email: undefined, deleted: false,
@@ -135,4 +139,19 @@ export async function factoryReset() {
   await audit('Remise à zéro', "Logiciel remis à l'état d'origine");
   await syncNow();
   await setMeta('session', null);
+}
+
+/**
+ * Réparation après une ancienne remise à l'état d'origine (avant le correctif du 08/10/2026) :
+ * zones et catégories par défaut supprimées, fiche Société restée « supprimée » malgré un nouvel enregistrement.
+ */
+export async function repairAfterReset() {
+  const audits = all<BaseRecord & { action: string; entityId?: string; at: string }>('audit');
+  const reset = audits.filter((a) => a.action === 'Remise à zéro').map((a) => a.at).sort().pop();
+  if (!reset) return;
+  if (!all('zones').length) await restoreDefaultZones();
+  if (!all('financeCategories').length) await restoreDefaultFinance();
+  const company = getRaw('settings', 'company');
+  const savedAfter = audits.some((a) => a.action === 'Paramètres' && a.entityId === 'company' && a.at > reset);
+  if (company?.deleted && savedAfter) await save('settings', { id: 'company', deleted: false });
 }

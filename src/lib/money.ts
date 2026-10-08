@@ -52,6 +52,10 @@ const DEFAULT_CATS: [string, 'expense' | 'income', string][] = [
   ['fc-impots', 'expense', 'Impôts et taxes'], ['fc-frais-mm', 'expense', 'Frais Mobile Money'], ['fc-divers', 'expense', 'Dépenses diverses'],
   ['fc-location', 'income', 'Location'], ['fc-prestations', 'income', 'Prestations'], ['fc-commissions', 'income', 'Commissions'], ['fc-autres', 'income', 'Autres revenus'],
 ];
+/** Remet les catégories de dépenses et revenus par défaut (après une remise à l'état d'origine). */
+export async function restoreDefaultFinance() {
+  await save('financeCategories', DEFAULT_CATS.map(([id, kind, name], i) => ({ id, kind, name, order: i, active: true, deleted: false })));
+}
 export async function seedFinance() {
   await applyRemote(DEFAULT_CATS.map(([id, kind, name], i) => ({ tbl: 'financeCategories', id, data: { id, kind, name, order: i, active: true, createdAt: SEED, updatedAt: SEED } as BaseRecord })));
 }

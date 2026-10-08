@@ -124,6 +124,10 @@ const DEFAULT_ZONES = [
   ['zone-retrait', 'Sur boutique (retrait par le client)', 0], ['zone-centre', 'Tana centre-ville', 3000], ['zone-proche', 'Tana périphérie proche', 4000],
   ['zone-peripherie', 'Tana périphérie', 5000], ['zone-loin', 'Tana grande périphérie', 7000], ['zone-province', 'Province (envoi taxi-brousse / coopérative)', 5000],
 ] as const;
+/** Remet les zones par défaut (après une remise à l'état d'origine). */
+export async function restoreDefaultZones() {
+  await save('zones', DEFAULT_ZONES.map(([id, name, fee], i) => ({ id, name, fee, order: i, active: true, pickup: id === 'zone-retrait' || undefined, deleted: false })));
+}
 export async function seedZones() {
   await applyRemote(DEFAULT_ZONES.map(([id, name, fee], i) => ({ tbl: 'zones', id, data: { id, name, fee, order: i, active: true, pickup: id === 'zone-retrait' || undefined, createdAt: SEED, updatedAt: SEED } as BaseRecord })));
 }

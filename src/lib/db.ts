@@ -119,7 +119,10 @@ export async function save(table: TableName, records: Partial<BaseRecord> | Part
   const list = Array.isArray(records) ? records : [records];
   const now = nowIso();
   const written: BaseRecord[] = list.map((r) => {
-    const prev = r.id ? cache.get(table)?.get(r.id) : undefined;
+    let prev = r.id ? cache.get(table)?.get(r.id) : undefined;
+    // Un enregistrement supprimé qu'on enregistre à nouveau (ex. fiche Société après une remise à zéro) est recréé :
+    // on repart d'une fiche propre au lieu de compléter l'ancienne, qui resterait marquée « supprimée ».
+    if (prev?.deleted && !('deleted' in r)) prev = { id: prev.id, createdAt: prev.createdAt, deleted: false } as BaseRecord;
     return { ...prev, ...r, id: r.id || newId(), createdAt: prev?.createdAt || r.createdAt || (BIZ_TABLES.has(table) ? bizNow() : now), updatedAt: now } as BaseRecord;
   });
   const tx = idb!.transaction([table, '_outbox'], 'readwrite');
