@@ -1,7 +1,7 @@
 // Synchronisation avec le cloud (Supabase) : envoie les modifications locales,
 // récupère celles des autres appareils. Toutes les 15 s, et juste après chaque saisie.
 import { useSyncExternalStore } from 'react';
-import { applyRemote, getMeta, outboxClear, outboxCount, outboxEntries, getRaw, setMeta, setWriteHook } from './db';
+import { all, applyRemote, getMeta, outboxClear, outboxCount, outboxEntries, getRaw, save, setMeta, setWriteHook, type BaseRecord, type SyncConflictLog } from './db';
 
 export interface CloudConfig {
   url: string;
@@ -84,40 +84,62 @@ export async function syncNow(): Promise<void> {
     const cfg = await freshConfig();
     if (!cfg) return;
     const device = getMeta('deviceId', '');
+    const conflicts: SyncConflictLog[] = [];
 
-    // 1. Envoi des modifications locales, par paquets.
-    const entries = await outboxEntries();
-    for (let i = 0; i < entries.length; i += 200) {
-      const chunk = entries.slice(i, i + 200);
-      const rows = chunk
-        .map((e) => ({ e, r: getRaw(e.tbl, e.id) }))
-        .filter((x) => x.r)
-        .map(({ e, r }) => ({ tbl: e.tbl, id: r!.id, data: r, updated_at: r!.updatedAt, device }));
-      if (rows.length) {
-        const res = await fetch(`${cfg.url}/rest/v1/records?on_conflict=tbl,id`, {
-          method: 'POST',
-          headers: { ...headers(cfg), Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(rows),
-        });
-        if (!res.ok) throw new Error(`Envoi refusé (${res.status}) ${await res.text()}`);
+    // 1. Réception des modifications des autres appareils, fusionnées champ par champ avec celles d'ici.
+    const pull = async () => {
+      let lastRev = getMeta<number>('lastRev', 0);
+      for (;;) {
+        const from = Math.max(0, lastRev - 50); // petite marge de sécurité : une fusion déjà faite ne change rien
+        const res = await fetch(`${cfg.url}/rest/v1/records?select=tbl,id,data,rev&rev=gt.${from}&order=rev.asc&limit=1000`, { headers: headers(cfg) });
+        if (!res.ok) throw new Error(`Réception refusée (${res.status})`);
+        const rows: { tbl: string; id: string; data: any; rev: number }[] = await res.json();
+        const r = await applyRemote(rows, 'sync');
+        conflicts.push(...r.conflicts);
+        const maxRev = rows.reduce((m, x) => Math.max(m, x.rev), lastRev);
+        const progressed = maxRev > lastRev;
+        lastRev = maxRev;
+        await setMeta('lastRev', lastRev);
+        if (rows.length < 1000 || !progressed) break;
       }
-      await outboxClear(chunk);
-    }
+    };
 
-    // 2. Réception des modifications des autres appareils.
-    let lastRev = getMeta<number>('lastRev', 0);
-    for (;;) {
-      const from = Math.max(0, lastRev - 50); // petite marge de sécurité, les doublons sont ignorés
-      const res = await fetch(`${cfg.url}/rest/v1/records?select=tbl,id,data,rev&rev=gt.${from}&order=rev.asc&limit=1000`, { headers: headers(cfg) });
-      if (!res.ok) throw new Error(`Réception refusée (${res.status})`);
-      const rows: { tbl: string; id: string; data: any; rev: number }[] = await res.json();
-      await applyRemote(rows);
-      const maxRev = rows.reduce((m, r) => Math.max(m, r.rev), lastRev);
-      const progressed = maxRev > lastRev;
-      lastRev = maxRev;
-      await setMeta('lastRev', lastRev);
-      if (rows.length < 1000 || !progressed) break;
+    // 2. Envoi des modifications locales (fusionnées), par paquets. Renvoyer deux fois la même version ne crée
+    //    jamais de doublon : chaque enregistrement a un identifiant unique, le cloud le remplace au lieu de l'ajouter.
+    const push = async () => {
+      const entries = await outboxEntries();
+      for (let i = 0; i < entries.length; i += 200) {
+        const chunk = entries.slice(i, i + 200);
+        const rows = chunk
+          .map((e) => ({ e, r: getRaw(e.tbl, e.id) }))
+          .filter((x) => x.r)
+          .map(({ e, r }) => ({ tbl: e.tbl, id: r!.id, data: r, updated_at: r!.updatedAt, device }));
+        if (rows.length) {
+          const res = await fetch(`${cfg.url}/rest/v1/records?on_conflict=tbl,id`, {
+            method: 'POST',
+            headers: { ...headers(cfg), Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(rows),
+          });
+          if (!res.ok) throw new Error(`Envoi refusé (${res.status}) ${await res.text()}`);
+        }
+        await outboxClear(chunk); // seulement les entrées qui n'ont pas changé pendant l'envoi
+      }
+    };
+
+    await pull();
+    await push();
+    await pull();                                   // confirme : ce qui revient du cloud est fusionné à nouveau
+    if (await outboxCount()) { await push(); await pull(); }
+
+    // 3. Conflits réels (même champ modifié ici hors ligne et sur un autre appareil) : gardés pour vérification.
+    if (conflicts.length) {
+      const uniq = [...new Map(conflicts.map((c) => [`${c.tbl}|${c.recId}|${c.field}|${c.keptStamp}|${c.lostStamp}`, c])).values()];
+      await save('syncConflicts', uniq.map((c) => ({
+        id: `cf_${c.tbl}_${c.recId}_${c.field}_${Math.min(c.keptStamp, c.lostStamp)}_${Math.max(c.keptStamp, c.lostStamp)}`, tbl: c.tbl, recId: c.recId, field: c.field, kept: c.kept, lost: c.lost, keptBy: c.keptBy, lostBy: c.lostBy, keptDev: c.keptDev, lostDev: c.lostDev,
+        keptAt: new Date(c.keptStamp).toISOString(), lostAt: new Date(c.lostStamp).toISOString(), resolved: false,
+      })));
     }
+    await ensureDeviceCode();
 
     setStatus({ state: 'ok', pending: await outboxCount(), lastSync: new Date().toISOString(), error: undefined });
   } catch (e: any) {
@@ -140,4 +162,29 @@ export function startSync() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(); });
   setInterval(syncNow, INTERVAL);
   syncNow();
+}
+
+// ---------- Appareils : une lettre par appareil (A, B, C…) pour des numéros uniques même hors ligne ----------
+export interface DeviceRec extends BaseRecord { code: string; name?: string; lastSeen?: string }
+const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const codeAt = (i: number) => (i < LETTERS.length ? LETTERS[i] : LETTERS[Math.floor(i / LETTERS.length) - 1] + LETTERS[i % LETTERS.length]);
+
+export async function ensureDeviceCode() {
+  const me = getMeta<string>('deviceId', '');
+  if (!me) return;
+  let code = getMeta<string>('deviceCode', '');
+  const mine = getRaw('devices', me) as DeviceRec | undefined;
+  const others = all<DeviceRec>('devices').filter((d) => d.id !== me);
+  // Deux appareils reliés au même moment ont pris la même lettre : le plus ancien la garde.
+  const clash = code && others.find((d) => d.code === code && (d.createdAt < (mine?.createdAt ?? '9') || (d.createdAt === mine?.createdAt && d.id < me)));
+  if (!code || clash) {
+    const taken = new Set(others.map((d) => d.code));
+    let i = 0; while (taken.has(codeAt(i))) i++;
+    code = codeAt(i);
+    await setMeta('deviceCode', code);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (!mine || mine.deleted || mine.code !== code || mine.name !== getMeta('deviceName', '') || (mine.lastSeen ?? '') < today) {
+    await save('devices', { id: me, code, name: getMeta('deviceName', ''), lastSeen: new Date().toISOString() });
+  }
 }

@@ -1,5 +1,5 @@
 // Comptes, connexion, mots de passe, questions secrètes et journal d'activité.
-import { all, applyRemote, get, getMeta, save, setMeta, useMeta, useTable, type BaseRecord } from './db';
+import { all, applyRemote, get, getMeta, save, setMeta, setWriter, useMeta, useTable, type BaseRecord } from './db';
 import { hashSecret, normalizeAnswer, verifySecret } from './crypto';
 import { DEFAULT_ROLES, PERMISSIONS, SUPERADMIN_ROLE } from './permissions';
 
@@ -78,6 +78,8 @@ export function currentUser(): User | undefined {
   const s = getMeta<Session | null>('session', null);
   return s ? get<User>('users', s.userId) : undefined;
 }
+// Chaque modification enregistrée garde le nom de la personne qui l'a faite (traçabilité de la synchro).
+setWriter(() => currentUser()?.fullName);
 export function useCurrentUser(): User | undefined {
   const s = useMeta<Session | null>('session', null);
   useTable('users');

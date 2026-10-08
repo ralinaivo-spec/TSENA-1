@@ -7,7 +7,7 @@ import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
-  canReassign, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
+  canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone,
 } from '../lib/orders';
@@ -196,7 +196,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
       let cid = courierId;
       if (!pickup && cid === '__new') { const [c] = await save('couriers', { name: newCourier.trim(), active: true }); cid = c.id; }
       let cust = p ? findCustomer(p) : undefined;
-      if (p && !cust) { const [c] = await save('customers', { phone: p, name: name.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
+      if (p && !cust) { const [c] = await save('customers', { id: customerIdFor(p), phone: p, name: name.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
       else if (cust) await save('customers', { id: cust.id, name: cust.name || name.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
       const data: Partial<Order> = {
         phone: p, name: name.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,

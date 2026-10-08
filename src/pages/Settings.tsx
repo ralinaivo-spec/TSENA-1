@@ -12,6 +12,7 @@ import { Zones } from './Deliveries';
 import { PrintersTab } from './Printers';
 import { ClearDataCard, ToolsTab } from './Tools';
 import { KEEP, deleteCloudBackup, pruneBackups } from '../lib/maintenance';
+import { ConflictsCard, DevicesCard } from './SyncCards';
 
 const TABS = [
   { key: 'societe', label: 'Société', perm: 'settings.company' },
@@ -213,6 +214,13 @@ function CloudTab() {
           <div style={{ flex: '1 1 240px' }}><TextField label="Nom de l'appareil" value={name} onChange={setName} placeholder="Exemple : Téléphone caisse" /></div>
           <Button variant="ghost" onClick={async () => { await setMeta('deviceName', name.trim()); toast('Nom enregistré'); }}>Enregistrer</Button>
         </div>
+      </div>
+      {cloud && <ConflictsCard />}
+      {cloud && <DevicesCard />}
+      <div className="card stack-s small">
+        <h3>Travailler sans Internet</h3>
+        <p>Tout ce que vous saisissez est d’abord enregistré sur cet appareil : vous pouvez continuer à travailler sans connexion. Les modifications attendent dans une file d’envoi (« {status.pending} en attente ») et partent toutes seules dès que la connexion revient.</p>
+        <p className="muted">Les modifications des différents appareils sont fusionnées information par information : deux vendeurs qui modifient des choses différentes d’une même commande gardent tous les deux leurs modifications. Un même envoi répété ne crée jamais de doublon.</p>
       </div>
       {confirmOff && <Confirm title="Délier cet appareil" confirmLabel="Délier"
         message={<p>Cet appareil ne se synchronisera plus. Les données restent sur l'appareil.{status.pending ? ` Attention : ${status.pending} modification(s) ne sont pas encore envoyées.` : ''}</p>}

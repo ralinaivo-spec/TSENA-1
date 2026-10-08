@@ -1,6 +1,6 @@
 // Articles, variantes (couleur/taille), mouvements de stock, coût moyen, quantités en arrivage.
 import { useMemo } from 'react';
-import { all, get, newId, nowIso, save, useTable, type BaseRecord , bizNow, workDate } from './db';
+import { all, get, getMeta, newId, nowIso, save, useTable, type BaseRecord , bizNow, workDate } from './db';
 import { audit, currentUser } from './auth';
 
 export interface Category extends BaseRecord { name: string; parentId?: string; order?: number }
@@ -215,7 +215,9 @@ export async function ensureCategory(name: string, parentId?: string): Promise<s
   const clean = name.trim();
   const found = all<Category>('categories').find((c) => c.name.toLowerCase() === clean.toLowerCase() && (c.parentId || undefined) === (parentId || undefined));
   if (found) return found.id;
-  const [c] = await save('categories', { name: clean, parentId });
+  // Identifiant tiré du nom : la même catégorie créée sur deux appareils hors ligne ne fait qu'une.
+  const slug = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const [c] = await save('categories', { id: `cat_${parentId ? parentId.slice(0, 12) + '_' : ''}${slug(clean) || 'x'}`, name: clean, parentId });
   return c.id;
 }
 
@@ -240,9 +242,16 @@ export async function createProduct(data: Partial<Product> & { code: string; nam
   return p as Product;
 }
 
+/**
+ * Prochain numéro (C-0012, V-0005…). Quand l'appareil est relié au cloud, le numéro porte la lettre de
+ * l'appareil (C-A0012 sur l'appareil A, C-B0012 sur l'appareil B) : deux vendeurs hors ligne ne peuvent
+ * jamais créer le même numéro.
+ */
 export function nextNumber(prefix: string, table: 'purchases' | 'receptions' | 'orders') {
-  const nums = all(table).filter((r: any) => String(r.number || '').startsWith(prefix + '-')).map((r: any) => parseInt(String(r.number).slice(prefix.length + 1), 10)).filter((n) => !isNaN(n));
-  return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
+  const code = getMeta<string>('deviceCode', '');
+  const re = new RegExp(`^${prefix}-${code}(\\d+)$`);
+  const nums = all(table).map((r: any) => re.exec(String(r.number || ''))).filter(Boolean).map((m) => parseInt(m![1], 10));
+  return `${prefix}-${code}${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
 }
 
 export const todayYmd = () => {

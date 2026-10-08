@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 3.1, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 3.2, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -319,6 +319,17 @@ Menu **Ventes → Boosts pub** (droits « Saisir les résultats des boosts » po
 - **Code PIN** (4 à 6 chiffres, propre à chaque appareil, Mon compte) pour déverrouiller après le verrouillage automatique ; après 5 erreurs, le mot de passe est demandé.
 - **Date de saisie** (admin et gérant, Paramètres → Outils) : choisir un jour passé pour des essais ou pour rattraper un cahier ; ventes, commandes, livraisons, retours, paiements, versements, dépenses et mouvements de stock saisis sur cet appareil prennent ce jour (heure actuelle). Bandeau orange visible sur toutes les pages, bouton « Revenir à aujourd'hui », retour automatique à la déconnexion ; changement tracé dans le journal. La synchronisation garde l'heure réelle.
 - **Outils** (admin, Paramètres → Outils) : vérification de la cohérence (stock recalculé depuis les mouvements, stocks négatifs avec correction tracée, variantes orphelines, articles sans coût, commandes sans livreur, trop-perçus, impayés, numéros en double), **export complet en Excel** (sans mots de passe ni photos), espace utilisé et nombre d'enregistrements ; **Tout resynchroniser** et **Chercher une mise à jour** (Système).
+
+### Fonctionnement hors ligne et synchronisation fiable *(renforcé le 08/10/2026)*
+
+- **Base locale sur chaque appareil** (IndexedDB) : tout est enregistré d’abord sur l’appareil, avec ou sans Internet. Chaque modification est mise dans une **file d’envoi** dans la même opération (rien ne peut être enregistré sans être mis en file). Envoi automatique dès que la connexion revient (et toutes les 15 s, au retour sur l’application, après chaque saisie).
+- **Version par information** : chaque champ d’un enregistrement garde la date de sa dernière modification, donnée par une **horloge logique** qui ne recule jamais (elle tient compte des modifications déjà reçues : un téléphone à l’heure fausse ne fait pas gagner une ancienne valeur).
+- **Fusion** : deux appareils qui modifient des informations différentes d’une même fiche gardent tous les deux leurs modifications ; les **paiements** et l’**historique** sont réunis élément par élément (deux paiements saisis hors ligne sur deux appareils = deux paiements). Même résultat sur tous les appareils, quel que soit l’ordre d’arrivée ; recevoir deux fois la même chose ne change rien.
+- **Conflit réel** (la même information modifiée sur deux appareils avant synchronisation) : la plus récente est gardée partout ; l’autre valeur est notée dans **Paramètres → Cloud et synchronisation → Conflits** (qui, quel appareil, quand), avec « Rétablir l’autre valeur » ou « C’est bon ».
+- **Pas de doublons** : identifiant unique créé sur l’appareil (un envoi répété remplace, n’ajoute pas) ; **lettre par appareil** dans les numéros (C-A0012, C-B0012, V-A0003…) ; un **client** est identifié par son téléphone et une **catégorie** par son nom (créés sur deux appareils hors ligne = une seule fiche) ; les mouvements de stock et de caisse sont des ajouts (jamais réécrits).
+- **Convergence** : réception et fusion, envoi, puis nouvelle réception ; si la fusion garde des modifications locales, elles repartent automatiquement. Le cloud ne garde jamais une version plus ancienne qu’une plus récente.
+- **Traçabilité** : chaque enregistrement garde la personne et l’appareil de la dernière modification ; journal d’activité ; liste des appareils reliés (lettre, dernière connexion).
+- **Plusieurs onglets** ouverts sur le même appareil : ils se tiennent à jour entre eux.
 
 ---
 

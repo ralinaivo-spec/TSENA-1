@@ -1,7 +1,7 @@
 // Commandes clients, livraisons, livreurs, zones : règles de calcul et actions.
 import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
-import { addMoves, stockOf, type Product, type Variant } from './catalog';
+import { addMoves, nextNumber, stockOf, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
 
 export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean; pickup?: boolean }
@@ -112,6 +112,8 @@ export function fmtPhone(p?: string) {
   const d = normPhone(p || '');
   return d.length === 10 ? `${d.slice(0, 3)} ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}` : p || '';
 }
+/** Identifiant d'un nouveau client tiré de son téléphone : créé hors ligne sur deux appareils, il ne fait qu'un. */
+export const customerIdFor = (phone: string) => `cus_${normPhone(phone)}`;
 export function findCustomer(phone: string) {
   const n = normPhone(phone);
   if (n.length < 6) return undefined;
@@ -290,10 +292,10 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
   if (phone.length >= 9) {
     const c = findCustomer(phone);
     if (c) customerId = c.id;
-    else { const [nc] = await save('customers', { phone, name: d.name || undefined }); customerId = nc.id; }
+    else { const [nc] = await save('customers', { id: customerIdFor(phone), phone, name: d.name || undefined }); customerId = nc.id; }
   }
   const internal = !!d.employee;
-  const number = nextOrderNumber(internal ? 'VI' : 'V');
+  const number = nextNumber(internal ? 'VI' : 'V', 'orders');
   const [o] = await save('orders', {
     number, kind: 'order', channel: 'shop', customerId, phone, name: d.name || undefined, zoneId: pickup?.id, deliveryFee: 0, feeCharged: 0,
     wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), discount: d.discount, notes: d.notes,
@@ -304,10 +306,6 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
   await addMoves(d.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'sale' as const, refType: 'order', refId: o.id, reason: `${number} — ${internal ? `vente interne (${d.employee!.name})` : 'vente sur place'}`, at })));
   await audit(internal ? 'Vente interne' : 'Vente sur place', `${number} — ${d.lines.reduce((s, l) => s + l.qty, 0)} article(s)${internal ? ` — employé : ${d.employee!.name}` : ''}`, 'orders', o.id);
   return o as Order;
-}
-function nextOrderNumber(prefix: string) {
-  const nums = all<Order>('orders').filter((o) => o.number.startsWith(prefix + '-')).map((o) => parseInt(o.number.slice(prefix.length + 1), 10)).filter((n) => !isNaN(n));
-  return `${prefix}-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(4, '0')}`;
 }
 
 /** Changer de livreur (avant le versement) : la commande, ses frais et l'argent encaissé passent au nouveau livreur. */

@@ -148,7 +148,7 @@ export const DATA_GROUPS: { key: string; label: string; tables: TableName[]; nee
   { key: 'catalog', label: 'Articles et catégories', tables: ['products', 'variants', 'categories'], needs: ['sales', 'stock', 'purchases'] },
   { key: 'suppliers', label: 'Fournisseurs', tables: ['suppliers'], needs: ['purchases'] },
   { key: 'couriers', label: 'Fiches livreurs', tables: ['couriers'], needs: ['sales', 'money'] },
-  { key: 'audit', label: "Journal d'activité", tables: ['audit'] },
+  { key: 'audit', label: "Journal d'activité et conflits de synchronisation", tables: ['audit', 'syncConflicts'] },
 ];
 export const KEPT_LABEL = 'Toujours gardés : paramètres de la société, utilisateurs et mots de passe, rôles, zones de livraison, catégories de dépenses, opérations récurrentes, imprimantes.';
 

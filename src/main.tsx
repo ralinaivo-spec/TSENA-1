@@ -41,6 +41,11 @@ async function boot() {
     await seedFinance();
     await repairAfterReset().catch(() => {});
     startSync();
+    // Outils de test automatisé (uniquement en local sur l'ordinateur du développeur).
+    if (location.hostname === 'localhost') {
+      const db = await import('./lib/db'); const sync = await import('./lib/sync'); const cat = await import('./lib/catalog'); const ord = await import('./lib/orders');
+      (window as any).__tsena = { save: db.save, get: db.get, getRaw: db.getRaw, all: db.all, syncNow: sync.syncNow, outboxCount: db.outboxCount, nextNumber: cat.nextNumber, customerIdFor: ord.customerIdFor, getMeta: db.getMeta };
+    }
     root.render(<App />);
   } catch (e: any) {
     root.render(
