@@ -501,3 +501,10 @@ a.btn { text-decoration: none; }
 .pos-tile .thumb { width: 100% !important; height: 140px !important; }
 .pos-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 .variant-cell .thumb { justify-self: center; }
+
+/* Boosts publicitaires */
+.slot-badge { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: var(--brand-soft); color: var(--brand); font-weight: 800; font-size: .85rem; }
+.boost-table .cell-input { width: 100%; min-width: 80px; }
+.week-table td, .week-table th { white-space: nowrap; }
+.week-table td.cell-missing { background: color-mix(in srgb, var(--gold, #B87A0E) 12%, transparent); }
+.pos { color: var(--ok); }

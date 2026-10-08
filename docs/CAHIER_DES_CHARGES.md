@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 3.0, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 3.1, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -221,6 +221,19 @@ Les livreurs versent généralement le lendemain (ou en fin de semaine) : il n'y
 Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…), copie, impression 58 mm ou PDF.
 
 - **Détail du bénéfice brut** *(ajout du 08/10/2026)* : tableau dépliable, article par article (variante) : pièces vendues (moins les retours), ventes, prix de revient par pièce, coût total, bénéfice. Bénéfice brut = total des ventes (remises et retours déduits) − pièces × prix de revient de chaque variante ; frais de livraison non comptés. Les articles vendus sans prix de revient sont signalés.
+
+---
+
+## 10 bis. Boosts publicitaires *(ajout du 08/10/2026)*
+
+Menu **Ventes → Boosts pub** (droits « Saisir les résultats des boosts » pour les vendeurs, « Voir le suivi et l’analyse des boosts » pour le propriétaire).
+
+- **Boost** : page (catégorie principale), **n°** = position dans la liste de l’Espace Pubs (1 = le premier), texte de la publicité, date de lancement, budget par jour ($). Seuls les boosts **actifs** sont enregistrés ; un boost qui n’est plus actif est **arrêté** (dernier jour + raison : peu performant, remplacé, budget terminé…). Un numéro déjà pris par un boost actif est refusé ; en modification, les deux numéros sont échangés.
+- **Saisie du jour** (avant la fin de journée, par le vendeur) : pour chaque boost actif, la **dépense cumulée ($)** et les **conversations cumulées** affichées par Meta (bouton « = » si rien n’a changé), puis les **messages réellement reçus** sur la page ce jour-là. Tous les boosts actifs doivent être saisis.
+- **Contrôle** : une valeur cumulée reste stable ou augmente, jamais elle ne baisse. Une valeur inférieure à la saisie précédente (ou supérieure à une saisie plus récente, en cas de correction) est signalée en rouge et l’enregistrement est bloqué.
+- **Calcul** : messages théoriques du jour d’un boost = valeur du jour − valeur de la saisie précédente (la 1re saisie compte tout depuis le lancement) ; total théorique du jour = somme des boosts ; **écart = réel − théorique** (et réel en % du théorique) ; dépense du jour ; coût par message réel ; commandes en ligne de la page ce jour-là (pour suivre messages → commandes).
+- **Semaine (lundi → dimanche)** : par page, tableau jour par jour (chaque boost, total théorique, réel, écart, dépense, coût par message, commandes) et totaux de la semaine ; vue « Toutes les pages » avec les totaux par page et par jour. Export Excel.
+- **Performance des boosts** (7, 14 ou 30 jours) : par boost, messages, dépense, coût par message, messages des 3 derniers jours, total depuis le lancement, et un **avis** : Bon (≥ 20 % moins cher que la moyenne de la page), Moyen, Faible (≥ 30 % plus cher, aucun message depuis 3 jours, ou dépense sans message → à arrêter et remplacer), Trop récent. Bandeau d’alerte listant les boosts à arrêter. Export Excel.
 
 ---
 

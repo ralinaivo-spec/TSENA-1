@@ -12,7 +12,7 @@ const TABLE_LABELS: Record<string, string> = {
   users: 'Utilisateurs', roles: 'Rôles', settings: 'Paramètres', audit: 'Journal', categories: 'Catégories', products: 'Articles', variants: 'Variantes', stockMoves: 'Mouvements de stock',
   suppliers: 'Fournisseurs', purchases: 'Achats', receptions: 'Réceptions', zones: 'Zones', couriers: 'Livreurs', customers: 'Clients', orders: 'Commandes et ventes',
   printStations: "Postes d'impression", printJobs: 'Impressions', cashMoves: 'Mouvements de trésorerie', financeCategories: 'Catégories de dépenses', recurring: 'Opérations récurrentes',
-  courierSettlements: 'Versements livreurs', closings: 'Anciennes clôtures',
+  courierSettlements: 'Versements livreurs', closings: 'Anciennes clôtures', boosts: 'Boosts publicitaires', boostReadings: 'Résultats des boosts', pageMessages: 'Messages réels par page',
 };
 
 export function ToolsTab() {
