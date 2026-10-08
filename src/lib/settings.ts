@@ -74,7 +74,13 @@ export function useApplyAppearance() {
       root.style.setProperty('--brand', brandUi);
       root.style.setProperty('--brand-ink', luminance(brandUi) > 0.4 ? '#14201C' : '#FFFFFF');
       root.style.setProperty('--brand-soft', dark ? mix(brand, '#0F1517', 0.72) : mix(brand, '#ffffff', 0.88));
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#0F1517' : brand);
+      // Thème « Lamba » : menu sombre teinté de la couleur de la société, reflet soyeux, dégradés de marque.
+      root.style.setProperty('--brand-deep', mix(brand, '#000000', dark ? 0.15 : 0.32));
+      root.style.setProperty('--brand-tint', dark ? mix(brand, '#0F1517', 0.82) : mix(brand, '#ffffff', 0.94));
+      root.style.setProperty('--nav-bg', mix(brand, '#081013', 0.80));
+      root.style.setProperty('--nav-bg-2', mix(brand, '#081013', 0.62));
+      root.style.setProperty('--nav-glow', mix(brand, '#ffffff', 0.25));
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mix(brand, '#081013', 0.80));
     };
     apply();
     const mq = matchMedia('(prefers-color-scheme: dark)');
