@@ -1,4 +1,5 @@
 // Lecture et création de fichiers Excel (.xlsx) directement dans le navigateur, sans connexion.
+import { compressPhoto } from './images';
 import JSZip from 'jszip';
 
 export type Cell = string | number | boolean | null;
@@ -212,22 +213,7 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 /** Réduit une photo (Blob) pour la stocker légèrement dans la fiche article. */
-export function blobToThumb(blob: Blob, max = 320): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
-      const ctx = c.getContext('2d')!;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, c.width, c.height);
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/jpeg', 0.72));
-      URL.revokeObjectURL(img.src);
-    };
-    img.onerror = () => reject(new Error('Photo illisible'));
-    img.src = URL.createObjectURL(blob);
-  });
+/** Photo d'article : même traitement partout (voir images.ts). */
+export function blobToThumb(blob: Blob, _max?: number): Promise<string> {
+  return compressPhoto(blob);
 }

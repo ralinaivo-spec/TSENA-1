@@ -13,11 +13,23 @@ import { blobToThumb } from '../lib/xlsx';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
-export function Thumb({ src, size = 48, alt = '' }: { src?: string; size?: number; alt?: string }) {
+/** Photo d'article. Avec `zoom`, un toucher l'affiche en grand. */
+export function Thumb({ src, size = 56, alt = '', zoom }: { src?: string; size?: number; alt?: string; zoom?: boolean }) {
+  const [big, setBig] = useState(false);
   return (
-    <span className="thumb" style={{ width: size, height: size }}>
-      {src ? <img src={src} alt={alt} loading="lazy" /> : <Icon name="store" size={Math.round(size * 0.42)} />}
-    </span>
+    <>
+      <span className={`thumb ${zoom && src ? 'thumb-zoom' : ''}`} style={{ width: size, height: size }}
+        onClick={zoom && src ? (e) => { e.preventDefault(); e.stopPropagation(); setBig(true); } : undefined}
+        role={zoom && src ? 'button' : undefined} aria-label={zoom && src ? `Agrandir la photo ${alt}` : undefined}>
+        {src ? <img src={src} alt={alt} loading="lazy" /> : <Icon name="store" size={Math.round(size * 0.42)} />}
+      </span>
+      {big && src && (
+        <div className="lightbox" onClick={(e) => { e.stopPropagation(); setBig(false); }} role="dialog" aria-label="Photo">
+          <img src={src} alt={alt} />
+          {alt && <span className="lightbox-cap">{alt}</span>}
+        </div>
+      )}
+    </>
   );
 }
 

@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -254,7 +254,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
                   return (
                     <tr key={l.id}>
                       <td>
-                        <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={p?.photo} size={36} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}</div></div></div>
+                        <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={48} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}</div></div></div>
                         <label className="small row" style={{ gap: 6, marginTop: 4 }}><input type="checkbox" checked={!!l.isChoice} onChange={(e) => setLine(l.id, { isChoice: e.target.checked })} /> Envoyé en choix (pas encore vendu)</label>
                       </td>
                       <td><input className="cell-input" inputMode="numeric" aria-label="Quantité" value={l.qty || ''} onChange={(e) => setLine(l.id, { qty: parseNum(e.target.value) || 0 })} /></td>
@@ -351,7 +351,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
               const avail = productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
               return (
                 <li key={p.id}><button className="list-item list-link btn-reset" onClick={() => setProd(p)}>
-                  <Thumb src={p.photo} size={44} />
+                  <Thumb src={p.photo} size={72} zoom alt={p.name} />
                   <div className="list-item-main"><span className="list-item-title">{p.name}</span><p className="small muted">{p.code} · {fmtAr(p.priceRetail)}{p.priceWholesale ? ` · gros ${fmtAr(p.priceWholesale)}` : ''}</p></div>
                   <span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span>
                 </button></li>
@@ -362,13 +362,14 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
         </div>
       ) : (
         <div className="stack">
-          <div className="row" style={{ gap: 12 }}><Thumb src={prod.photo} size={64} /><div><strong>{prod.code}</strong><p className="small muted">{fmtAr(prod.priceRetail)}{prod.priceWholesale ? ` · gros ${fmtAr(prod.priceWholesale)}` : ''}</p></div></div>
+          <div className="row" style={{ gap: 12 }}><Thumb src={prod.photo} size={120} zoom alt={prod.name} /><div><strong>{prod.code}</strong> {prod.name}<p className="small muted">{fmtAr(prod.priceRetail)}{prod.priceWholesale ? ` · gros ${fmtAr(prod.priceWholesale)}` : ''}</p></div></div>
           {!noChoice && <p className="small muted">« Vendu » : ce que le client achète. « En choix » : les tailles ou couleurs envoyées en plus pour qu’il choisisse sur place.</p>}
           <div className="variant-grid">
             {variants.map((v) => {
               const a = availableOf(v.id, reserved);
               return (
                 <div key={v.id} className={`variant-cell ${a <= 0 ? 'is-out' : ''}`}>
+                  {variants.some((x) => x.photo) && <Thumb src={photoOf(v)} size={84} zoom alt={`${prod.code} ${variantLabel(v)}`} />}
                   <span className="small"><strong>{variantLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
                   <label className="small">{noChoice ? 'Quantité' : 'Vendu'}<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
                   {!noChoice && <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>}
@@ -460,7 +461,7 @@ function OrderDetail({ id }: { id: string }) {
                 const q = closed ? (l.qtyKept ?? 0) : l.isChoice ? 0 : l.qty;
                 return (
                   <tr key={l.id}>
-                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={p?.photo} size={40} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}{l.isChoice ? ' · en choix' : ''}</div></div></div></td>
+                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={56} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}{l.isChoice ? ' · en choix' : ''}</div></div></div></td>
                     <td className="t-num num">{l.qty}</td>
                     {closed && <td className={`t-num num ${(l.qtyKept ?? 0) < l.qty && !l.isChoice ? 'neg' : ''}`}>{l.qtyKept ?? 0}</td>}
                     <td className="t-num">{fmtAr(l.unitPrice)}</td>

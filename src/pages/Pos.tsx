@@ -85,7 +85,7 @@ export function PosPage() {
             <div className="pos-grid">
               {found.map(({ p, avail }) => (
                 <button key={p.id} className={`pos-tile ${avail <= 0 ? 'is-out' : ''}`} onClick={() => pick(p)}>
-                  <Thumb src={p.photo} size={64} />
+                  <Thumb src={p.photo} size={140} />
                   <span className="pos-tile-name">{p.name}</span>
                   <span className="small muted">{p.code}</span>
                   <span className="pos-tile-foot"><strong className="num">{fmtAr(p.priceRetail)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span></span>

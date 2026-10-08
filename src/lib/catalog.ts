@@ -22,6 +22,7 @@ export interface Variant extends BaseRecord {
   color?: string;
   size?: string;
   costAvg?: number;
+  photo?: string;         // photo propre à la couleur (sinon celle de l'article)
   priceRetail?: number;   // si différent du prix de l'article
   priceWholesale?: number;
   active: boolean;
@@ -156,6 +157,15 @@ export function productIncoming(productId: string) {
   return productVariants(productId).reduce((s, v) => s + incomingOf(v.id), 0);
 }
 export function variantCost(v: Variant) { return v.costAvg ?? 0; }
+/** Photo d'une variante : celle de sa couleur si elle en a une, sinon celle de l'article. */
+export function photoOf(v?: Variant) {
+  if (!v) return undefined;
+  if (v.photo) return v.photo;
+  // La photo d'une couleur n'est enregistrée qu'une fois (sur une de ses tailles) : on la partage.
+  const c = (v.color || '').toLowerCase();
+  const sib = c ? productVariants(v.productId).find((x) => x.photo && (x.color || '').toLowerCase() === c) : undefined;
+  return sib?.photo || get<Product>('products', v.productId)?.photo;
+}
 export function variantPrice(v: Variant, p?: Product) { return v.priceRetail ?? p?.priceRetail; }
 export function variantWholesale(v: Variant, p?: Product) { return v.priceWholesale ?? p?.priceWholesale; }
 

@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { save, useTable } from '../lib/db';
 import { fmtAr, parseNum } from '../lib/catalog';
-import { resizeImage } from '../lib/settings';
+import { compressPhoto } from '../lib/images';
 import {
   ACCOUNTS, ACCOUNT_IDS, MOVE_TYPES, addMove, addTransfer, atFor, balances, confirmRecurring, dayOf, deleteMove, dueRecurring, flows, skipRecurring, today,
   type AccountId, type CashMove, type FinanceCategory, type Flow, type MoveType, type Recurring,
@@ -156,7 +156,7 @@ function MoveForm({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
           <div className="row" style={{ alignItems: 'center' }}>
             <Button variant="ghost" icon="upload" onClick={() => file.current?.click()}>{photo ? 'Changer la photo du reçu' : 'Photo du reçu'}</Button>
             {photo && <><img src={photo} alt="Reçu" style={{ height: 48, borderRadius: 8 }} /><Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer</Button></>}
-            <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { setPhoto(await resizeImage(f, 1000, 'image/jpeg')); } catch (err: any) { toast(err.message, 'error'); } } e.target.value = ''; }} />
+            <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { setPhoto(await compressPhoto(f, { max: 1000, targetBytes: 110_000 })); } catch (err: any) { toast(err.message, 'error'); } } e.target.value = ''; }} />
           </div>
         )}
         {dayLocked && <div className="notice notice-danger"><Icon name="lock" /><span>Cette journée est clôturée. Seuls l’admin ou le gérant peuvent encore y ajouter une opération.</span></div>}

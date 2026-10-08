@@ -490,3 +490,10 @@ a.btn { text-decoration: none; }
 .synth-table tr.synth-total td { font-weight: 800; font-size: 1.1rem; background: var(--brand-soft); }
 .synth-grid { display: grid; grid-template-columns: 1fr; }
 .scope-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--radius-m); background: var(--brand-soft); color: var(--ink); } .scope-bar > span { flex: 1; min-width: 180px; } .scope-bar svg { color: var(--brand); }
+.thumb-zoom { cursor: zoom-in; }
+.lightbox { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.82); display: grid; place-items: center; padding: 20px; cursor: zoom-out; }
+.lightbox img { max-width: min(92vw, 520px); max-height: 80vh; border-radius: 12px; background: #fff; }
+.lightbox-cap { position: absolute; bottom: 24px; left: 0; right: 0; text-align: center; color: #fff; font-weight: 700; }
+.pos-tile .thumb { width: 100% !important; height: 140px !important; }
+.pos-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.variant-cell .thumb { justify-self: center; }

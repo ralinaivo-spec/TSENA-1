@@ -6,7 +6,7 @@ import { audit, useCan, type User } from '../lib/auth';
 import { get, useTable } from '../lib/db';
 import {
   addMoves, categoryPath, fmtAr, fmtNum, incomingOf, MOVE_LABELS, parseNum, stockOf, useCatalog, variantLabel,
-  type Category, type MoveType, type Product, type StockMove, type Variant,
+  type Category, type MoveType, type Product, type StockMove, type Variant, photoOf,
 } from '../lib/catalog';
 import { Button, Confirm, Empty, PageHead, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
@@ -122,7 +122,7 @@ function StockState() {
               <tbody>
                 {rows.slice(0, limit).map((r) => (
                   <tr key={r.v.id} className="row-link" onClick={() => navigate('/articles/' + r.p!.id)}>
-                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={r.p!.photo} size={36} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div></div></div></td>
+                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={52} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div></div></div></td>
                     <td>{variantLabel(r.v)}</td>
                     <td className="t-num"><span className={`stock-pill ${r.stock <= 0 ? 'is-out' : ''}`}>{fmtNum(r.stock)}</span></td>
                     <td className="t-num">{r.incoming || '—'}</td>

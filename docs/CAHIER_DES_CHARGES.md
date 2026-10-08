@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.8, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 2.9, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -56,6 +56,8 @@
 - **Variantes** *(ajout important)* : taille, couleur, pointure… Chaque variante a son propre stock. Indispensable pour les « choix » de taille envoyés aux clients.
 
 ---
+
+- **Photos des articles** *(ajouté le 08/10/2026)* : toute photo ajoutée (fiche article, import Excel, commande Chine) suit automatiquement le même traitement **avant** d'être enregistrée : redimensionnement à 480 px au plus grand côté → conversion en **JPEG** (format unique, fond blanc) → compression jusqu'à environ **40 Ko** avec une qualité suffisante → enregistrement. Les reçus de dépenses suivent le même principe (1000 px, ~110 Ko). **Une photo par couleur** quand un article a plusieurs couleurs avec des photos différentes (stockée une seule fois par couleur). Photos affichées en grand (caisse, choix des articles, tailles/couleurs) et **agrandies d'un toucher**. Outil « Optimiser les photos » (Paramètres → Outils) pour les photos plus anciennes.
 
 ## 4. Achats en Chine → arrivage → stock
 

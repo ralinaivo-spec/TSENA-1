@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { setMeta, useMeta, useTable, workDate } from '../lib/db';
 import { audit } from '../lib/auth';
-import { DATA_GROUPS, KEPT_LABEL, checkData, clearData, exportAllExcel, tableCounts, type Issue } from '../lib/maintenance';
+import { DATA_GROUPS, KEPT_LABEL, checkData, clearData, exportAllExcel, optimizePhotos, photoStats, tableCounts, type Issue } from '../lib/maintenance';
 import { Badge, Button, Confirm, TextField, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
@@ -52,6 +52,8 @@ export function ToolsTab() {
           </ul>
         )}
       </div>
+
+      {can('catalog.edit') && <PhotosCard />}
 
       {can('backup.manage') && (
         <div className="card stack">
@@ -131,6 +133,27 @@ export function WorkDateBanner() {
     <div className="notice workdate-banner"><Icon name="alert" />
       <span style={{ flex: 1 }}><strong>Saisies datées du {longDay(active)}</strong> — tout ce que vous enregistrez prend cette date.</span>
       <Button variant="ghost" onClick={async () => { await setMeta('workDate', null); await audit('Date de saisie', 'Retour à la date du jour'); toast('Retour à la date du jour'); }}>Revenir à aujourd’hui</Button>
+    </div>
+  );
+}
+
+function PhotosCard() {
+  useTable('products'); useTable('variants');
+  const st = photoStats();
+  const [prog, setProg] = useState('');
+  const ko = (b: number) => Math.round(b / 1024).toLocaleString('fr-FR') + ' Ko';
+  return (
+    <div className="card stack">
+      <div><h3>Photos des articles</h3>
+        <p className="small muted">Chaque photo ajoutée (fiche article, import Excel, commande Chine) est automatiquement redimensionnée (480 px), convertie en JPEG et compressée à environ 40 Ko avant d’être enregistrée. Ce bouton applique le même traitement aux photos plus anciennes.</p></div>
+      <p className="small">{st.count} photo(s) · {ko(st.bytes)} au total{st.count ? ` · moyenne ${ko(st.bytes / st.count)}` : ''}{st.heavy ? ` · ${st.heavy} à optimiser` : ' · toutes optimisées'}</p>
+      <div className="row" style={{ alignItems: 'center' }}>
+        <Button variant="ghost" icon="refresh" disabled={!st.heavy || !!prog} onClick={async () => {
+          const r = await optimizePhotos((d, t) => setProg(`${d} / ${t}`));
+          setProg(''); toast(r.count ? `${r.count} photo(s) optimisée(s) : ${ko(r.before)} → ${ko(r.after)}` : 'Rien à optimiser');
+        }}>Optimiser les photos</Button>
+        {prog && <span className="small muted">{prog}…</span>}
+      </div>
     </div>
   );
 }

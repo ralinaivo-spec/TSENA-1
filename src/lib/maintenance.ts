@@ -8,6 +8,7 @@ import { addMoves, stockOf, type Product, type Variant } from './catalog';
 import { remaining, type Courier, type Order } from './orders';
 import { cloudBackup, downloadBackup } from './backup';
 import { writeXlsx, downloadBlob, type Cell } from './xlsx';
+import { PHOTO, compressPhoto, photoBytes } from './images';
 
 // ---------- Mot de passe oublié : lien envoyé à l'e-mail du compte cloud de la société ----------
 export const maskEmail = (e: string) => e.replace(/^(.)(.*)(.@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.min(6, b.length)) + c);
@@ -232,4 +233,25 @@ export async function exportAllExcel() {
   const blob = await writeXlsx(sheets);
   downloadBlob(blob, `TSENA-export-complet-${new Date().toISOString().slice(0, 10)}.xlsx`);
   await audit('Export', 'Export complet des données en Excel');
+}
+
+// ---------- Optimiser les photos déjà enregistrées ----------
+export function photoStats() {
+  const list = [...all<Product>('products').map((p) => p.photo), ...all<Variant>('variants').map((v) => v.photo)].filter(Boolean) as string[];
+  const bytes = list.reduce((t, p) => t + photoBytes(p), 0);
+  const heavy = list.filter((p) => photoBytes(p) > PHOTO.targetBytes * 1.15 || !p.startsWith('data:image/jpeg')).length;
+  return { count: list.length, bytes, heavy };
+}
+export async function optimizePhotos(onProgress?: (done: number, total: number) => void) {
+  const todo: { table: 'products' | 'variants'; id: string; photo: string }[] = [];
+  for (const p of all<Product>('products')) if (p.photo && (photoBytes(p.photo) > PHOTO.targetBytes * 1.15 || !p.photo.startsWith('data:image/jpeg'))) todo.push({ table: 'products', id: p.id, photo: p.photo });
+  for (const v of all<Variant>('variants')) if (v.photo && (photoBytes(v.photo) > PHOTO.targetBytes * 1.15 || !v.photo.startsWith('data:image/jpeg'))) todo.push({ table: 'variants', id: v.id, photo: v.photo });
+  let before = 0, after = 0;
+  for (let i = 0; i < todo.length; i++) {
+    const t = todo[i];
+    try { const np = await compressPhoto(t.photo); before += photoBytes(t.photo); after += photoBytes(np); await save(t.table, { id: t.id, photo: np }); } catch { /* photo illisible : laissée telle quelle */ }
+    onProgress?.(i + 1, todo.length);
+  }
+  if (todo.length) await audit('Photos', `${todo.length} photo(s) optimisée(s) : ${Math.round(before / 1024)} Ko → ${Math.round(after / 1024)} Ko`);
+  return { count: todo.length, before, after };
 }

@@ -248,6 +248,16 @@ function ArticlesImport({ sheets, fileName, onDone }: { sheets: Sheet[]; fileNam
         const pv = list.find((r) => r.pv)?.pv; const pvg = list.find((r) => r.pvg)?.pvg;
         const photoBlob = list.map((r) => photos.get(r.photoRow)).find(Boolean);
         const photo = photoBlob ? await blobToThumb(photoBlob).catch(() => undefined) : undefined;
+        // Plusieurs couleurs avec chacune sa photo : chaque couleur garde la sienne (compressée une seule fois).
+        const colorPhoto = new Map<string, string>();
+        const colors = [...new Set(list.map((r) => r.color.toLowerCase()))];
+        if (colors.length > 1) {
+          for (const c of colors) {
+            const b = list.filter((r) => r.color.toLowerCase() === c).map((r) => photos.get(r.photoRow)).find(Boolean);
+            // La première couleur utilise la photo de l'article : rien à stocker en plus.
+            if (b && b !== photoBlob) { const ph = await blobToThumb(b).catch(() => undefined); if (ph) colorPhoto.set(c, ph); }
+          }
+        }
         let prod = findProductByCode(first.model);
         let productId: string;
         if (prod) {
@@ -259,14 +269,16 @@ function ArticlesImport({ sheets, fileName, onDone }: { sheets: Sheet[]; fileNam
         }
         const existingVariants = prod ? productVariants(prod.id) : [];
         const bySku = new Map<string, Partial<Variant> & { _stock: number }>();
+        const colorTaken = new Set<string>(); // une seule copie de la photo par couleur
+        const takePhoto = (color: string) => { const k = color.toLowerCase(); if (colorTaken.has(k)) return undefined; const ph = colorPhoto.get(k); if (ph) colorTaken.add(k); return ph; };
         for (const r of list) {
           const k = r.code.toUpperCase().replace(/\s+/g, '');
           const cur = bySku.get(k);
           if (cur) { cur._stock += Math.max(0, r.stock); continue; }
           const ex = existingVariants.find((v) => v.sku.toUpperCase().replace(/\s+/g, '') === k);
           const v: Partial<Variant> & { _stock: number } = ex
-            ? { id: ex.id, _stock: Math.max(0, r.stock), costAvg: ex.costAvg ?? r.cost }
-            : { id: newId(), productId, sku: r.code, color: r.color || undefined, size: r.size || undefined, costAvg: r.cost, active: true, _stock: Math.max(0, r.stock),
+            ? { id: ex.id, _stock: Math.max(0, r.stock), costAvg: ex.costAvg ?? r.cost, photo: ex.photo ?? takePhoto(r.color) }
+            : { id: newId(), productId, sku: r.code, color: r.color || undefined, size: r.size || undefined, costAvg: r.cost, active: true, _stock: Math.max(0, r.stock), photo: takePhoto(r.color),
                 priceRetail: r.pv && pv && r.pv !== pv ? r.pv : undefined, priceWholesale: r.pvg && pvg && r.pvg !== pvg ? r.pvg : undefined };
           (ex ? updVariants : newVariants).push(v);
           bySku.set(k, v);
