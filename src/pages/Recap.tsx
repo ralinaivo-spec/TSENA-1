@@ -258,10 +258,10 @@ function SynthesisCard({ date }: { date: string }) {
           <h3 className="card-pad" style={{ paddingBottom: 0 }}>Livreurs</h3>
           {s.couriers.length === 0 ? <p className="card-pad small muted">Aucune livraison ce jour.</p> : (
             <div className="table-wrap"><table className="table">
-              <thead><tr><th>Livreur</th><th className="t-num">Livraisons</th><th className="t-num">Frais (pour lui)</th><th className="t-num">Sans retour</th><th className="t-num">Avec retour</th></tr></thead>
+              <thead><tr><th>Livreur</th><th className="t-num">Nombre de livraisons</th><th className="t-num">Frais gagnés</th></tr></thead>
               <tbody>
-                {s.couriers.map((c) => <tr key={c.id}><td><strong>{c.name}</strong>{c.returns ? <div className="small neg">{c.returns} retour(s)</div> : null}{c.pending ? <div className="small muted">{c.pending} à confirmer</div> : null}</td><td className="t-num">{c.count}</td><td className="t-num">{fmtAr(c.fees)}</td><td className="t-num">{fmtAr(c.sans)}</td><td className="t-num">{fmtAr(c.avec)}</td></tr>)}
-                <tr className="t-total"><td>Total</td><td className="t-num">{s.deliv.count}</td><td className="t-num">{fmtAr(s.fees)}</td><td className="t-num">{fmtAr(s.deliv.sans)}</td><td className="t-num">{fmtAr(s.deliv.avec)}</td></tr>
+                {s.couriers.map((c) => <tr key={c.id}><td><strong>{c.name}</strong></td><td className="t-num">{c.count}</td><td className="t-num">{fmtAr(c.fees)}</td></tr>)}
+                <tr className="t-total"><td>Total</td><td className="t-num">{s.deliv.count}</td><td className="t-num">{fmtAr(s.fees)}</td></tr>
               </tbody>
             </table></div>
           )}

@@ -83,7 +83,7 @@ export function synthSections(s: Synthesis): Section[] {
     ...(s.total.diff ? [{ label: `Retours (${s.deliv.returns} livraison(s))`, value: '− ' + fmtAr(s.total.diff) }] : []),
   ] }];
   if (s.couriers.length) out.push({ title: 'Livreurs : livraisons et frais', lines: [
-    ...s.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)${c.returns ? `, ${c.returns} retour(s)` : ''}`, value: `frais ${fmtAr(c.fees)}` })),
+    ...s.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)`, value: `frais ${fmtAr(c.fees)}` })),
     { label: `Total : ${s.deliv.count} livraison(s)`, value: `frais ${fmtAr(s.fees)}`, strong: true },
   ] });
   if (s.categories.length) out.push({ title: 'Ventes par catégorie (page)', lines: s.categories.map((c) => ({ label: `${c.name}${c.sellers.length ? ` (${c.sellers.join(', ')})` : ''}`, value: sa(c.sans, c.avec) })) });
