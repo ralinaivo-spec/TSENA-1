@@ -18,20 +18,33 @@ export function BrandLogo({ size }: { size?: number }) {
   );
 }
 
+/** Cadre des écrans d'accès : panneau d'accueil en dégradé violet et carte blanche de connexion qui le chevauche. */
 function AuthShell({ children }: { children: ReactNode }) {
   const c = useCompany();
+  const h = new Date().getHours();
+  const moment = h < 12 ? 'Bonne matinée' : h < 18 ? 'Bon après-midi' : 'Bonne soirée';
   return (
-    <div className="auth">
-      <aside className="auth-side">
-        <div className="auth-awning" aria-hidden />
-        <div className="auth-company">
-          <BrandLogo />
-          <span className="small" style={{ opacity: .85 }}>{c.slogan || 'Gestion commerciale'}</span>
-        </div>
-        <h1 className="auth-title">{c.name}</h1>
-        <p className="auth-tagline">Achats, stock, ventes, livraisons et caisse — même sans connexion.</p>
-      </aside>
-      <main className="auth-main"><div className="auth-card">{children}</div></main>
+    <div className="login">
+      <div className="login-stage">
+        <section className="login-art">
+          <div className="login-badge"><BrandLogo /></div>
+          <span className="login-dot d1" aria-hidden /><span className="login-dot d2" aria-hidden /><span className="login-dot d3" aria-hidden /><span className="login-dot d4" aria-hidden />
+          <div className="login-hello">
+            <p>Salama !</p>
+            <h1>{moment.split(' ')[0]}<br />{moment.split(' ').slice(1).join(' ')}</h1>
+            <span className="login-company">{c.name}</span>
+            <span className="login-tag">{c.slogan || 'Ventes en ligne, boutique, livraisons et stock — même sans connexion.'}</span>
+          </div>
+          <svg className="login-hills" viewBox="0 0 600 220" preserveAspectRatio="none" aria-hidden>
+            <path d="M0 220 L0 150 L70 95 L130 140 L210 60 L300 150 L360 110 L430 170 L520 90 L600 140 L600 220 Z" />
+            <path d="M0 220 L0 185 L90 140 L170 190 L260 130 L350 195 L440 150 L530 190 L600 165 L600 220 Z" />
+          </svg>
+        </section>
+        <main className="login-card">
+          <span className="login-corner" aria-hidden />
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
@@ -52,7 +65,7 @@ function LoginForm({ onForgot, onCloud }: { onForgot: () => void; onCloud: () =>
     <AuthShell>
       <div>
         <h2>Connexion</h2>
-        <p className="muted">Entrez le nom d'utilisateur et le mot de passe donnés par votre admin.</p>
+        <p className="muted">Connectez-vous avec le nom d'utilisateur et le mot de passe donnés par votre admin.</p>
       </div>
       <ResetErrorNotice />
       <form className="stack" onSubmit={async (e) => {
