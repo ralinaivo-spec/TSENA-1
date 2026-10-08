@@ -7,7 +7,7 @@ import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
-  canReassign, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
+  canReassign, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone,
 } from '../lib/orders';
@@ -37,7 +37,10 @@ export function OrdersPage() {
 
 export function OrderStatusBadge({ o }: { o: Order }) {
   const st = ORDER_STATUS[o.status];
-  return <Badge tone={st.tone}>{o.kind === 'exchange' ? `Échange · ${st.label}` : st.label}</Badge>;
+  return <>
+    <Badge tone={st.tone}>{o.kind === 'exchange' ? `Échange · ${st.label}` : st.label}</Badge>
+    {hasPendingChoice(o) && <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>}
+  </>;
 }
 
 function OrderList({ tabKey }: { tabKey?: string }) {
@@ -436,6 +439,7 @@ function OrderDetail({ id }: { id: string }) {
         {o.notes && <p className="small" style={{ whiteSpace: 'pre-line' }}><strong>Observations :</strong> {o.notes}</p>}
         {parent && <p className="small">Échange de la commande <a href={`#/commandes/${parent.id}`}>{parent.number}</a></p>}
         {children.map((c) => <p key={c.id} className="small">Échange lié : <a href={`#/commandes/${c.id}`}>{c.number}</a> ({ORDER_STATUS[c.status].label})</p>)}
+        {hasPendingChoice(o) && <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}><strong>Choix du client à préciser</strong> : {choiceQty(o)} pièce(s) sont parties en choix. Dès que le livreur revient, touchez « Préciser le choix du client » et indiquez ce que le client a gardé. Tant que ce n’est pas fait, le versement du livreur pour cette livraison est bloqué.</span></div>}
 
         <div className="action-bar">
           {o.status === 'new' && can('orders.prepare') && <Button icon="check" onClick={act(async () => { await confirmOrder(o); }, 'Commande confirmée')}>Confirmer (client joint)</Button>}
@@ -443,7 +447,7 @@ function OrderDetail({ id }: { id: string }) {
           {o.status === 'ready' && !isPickupZone(o.zoneId) && can('orders.dispatch') && <Button icon="truck" onClick={() => setModal('dispatch')}>Remettre au livreur</Button>}
           {(o.status === 'ready' || (isWalkIn(o) && ['new', 'confirmed'].includes(o.status))) && isPickupZone(o.zoneId) && can('orders.create') && <Button icon="store" onClick={() => setModal('pickup')}>Remis au client en boutique</Button>}
           {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Remise en préparation')}>Revenir à « à préparer »</Button>}
-          {o.status === 'out' && can('deliveries.manage') && <Button icon="inbox" onClick={() => setModal('return')}>Enregistrer le retour du livreur</Button>}
+          {o.status === 'out' && can('deliveries.manage') && <Button icon="inbox" onClick={() => setModal('return')}>{hasPendingChoice(o) ? 'Préciser le choix du client' : 'Enregistrer le retour du livreur'}</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
           {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
           {closed && o.status !== 'refused' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>Retour / échange</Button>}
@@ -559,7 +563,9 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
 }
 
 export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])));
+  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, l.isChoice ? '' : String(l.qty)])));
+  const hasChoice = o.lines.some((l) => l.isChoice);
+  const choiceMissing = o.lines.filter((l) => l.isChoice && (kept[l.id] ?? '').trim() === '');
   const keptNum = Object.fromEntries(o.lines.map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(kept[l.id]) ?? 0))]));
   const anyKept = Object.values(keptNum).some((n) => n > 0);
   const [fee, setFee] = useState<string | null>(null);
@@ -573,15 +579,16 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const [busy, setBusy] = useState(false);
   const amountVal = amount == null ? toCollect : parseNum(amount) ?? 0;
   return (
-    <Modal title={`Retour du livreur — ${o.number}`} onClose={onClose} wide
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={async () => {
+    <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0} onClick={async () => {
         setBusy(true);
         await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined });
-        toast('Retour enregistré'); setBusy(false); onClose();
-      }}>Valider le retour</Button></>}>
+        toast(hasChoice ? 'Choix du client enregistré' : 'Retour enregistré'); setBusy(false); onClose();
+      }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : hasChoice ? 'Valider le choix et le retour' : 'Valider le retour'}</Button></>}>
       <div className="stack">
+        {hasChoice && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues). Le versement du livreur pour cette livraison n’est possible qu’après cette étape.</span></div>}
         <div className="row">
-          <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>Tout livré (choix rendus)</Button>
+          <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>{hasChoice ? 'Tout livré, choix tous rendus' : 'Tout livré'}</Button>
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, '0'])))}>Tout refusé</Button>
         </div>
         <div className="table-wrap">
@@ -591,10 +598,10 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
               {o.lines.map((l) => {
                 const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId);
                 return (
-                  <tr key={l.id}>
-                    <td><strong>{p?.code}</strong> {variantLabel(v)} {l.isChoice && <Badge>choix</Badge>}<div className="small muted">{fmtAr(l.unitPrice)}</div></td>
+                  <tr key={l.id} className={l.isChoice ? 'is-choice' : ''}>
+                    <td><strong>{p?.code}</strong> {variantLabel(v)} {l.isChoice && <Badge tone="warn">choix</Badge>}<div className="small muted">{fmtAr(l.unitPrice)}</div></td>
                     <td className="t-num num">{l.qty}</td>
-                    <td><input className="cell-input" inputMode="numeric" aria-label="Gardé" value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td>
+                    <td><input className="cell-input" inputMode="numeric" aria-label="Gardé" placeholder={l.isChoice ? 'à préciser' : ''} aria-invalid={l.isChoice && (kept[l.id] ?? '').trim() === ''} value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td>
                     <td className="t-num num">{l.qty - keptNum[l.id]}</td>
                   </tr>
                 );

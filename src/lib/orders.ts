@@ -139,6 +139,9 @@ export function isOutsideHours(d: Date, c: Company) {
 
 // ---------- Montants ----------
 export const sellingLines = (o: Order) => o.lines.filter((l) => !l.isChoice);
+/** Livraison partie avec des articles « en choix » dont le client n'a pas encore dit ce qu'il garde. */
+export const hasPendingChoice = (o: Pick<Order, 'status' | 'lines'>) => o.status === 'out' && o.lines.some((l) => l.isChoice);
+export const choiceQty = (o: Pick<Order, 'lines'>) => o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0);
 export function itemsTotal(o: Order) { return sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0); }
 export function keptTotal(o: Order) { return o.lines.reduce((s, l) => s + (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice, 0); }
 export const paidTotal = (o: Order) => (o.payments || []).reduce((s, p) => s + p.amount, 0);

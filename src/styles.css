@@ -465,6 +465,8 @@ a.btn { text-decoration: none; }
 .stat-strong { border-color: var(--brand); background: var(--brand-soft); }
 .table tr.t-total td { font-weight: 700; background: var(--surface-2); }
 .table tr.is-checked td { background: var(--brand-soft); }
+.table tr.is-choice td { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.cell-input[aria-invalid='true'] { border-color: var(--danger); }
 
 /* ---- Étape 7 : graphiques, tableaux de bord, rapports ---- */
 .chart { position: relative; width: 100%; }

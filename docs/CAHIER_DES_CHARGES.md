@@ -195,6 +195,8 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - Par défaut, le client paie tout à la livraison ; dans la commande, « Paiement déjà reçu » permet d'indiquer un paiement total ou partiel par Mobile Money (boutons « Articles payés » / « Tout payé ») et affiche ce que le livreur encaissera.
 - **Correction d'un paiement** (admin et gérant) : nouveau montant et/ou moyen, motif ; l'ancien montant, le nouveau, la date et l'utilisateur restent visibles sous le paiement, dans l'historique de la commande et dans le journal. Reste à payer et compte du livreur se recalculent.
 
+- **Livraisons avec articles en choix** *(règle du 08/10/2026)* : tant que le client n’a pas dit ce qu’il garde, la livraison porte le badge rouge **« Choix à préciser (n) »** (liste des commandes, fiche commande, « En livraison », versement). On le précise avec le bouton **« Préciser le choix du client »** (fiche commande, onglet « En livraison » ou directement dans la fenêtre de versement) : pour chaque ligne « choix », le nombre de pièces gardées doit être saisi (0 si tout est rendu) avant de pouvoir valider. **Le versement de cette livraison est bloqué** (case non cochable, refus aussi côté calcul) tant que le choix n’est pas renseigné.
+
 ---
 
 ## 10. Récapitulatif journalier et hebdomadaire *(remplace la « clôture de caisse », modifié le 07/10/2026)*

@@ -189,6 +189,8 @@ export function courierBalance(courierId: string, until?: string) {
  * amount + : le livreur remet l'argent ; − : la boutique lui verse ses frais.
  */
 export async function settleCourier(c: Courier, orderIds: string[], amount: number, account: AccountId, note?: string) {
+  const blocked = orderIds.map((id) => get<Order>('orders', id)).filter((o): o is Order => !!o && o.status === 'out' && o.lines.some((l) => l.isChoice));
+  if (blocked.length) throw new Error(`Choix du client à préciser avant le versement : ${blocked.map((o) => o.number).join(', ')}`);
   for (const id of orderIds) {
     const o = get<Order>('orders', id);
     if (o && o.status === 'out' && !o.lines.some((l) => l.isChoice)) {

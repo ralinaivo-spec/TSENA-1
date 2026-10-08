@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
-import { courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
@@ -112,12 +112,12 @@ function OutNow() {
               {list.map((o) => (
                 <li key={o.id} className="list-item">
                   <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span></span>
+                    <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span>{hasPendingChoice(o) && <> <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge></>}</span>
                     <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser <strong>{fmtAr(courierSplit(o).toCollect)}</strong>{courierSplit(o).toCollect === 0 ? ' (déjà payé)' : ''} · frais livreur {fmtAr(courierSplit(o).fee)}{courierSplit(o).feeOwed ? ` (payés par Mobile Money : à lui reverser)` : ''}</p>
                   </a>
                   <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                     <Button variant="quiet" onClick={() => setMove(o)}>Changer de livreur</Button>
-                    <Button variant="ghost" onClick={() => setRet(o)}>Retour</Button>
+                    <Button variant={hasPendingChoice(o) ? 'primary' : 'ghost'} onClick={() => setRet(o)}>{hasPendingChoice(o) ? 'Préciser le choix' : 'Retour'}</Button>
                   </div>
                 </li>
               ))}
@@ -199,7 +199,8 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [ret, setRet] = useState<Order | null>(null);
-  const checkable = (o: Order) => !(o.status === 'out' && o.lines.some((l) => l.isChoice));
+  const checkable = (o: Order) => !hasPendingChoice(o);
+  const blocked = b.pending.filter((o) => !checkable(o));
   const sel = b.pending.filter((o) => checked.includes(o.id));
   const selNet = sel.reduce((t, o) => t + deliveryNet(o).net, 0);
   const selCollect = sel.reduce((t, o) => t + deliveryNet(o).collect, 0);
@@ -216,10 +217,11 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
         <Button variant="ghost" onClick={onClose}>Annuler</Button>
         <Button busy={busy} disabled={!sel.length && !n} onClick={async () => {
           setBusy(true);
-          try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined); toast('Versement enregistré'); onClose(); } finally { setBusy(false); }
+          try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined); toast('Versement enregistré'); onClose(); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); }
         }}>Valider le versement</Button></>}>
       <div className="stack">
         <p className="small">Les frais du livreur ne sont jamais dans le montant à encaisser : il les garde. Cochez les livraisons <strong>réellement effectuées</strong> (d’après le ticket rapporté par le livreur). Les autres restent sur son compte et seront reportées au prochain versement. Pour une livraison pas faite, refusée ou un retour, touchez « Retour / anomalie ».</p>
+        {blocked.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span><strong>{blocked.length} livraison(s) avec un choix à préciser</strong> ({blocked.map((o) => o.number).join(', ')}) : elles ne peuvent pas être versées. Touchez « Préciser le choix » sur la ligne, indiquez ce que le client a gardé, puis cochez-la.</span></div>}
         {b.pending.length === 0 ? <Empty icon="truck" title="Aucune livraison en attente de versement" /> : (
           <div className="table-wrap"><table className="table">
             <thead><tr>
@@ -231,12 +233,12 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
                 const d = deliveryNet(o);
                 const ok = checkable(o);
                 return (
-                  <tr key={o.id} className={checked.includes(o.id) ? 'is-checked' : ''}>
-                    <td><input type="checkbox" className="perm-check" disabled={!ok} checked={checked.includes(o.id)} onChange={() => toggle(o.id)} aria-label={`Livraison ${o.number} effectuée`} /></td>
+                  <tr key={o.id} className={checked.includes(o.id) ? 'is-checked' : !ok ? 'is-choice' : ''}>
+                    <td><input type="checkbox" className="perm-check" disabled={!ok} title={ok ? undefined : 'Précisez d’abord le choix du client'} checked={checked.includes(o.id)} onChange={() => toggle(o.id)} aria-label={`Livraison ${o.number} effectuée`} /></td>
                     <td><strong>{o.number}</strong> <span className="small muted">{orderLabel(o)} · {get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · partie le {fmtDateTime(o.dispatchedAt)}</span></td>
-                    <td>{o.status === 'out' ? <Badge tone="warn">{ok ? 'À confirmer' : 'Choix à préciser'}</Badge> : <Badge tone={o.status === 'refused' ? 'danger' : 'ok'}>{o.status === 'refused' ? 'Refusée' : o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}</td>
+                    <td>{o.status === 'out' ? (ok ? <Badge tone="warn">À confirmer</Badge> : <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>) : <Badge tone={o.status === 'refused' ? 'danger' : 'ok'}>{o.status === 'refused' ? 'Refusée' : o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}</td>
                     <td className="t-num"><strong>{fmtAr(d.collect)}</strong>{d.collect === 0 && o.payments.some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé par Mobile Money</div> : null}</td><td className="t-num muted">{fmtAr(d.fee)}</td><td className="t-num">{d.feeOwed ? fmtAr(d.feeOwed) : '—'}</td>
-                    <td>{o.status === 'out' && <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button>}</td>
+                    <td>{o.status === 'out' && (ok ? <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button> : <Button onClick={() => setRet(o)}>Préciser le choix</Button>)}</td>
                   </tr>
                 );
               })}
