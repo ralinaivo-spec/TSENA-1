@@ -218,6 +218,8 @@ Les livreurs versent généralement le lendemain (ou en fin de semaine) : il n'y
 ### 10.3 Envoi au responsable
 Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…), copie, impression 58 mm ou PDF.
 
+- **Détail du bénéfice brut** *(ajout du 08/10/2026)* : tableau dépliable, article par article (variante) : pièces vendues (moins les retours), ventes, prix de revient par pièce, coût total, bénéfice. Bénéfice brut = total des ventes (remises et retours déduits) − pièces × prix de revient de chaque variante ; frais de livraison non comptés. Les articles vendus sans prix de revient sont signalés.
+
 ---
 
 ## 11. Tableaux de bord et rapports

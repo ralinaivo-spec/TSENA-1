@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { useTable } from '../lib/db';
-import { fmtAr } from '../lib/catalog';
+import { fmtAr, fmtNum, variantLabel, type Product, type Variant } from '../lib/catalog';
+import { salesLedger } from '../lib/analytics';
 import { useCompany } from '../lib/settings';
 import { fmtPhone, normPhone, orderLabel, ORDER_STATUS, PAY_METHODS, keptTotal, type Order, type Zone } from '../lib/orders';
 import { ACCOUNTS, MOVE_TYPES, addDays, mondayOf, report, today, type AccountId, type Report } from '../lib/money';
@@ -61,6 +62,7 @@ export function RecapPage() {
         {withProfit && <Stat label="Bénéfice brut" value={r.grossProfit} />}
       </div>
 
+      {withProfit && <ProfitDetail from={r.from} to={r.to} gross={r.grossProfit} sales={r.netSales} cost={r.cost} />}
       {mode === 'week' ? <WeekTables days={days} r={r} /> : <DayTables r={r} />}
       <MoneyCard r={r} />
       <Share text={text} title={mode === 'week' ? 'Récapitulatif de la semaine' : 'Récapitulatif du jour'} sub={mode === 'week' ? `${fmtDate(monday)} au ${fmtDate(end)}` : fmtDate(date)} sections={sections} />
@@ -305,5 +307,51 @@ function WeekSynth({ dates }: { dates: string[] }) {
         </tbody>
       </table></div>
     </div>
+  );
+}
+
+/** Détail du bénéfice brut, article par article : ventes − coût (prix de revient × pièces). */
+function ProfitDetail({ from, to, gross, sales, cost }: { from: string; to: string; gross: number; sales: number; cost: number }) {
+  const rows = useMemo(() => {
+    const m = new Map<string, { variantId: string; sold: number; back: number; amount: number; cost: number; disc: number; full: number }>();
+    for (const l of salesLedger(from, to)) {
+      if (!m.has(l.variantId)) m.set(l.variantId, { variantId: l.variantId, sold: 0, back: 0, amount: 0, cost: 0, disc: 0, full: 0 });
+      const x = m.get(l.variantId)!;
+      if (l.kind === 'sale') x.sold += l.qty; else x.back -= l.qty;
+      x.amount += l.amount; x.cost += l.cost;
+    }
+    return [...m.values()].map((x) => {
+      const v = get<Variant>('variants', x.variantId); const p = v && get<Product>('products', v.productId);
+      return { ...x, name: p ? `${p.name}` : 'Article supprimé', variant: variantLabel(v), unit: v?.costAvg ?? 0 };
+    }).sort((a, b) => b.amount - a.amount);
+  }, [from, to, gross]);
+  const pcs = rows.reduce((t, x) => t + x.sold - x.back, 0);
+  const missing = rows.filter((x) => !x.unit && x.sold - x.back);
+  return (
+    <details className="card card-flush">
+      <summary className="card-pad row-between" style={{ cursor: 'pointer' }}><h2>Détail du bénéfice brut</h2><strong className="num">{fmtAr(gross)}</strong></summary>
+      <p className="card-pad small muted" style={{ paddingTop: 0 }}>
+        Bénéfice brut = total des ventes ({fmtAr(sales)}) − coût des articles vendus ({fmtAr(cost)}).
+        Le coût de chaque ligne = pièces × <strong>prix de revient de la variante</strong> (couleur/taille) — il peut être différent d’une taille ou d’une couleur à l’autre.
+        Les remises sont déduites des ventes ; un article retourné est enlevé des ventes <em>et</em> du coût ; les frais de livraison ne sont pas comptés.
+      </p>
+      {missing.length > 0 && <div className="notice notice-danger" style={{ margin: '0 16px 12px' }}><Icon name="alert" /><span>{missing.length} article(s) vendu(s) sans prix de revient : leur coût est compté à 0, le bénéfice est donc surestimé.</span></div>}
+      {rows.length === 0 ? <p className="card-pad small muted">Aucune vente sur la période.</p> : (
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>Article</th><th className="t-num">Pièces</th><th className="t-num">Ventes</th><th className="t-num">Prix de revient / pièce</th><th className="t-num">Coût total</th><th className="t-num">Bénéfice</th></tr></thead>
+          <tbody>{rows.map((x) => (
+            <tr key={x.variantId}>
+              <td>{x.name} <span className="muted small">{x.variant}</span></td>
+              <td className="t-num">{fmtNum(x.sold - x.back)}{x.back ? <span className="small muted"> ({x.sold} − {x.back} retour)</span> : null}</td>
+              <td className="t-num">{fmtAr(x.amount)}</td>
+              <td className={`t-num ${x.unit ? '' : 'neg'}`}>{x.unit ? fmtAr(x.unit) : 'manquant'}</td>
+              <td className="t-num">{fmtAr(x.cost)}</td>
+              <td className="t-num"><strong>{fmtAr(x.amount - x.cost)}</strong></td>
+            </tr>
+          ))}</tbody>
+          <tfoot><tr className="synth-total"><td>Total</td><td className="t-num">{fmtNum(pcs)}</td><td className="t-num">{fmtAr(rows.reduce((t, x) => t + x.amount, 0))}</td><td></td><td className="t-num">{fmtAr(rows.reduce((t, x) => t + x.cost, 0))}</td><td className="t-num">{fmtAr(rows.reduce((t, x) => t + x.amount - x.cost, 0))}</td></tr></tfoot>
+        </table></div>
+      )}
+    </details>
   );
 }
