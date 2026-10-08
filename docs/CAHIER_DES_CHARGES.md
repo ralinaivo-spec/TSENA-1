@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 2.7, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 2.8, validée le 08/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -33,6 +33,8 @@
 - Seul l'**Admin** crée les comptes et attribue les rôles. Un utilisateur ne peut rien faire avant d'avoir été créé par l'admin.
 - Les droits sont présentés sous forme de **matrice cochable** (rôle × fonction) : l'admin peut ajuster un rôle ou créer un rôle personnalisé.
 - Chaque utilisateur ne voit **que les menus de son rôle**.
+- **Pages attribuées aux vendeurs** *(ajouté le 08/10/2026)* : dans la fiche utilisateur, l'admin coche la ou les pages (catégories principales) du vendeur, ex. Vendeur 1 → « Pyjamas Homme », Vendeur 2 → « Boxer ». À sa connexion, le vendeur voit d'abord : les **articles et le stock** de ses pages, les **articles proposés** dans ses commandes et à la caisse, **ses propres commandes** (et leurs compteurs sur l'accueil) et **ses clients**. Un bouton « Tout » permet de voir exceptionnellement les autres pages. Restent communs à tous : les **livraisons** (à livrer, en cours, livreurs). **Ventes sur place** : la liste du jour montre par défaut « Mes ventes » (bouton « Toutes »). Sans page cochée, le vendeur voit tout.
+
 
 ### 2.2 Connexion et sécurité
 

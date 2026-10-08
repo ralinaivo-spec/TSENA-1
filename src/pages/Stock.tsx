@@ -1,4 +1,6 @@
 // Stock : état par variante, valeur, mouvements filtrables, inventaire physique.
+import { useMyScope } from '../lib/scope';
+import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, useCan, type User } from '../lib/auth';
 import { get, useTable } from '../lib/db';
@@ -51,20 +53,22 @@ function StockState() {
   const [f, setF] = useState<'' | 'in' | 'out' | 'neg'>('in');
   const [sort, setSort] = useState<'code' | 'stock' | 'value'>('code');
   const [limit, setLimit] = useState(150);
+  const scope = useMyScope();
 
   const rows = useMemo(() => {
     const n = q.trim().toLowerCase();
     return variants
       .map((v) => ({ v, p: get<Product>('products', v.productId), stock: stockOf(v.id), incoming: incomingOf(v.id) }))
       .filter((r) => r.p && r.p.active !== false && r.v.active !== false)
+      .filter((r) => scope.product(r.p!.id))
       .filter((r) => inCategory(r.p, cat))
       .filter((r) => !n || `${r.v.sku} ${r.p!.name} ${r.p!.code}`.toLowerCase().includes(n))
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
       .map((r) => ({ ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0) }))
       .sort((a, b) => sort === 'stock' ? b.stock - a.stock : sort === 'value' ? b.value - a.value : a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true }));
-  }, [variants, q, cat, f, sort]);
+  }, [variants, q, cat, f, sort, scope.on]);
 
-  const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && inCategory(p, cat); });
+  const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
   const totals = allRows.reduce((t, v) => {
     const s = stockOf(v.id);
     t.pcs += Math.max(0, s); t.value += Math.max(0, s) * (v.costAvg ?? 0);
@@ -84,6 +88,7 @@ function StockState() {
 
   return (
     <>
+      <ScopeBar scope={scope} />
       <div className="stat-grid">
         <div className="card stat"><span className="muted small">Pièces en stock</span><span className="stat-value">{fmtNum(totals.pcs)}</span></div>
         {showCost && <div className="card stat"><span className="muted small">Valeur du stock (coût)</span><span className="stat-value">{fmtAr(totals.value)}</span></div>}

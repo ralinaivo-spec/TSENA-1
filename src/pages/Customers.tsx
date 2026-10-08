@@ -1,4 +1,6 @@
 // Clients : retrouvés par téléphone, historique des commandes, taux de refus.
+import { useMyScope } from '../lib/scope';
+import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { get, save, useTable } from '../lib/db';
@@ -27,16 +29,19 @@ function CustomerList() {
   const orders = useTable<Order>('orders');
   const [q, setQ] = useState('');
   const [limit, setLimit] = useState(80);
+  const scope = useMyScope();
   const list = useMemo(() => {
     const n = q.trim().toLowerCase(); const np = normPhone(q);
     return customers
+      .filter((c) => !scope.on || orders.some((o) => o.customerId === c.id && scope.mine(o)))
       .filter((c) => !n || (c.name || '').toLowerCase().includes(n) || (np.length >= 3 && normPhone(c.phone).includes(np)) || (c.place || '').toLowerCase().includes(n))
       .map((c) => ({ c, s: stats(c, orders) }))
       .sort((a, b) => (b.s.last || b.c.createdAt).localeCompare(a.s.last || a.c.createdAt));
-  }, [customers, orders, q]);
+  }, [customers, orders, q, scope.on]);
   return (
     <>
       <PageHead title="Clients" subtitle={`${customers.length} client(s) — créés automatiquement à chaque commande`} />
+      <ScopeBar scope={scope} mineLabel="Mes clients" text="Vous voyez les clients de vos commandes et ventes." />
       <div className="card"><div className="field"><input aria-label="Rechercher" placeholder="Rechercher un téléphone, un nom, un lieu…" value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
       <div className="card card-flush">
         {list.length === 0 ? <Empty icon="users" title="Aucun client" /> : (

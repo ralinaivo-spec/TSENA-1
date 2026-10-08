@@ -6,6 +6,8 @@ import { save, useTable } from '../lib/db';
 import { ADMIN_ROLE, SUPERADMIN_ROLE } from '../lib/permissions';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordField, SelectField, TextField, Toggle, timeAgo, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { pageNames, userPages } from '../lib/scope';
+import type { Category } from '../lib/catalog';
 
 /** Mot de passe provisoire facile à dicter : 3 lettres + 4 chiffres. */
 function tempPassword() {
@@ -63,7 +65,7 @@ export function UsersPage() {
                     {!u.active && <Badge tone="danger">Désactivé</Badge>}
                     {u.mustChangePassword && u.active && u.roleId === SUPERADMIN_ROLE && <Badge tone="warn">Mot de passe d'origine</Badge>}
                   </div>
-                  <p className="small muted">{u.username} · {roleOf(u)?.name ?? 'Rôle inconnu'}{u.phone ? ` · ${u.phone}` : ''}</p>
+                  <p className="small muted">{u.username} · {roleOf(u)?.name ?? 'Rôle inconnu'}{u.phone ? ` · ${u.phone}` : ''}{userPages(u).length ? ` · Pages : ${pageNames(userPages(u))}` : ''}</p>
                 </div>
                 {canTouch(u) && (
                   <div className="row" style={{ gap: 0 }}>
@@ -116,6 +118,8 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
   const [active, setActive] = useState(user?.active ?? true);
+  const [pageIds, setPageIds] = useState<string[]>(user?.pageIds ?? []);
+  const pages = useTable<Category>('categories').filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
   // Mot de passe : visible et modifiable uniquement par le super-admin et le gérant.
   const canSetPwd = me.roleId === SUPERADMIN_ROLE || me.roleId === ADMIN_ROLE;
   const [pwd, setPwd] = useState(user ? '' : tempPassword());
@@ -138,7 +142,7 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
     if (canSetPwd && pwd && pwd !== pwd.trim()) return setError('Le mot de passe ne doit pas commencer ni finir par un espace.');
     setBusy(true);
     try {
-      const data = { fullName: fullName.trim(), username: uname, roleId, phone: phone.trim(), email: email.trim(), active };
+      const data = { fullName: fullName.trim(), username: uname, roleId, phone: phone.trim(), email: email.trim(), active, pageIds };
       if (user) {
         await save('users', { id: user.id, ...data });
         if (canSetPwd && pwd) {
@@ -166,6 +170,15 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
         <SelectField label="Rôle" value={roleId} onChange={setRoleId} options={roleOptions} hint={roles.find((r) => r.id === roleId)?.description} />
         <TextField label="Téléphone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
         <TextField label="E-mail (facultatif)" value={email} onChange={setEmail} type="email" autoCapitalize="none" />
+        <div className="card stack-s" style={{ background: 'var(--surface-2)' }}>
+          <strong>Pages attribuées (catégories)</strong>
+          <p className="small muted">Le vendeur verra d’abord le stock, les articles, ses commandes et ses clients de ces pages. Les livraisons restent visibles par tous. Ne cochez rien pour qu’il voie tout.</p>
+          {pages.length === 0 ? <p className="small muted">Créez d’abord les catégories (une par page) dans Articles.</p> : (
+            <div className="row" style={{ gap: 6 }}>
+              {pages.map((c) => <button key={c.id} type="button" className="chip" aria-pressed={pageIds.includes(c.id)} onClick={() => setPageIds(pageIds.includes(c.id) ? pageIds.filter((x) => x !== c.id) : [...pageIds, c.id])}>{c.name}</button>)}
+            </div>
+          )}
+        </div>
         {user && !isSelf && !isSuper && <Toggle checked={active} onChange={setActive} label="Compte actif (décochez pour bloquer l'accès)" />}
         {canSetPwd ? (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>

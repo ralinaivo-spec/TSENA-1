@@ -7,6 +7,7 @@ import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabe
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { BarChart } from '../ui/chart';
 import { Delta } from './Reports';
+import { useMyScope } from '../lib/scope';
 import type { Courier } from '../lib/orders';
 import { managesOwnPassword, roleOf, SUPERADMIN_ID, useCan, useCurrentUser, type User, useMe } from '../lib/auth';
 import { useMeta, useTable } from '../lib/db';
@@ -22,6 +23,7 @@ export function DashboardPage() {
   const company = useCompany();
   const users = useTable<User>('users');
   const orders = useTable<Order>('orders');
+  const scope = useMyScope();
   const status = useSyncStatus();
   const cloud = useMeta('cloud', null);
   const lastFile = useMeta<string | null>('lastFileBackup', null);
@@ -59,7 +61,7 @@ export function DashboardPage() {
           {([['new', 'À confirmer', 'confirmer'], ['confirmed', 'À préparer', 'preparer'], ['ready', 'Prêtes à livrer', 'pretes'], ['out', 'En livraison', 'livraison']] as const).map(([st, label, tab]) => (
             <a key={st} className="card stat" href={`#/commandes/${tab}`} style={{ textDecoration: 'none', color: 'inherit' }}>
               <span className="muted small">{label}</span>
-              <span className="stat-value">{orders.filter((o) => o.status === st).length}</span>
+              <span className="stat-value">{orders.filter((o) => o.status === st && scope.mine(o)).length}</span>
             </a>
           ))}
         </div>

@@ -1,4 +1,6 @@
 // Commandes clients : saisie (comme le cahier), préparation, remise au livreur, retour, échanges.
+import { useMyScope } from '../lib/scope';
+import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
@@ -46,25 +48,27 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const [period, setPeriod] = useState<Period>(defaultPeriod('30d'));
+  const scope = useMyScope();
   const tab = TABS.find((t) => t.key === tabKey) ?? TABS.find((t) => orders.some((o) => !isWalkIn(o) && t.statuses.includes(o.status) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status))) ?? TABS[0];
   const done = ['terminees', 'annulees'].includes(tab.key);
   const list = useMemo(() => {
     const n = q.trim().toLowerCase(); const np = normPhone(q);
     return orders
-      .filter((o) => !isWalkIn(o))
+      .filter((o) => !isWalkIn(o) && scope.mine(o))
       .filter((o) => (n ? true : tab.statuses.includes(o.status)))
       .filter((o) => !done || n || inPeriod(o.createdAt, period))
       .filter((o) => !n || o.number.toLowerCase().includes(n) || (o.name || '').toLowerCase().includes(n) || (np.length >= 3 && normPhone(o.phone).includes(np)) || (o.place || '').toLowerCase().includes(n))
       .sort((a, b) => (done ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
-  }, [orders, tab.key, q, period]);
+  }, [orders, tab.key, q, period, scope.on]);
 
   return (
     <>
       <PageHead title="Commandes" subtitle="Commandes Facebook, téléphone et autres, jusqu’à la livraison."
         actions={can('orders.create') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button>} />
+      <ScopeBar scope={scope} mineLabel="Mes commandes" text="Vous voyez les commandes que vous avez enregistrées. Les livraisons du jour restent visibles par tous dans Livraisons." />
       <div className="tabs" role="tablist">
         {TABS.map((t) => {
-          const n = orders.filter((o) => !isWalkIn(o) && t.statuses.includes(o.status)).length;
+          const n = orders.filter((o) => !isWalkIn(o) && scope.mine(o) && t.statuses.includes(o.status)).length;
           return <button key={t.key} role="tab" aria-selected={tab.key === t.key} onClick={() => navigate('/commandes/' + t.key)}>{t.label}{!['terminees', 'annulees'].includes(t.key) && n ? <span className="tab-count">{n}</span> : null}</button>;
         })}
       </div>
@@ -327,8 +331,9 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
   const [prod, setProd] = useState<Product | null>(initialProduct ?? null);
   const [qty, setQty] = useState<Record<string, string>>({});
   const [choice, setChoice] = useState<Record<string, string>>({});
+  const scope = useMyScope();
   const n = q.trim().toLowerCase();
-  const found = products.filter((p) => p.active !== false && (!n || `${p.code} ${p.name}`.toLowerCase().includes(n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
+  const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || `${p.code} ${p.name}`.toLowerCase().includes(n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
   const variants = prod ? productVariants(prod.id).filter((v) => v.active !== false) : [];
   const picked = variants.flatMap((v) => [
     ...(parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(qty[v.id])! }] : []),
@@ -339,6 +344,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
       footer={prod ? <><Button variant="ghost" onClick={() => { setProd(null); setQty({}); setChoice({}); }}>Autre article</Button><Button disabled={!picked.length} onClick={() => { onAdd(picked); onClose(); }}>Ajouter</Button></> : undefined}>
       {!prod ? (
         <div className="stack">
+          <ScopeBar scope={scope} />
           <div className="field"><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <ul className="list card" style={{ padding: 0 }}>
             {found.map((p) => {

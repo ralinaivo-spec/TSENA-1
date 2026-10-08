@@ -1,6 +1,8 @@
 // Vente sur place : écran de comptoir rapide (recherche, panier, encaissement, monnaie à rendre).
 import { useMemo, useState } from 'react';
-import { useCan } from '../lib/auth';
+import { useCan, useMe } from '../lib/auth';
+import { useMyScope } from '../lib/scope';
+import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
 import {
@@ -31,6 +33,10 @@ export function PosPage() {
   const [last, setLast] = useState<Order | null>(null);
   const [printFor, setPrintFor] = useState<Order | null>(null);
   const reserved = useMemo(() => reservedIndex(), [orders]);
+  const scope = useMyScope();
+  // Ventes du jour : chaque vendeur voit d'abord les siennes (l'admin voit tout).
+  const [allSales, setAllSales] = useState(can('reports.view'));
+  const me = useMe();
   const minQty = company.wholesaleMinQty ?? 3;
   const isGros = useWholesale({ lines, wholesale }, minQty);
   const priced = repriceLines(lines, isGros);
@@ -40,13 +46,13 @@ export function PosPage() {
 
   const n = q.trim().toLowerCase();
   const found = useMemo(() => products
-    .filter((p) => p.active !== false && (!n || `${p.code} ${p.name} ${productVariants(p.id).map((v) => v.sku).join(' ')}`.toLowerCase().includes(n)))
+    .filter((p) => p.active !== false && scope.product(p.id) && (!n || `${p.code} ${p.name} ${productVariants(p.id).map((v) => v.sku).join(' ')}`.toLowerCase().includes(n)))
     .map((p) => ({ p, avail: productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
     .sort((a, b) => Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
-    .slice(0, 48), [products, n, reserved]);
+    .slice(0, 48), [products, n, reserved, scope.on]);
 
   const today = todayYmd();
-  const todaySales = orders.filter((o) => isWalkIn(o) && o.createdAt.slice(0, 10) === today && o.status !== 'cancelled').sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const todaySales = orders.filter((o) => isWalkIn(o) && o.createdAt.slice(0, 10) === today && o.status !== 'cancelled' && (allSales || o.createdBy === me.id || (!o.createdBy && o.createdByName === me.fullName))).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const todayTotal = todaySales.reduce((s, o) => s + Math.max(0, keptTotal(o) - (o.discount || 0)), 0);
 
   function add(a: { variantId: string; qty: number }[]) {
@@ -67,7 +73,8 @@ export function PosPage() {
   if (!can('pos.sell')) return <Empty icon="lock" title="Accès réservé" />;
   return (
     <>
-      <PageHead title="Vente sur place" subtitle={`Aujourd’hui : ${todaySales.length} vente(s) · ${fmtAr(todayTotal)}`} />
+      <PageHead title="Vente sur place" subtitle={`${allSales ? 'Aujourd’hui' : 'Mes ventes aujourd’hui'} : ${todaySales.length} vente(s) · ${fmtAr(todayTotal)}`} />
+      <ScopeBar scope={scope} text={`Articles de vos pages : ${scope.names}`} />
       {last && (
         <div className="notice notice-ok"><Icon name="check" /><span style={{ flex: 1 }}><strong>Vente {last.number} enregistrée</strong> — {fmtAr(Math.max(0, keptTotal(last) - (last.discount || 0)))}. Le stock est mis à jour.</span><PrintButton label="Ticket" docs={[{ key: 'ticket', label: 'Ticket de caisse', build: () => ticketDoc(get<Order>('orders', last.id) ?? last, company) }]} /></div>
       )}
@@ -131,7 +138,8 @@ export function PosPage() {
       </div>
 
       <div className="card card-flush">
-        <div className="card-pad"><h2>Ventes du jour</h2></div>
+        <div className="card-pad row-between"><h2>{allSales ? 'Ventes du jour' : 'Mes ventes du jour'}</h2>
+          <div className="segmented" role="group" aria-label="Ventes"><button type="button" aria-pressed={!allSales} onClick={() => setAllSales(false)}>Mes ventes</button><button type="button" aria-pressed={allSales} onClick={() => setAllSales(true)}>Toutes</button></div></div>
         {todaySales.length === 0 ? <Empty icon="list" title="Aucune vente sur place aujourd’hui" /> : (
           <ul className="list">
             {todaySales.map((o) => (

@@ -1,4 +1,6 @@
 // Articles : liste, fiche article, variantes (couleur/taille), catégories, ajustements de stock.
+import { useMyScope } from '../lib/scope';
+import { ScopeBar } from '../ui/scope';
 import { useMemo, useRef, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
@@ -43,6 +45,7 @@ function ProductList() {
   const [creating, setCreating] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [limit, setLimit] = useState(60);
+  const scope = useMyScope();
 
   const list = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -54,6 +57,7 @@ function ProductList() {
     };
     return products
       .filter((p) => showArchived || p.active !== false)
+      .filter((p) => scope.product(p.id))
       .filter(inCat)
       .filter((p) => !n || `${p.code} ${p.name} ${productVariants(p.id).map((v) => v.sku).join(' ')}`.toLowerCase().includes(n))
       .map((p) => ({ p, stock: productStock(p.id), incoming: productIncoming(p.id) }))
@@ -65,7 +69,7 @@ function ProductList() {
         return true;
       })
       .sort((a, b) => a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }));
-  }, [products, q, cat, sf, showArchived]);
+  }, [products, q, cat, sf, showArchived, scope.on]);
 
   return (
     <>
@@ -75,6 +79,7 @@ function ProductList() {
           {can('catalog.edit') && <Button variant="ghost" icon="upload" onClick={() => navigate('/import')}>Importer</Button>}
           {can('catalog.edit') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvel article</Button>}
         </>} />
+      <ScopeBar scope={scope} />
       <div className="card stack">
         <div className="row">
           <div className="field" style={{ flex: '1 1 240px' }}>

@@ -14,6 +14,8 @@ export interface User extends BaseRecord {
   mustChangePassword?: boolean;
   secretQuestion?: string;
   secretAnswerHash?: string;
+  /** Pages (catégories principales) attribuées au vendeur : il voit d'abord ce qui les concerne. */
+  pageIds?: string[];
 }
 export interface Role extends BaseRecord {
   name: string;

@@ -489,3 +489,4 @@ a.btn { text-decoration: none; }
 .synth-table td, .synth-table th { font-size: 1rem; }
 .synth-table tr.synth-total td { font-weight: 800; font-size: 1.1rem; background: var(--brand-soft); }
 .synth-grid { display: grid; grid-template-columns: 1fr; }
+.scope-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--radius-m); background: var(--brand-soft); color: var(--ink); } .scope-bar > span { flex: 1; min-width: 180px; } .scope-bar svg { color: var(--brand); }
