@@ -21,12 +21,13 @@ export interface Company extends BaseRecord {
 }
 
 export const DEFAULT_COMPANY: Company = {
-  id: 'company', name: 'Ma boutique', brandColor: '#17695A', autoLockMinutes: 30, wholesaleMinQty: 3, internalRounding: 1,
+  id: 'company', name: 'Ma boutique', brandColor: '#5B3DB0', autoLockMinutes: 30, wholesaleMinQty: 3, internalRounding: 1,
   hours: { 1: { open: '08:00', close: '17:00' }, 2: { open: '08:00', close: '17:00' }, 3: { open: '08:00', close: '17:00' }, 4: { open: '08:00', close: '17:00' }, 5: { open: '08:00', close: '17:00' }, 6: { open: '08:00', close: '14:00' }, 0: null },
   ticketFooter: 'Misaotra tompoko ! Merci de votre visite.', createdAt: '2000-01-01T00:00:00.000Z', updatedAt: '2000-01-01T00:00:00.000Z',
 };
 
 export const BRAND_SWATCHES = [
+  { name: 'Lavande', hex: '#5B3DB0' },
   { name: 'Ravinala', hex: '#17695A' },
   { name: 'Océan', hex: '#1D5FA8' },
   { name: 'Indigo', hex: '#4B3FA6' },
@@ -75,12 +76,13 @@ export function useApplyAppearance() {
       root.style.setProperty('--brand-ink', luminance(brandUi) > 0.4 ? '#14201C' : '#FFFFFF');
       root.style.setProperty('--brand-soft', dark ? mix(brand, '#0F1517', 0.72) : mix(brand, '#ffffff', 0.88));
       // Thème « Lamba » : menu sombre teinté de la couleur de la société, reflet soyeux, dégradés de marque.
-      root.style.setProperty('--brand-deep', mix(brand, '#000000', dark ? 0.15 : 0.32));
-      root.style.setProperty('--brand-tint', dark ? mix(brand, '#0F1517', 0.82) : mix(brand, '#ffffff', 0.94));
-      root.style.setProperty('--nav-bg', mix(brand, '#081013', 0.80));
-      root.style.setProperty('--nav-bg-2', mix(brand, '#081013', 0.62));
-      root.style.setProperty('--nav-glow', mix(brand, '#ffffff', 0.25));
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mix(brand, '#081013', 0.80));
+      root.style.setProperty('--brand-deep', mix(brand, '#0E0822', 0.38));
+      root.style.setProperty('--brand-tint', dark ? mix(brand, '#15112A', 0.8) : mix(brand, '#ffffff', 0.92));
+      // Thème « Lavande » : menu dans un ton riche de la couleur de la société (violet par défaut).
+      root.style.setProperty('--nav-bg', mix(brand, '#0E0822', 0.38));
+      root.style.setProperty('--nav-bg-2', mix(brand, '#ffffff', 0.04));
+      root.style.setProperty('--nav-glow', mix(brand, '#ffffff', 0.35));
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', mix(brand, '#0E0822', 0.38));
     };
     apply();
     const mq = matchMedia('(prefers-color-scheme: dark)');
