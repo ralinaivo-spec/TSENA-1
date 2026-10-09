@@ -254,3 +254,12 @@ export function parseCategoryFile(cat: Category, sheets: Sheet[]): ImportRow[] {
 
 /** Article d'une page avec valeurs (utilisé pour l'affichage). */
 export const isAttrArticle = (p?: Product) => !!(p?.attrs && attrCategory(p.categoryId));
+
+/** Articles « frères » : même page, une seule variante différente (ex. les autres tailles du même modèle). */
+export function siblingsOf(p: Product): Product[] {
+  if (!p.attrs) return [];
+  const keys = Object.keys(p.attrs);
+  return all<Product>('products').filter((x) => x.id !== p.id && x.active !== false && x.categoryId === p.categoryId && x.attrs
+    && keys.length === Object.keys(x.attrs).length && keys.filter((k) => x.attrs![k] !== p.attrs![k]).length === 1)
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+}

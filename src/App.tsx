@@ -32,6 +32,7 @@ import { PosPage } from './pages/Pos';
 import { BoostsPage } from './pages/Boosts';
 import { DayCashPage } from './pages/DayCash';
 import { CategoriesPage } from './pages/Categories';
+import { MyDeliveriesPage } from './pages/MyDeliveries';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { path: '/', label: 'Accueil', icon: 'home', group: '', page: () => <DashboardPage />, mobile: true },
   { path: '/vente', label: 'Vente sur place', icon: 'store', perm: 'pos.sell', group: 'Ventes', page: () => <PosPage />, mobile: true },
   { path: '/commandes', label: 'Commandes clients', icon: 'list', perm: 'orders.create', group: 'Ventes', page: () => <OrdersPage />, mobile: true },
+  { path: '/mes-livraisons', label: 'Mes livraisons', icon: 'truck', perm: 'courier.self', group: 'Ventes', page: () => <MyDeliveriesPage />, mobile: true },
   { path: '/livraisons', label: 'Livraisons', icon: 'truck', perm: 'deliveries.manage', group: 'Ventes', page: () => <DeliveriesPage />, mobile: true },
   { path: '/caisse-du-jour', label: 'Caisse du jour', icon: 'wallet', perm: 'cashday.use', group: 'Ventes', page: () => <DayCashPage /> },
   { path: '/boosts', label: 'Boosts pub', icon: 'megaphone', perm: 'boosts.view', group: 'Ventes', page: () => <BoostsPage /> },
@@ -124,7 +126,7 @@ function Shell() {
   const company = useCompany();
   const route = useRoute();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => !n.perm || can(n.perm));
+  const items = NAV.filter((n) => (!n.perm || can(n.perm)) && (n.path !== '/mes-livraisons' || !!user?.courierId));
   const current = [...items].sort((a, b) => b.path.length - a.path.length).find((n) => n.path === '/' ? route === '/' : route.startsWith(n.path)) ?? items[0];
   useEffect(() => { setOpen(false); window.scrollTo(0, 0); }, [route]);
   // Menu ouvert sur téléphone : la page derrière ne défile plus, seul le menu défile.

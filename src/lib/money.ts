@@ -257,7 +257,7 @@ export function report(from: string, to: string): Report {
   const addSale = (o: Order, amount: number, cost: number, count: boolean) => {
     s.sales.amount += amount; s.cost += cost;
     if (o.internal) { s.sales.internalAmount += amount; if (count) s.sales.internalCount++; }
-    if (isWalkIn(o)) { s.sales.shopAmount += amount; if (count) s.sales.shopCount++; } else { s.sales.onlineAmount += amount; if (count) s.sales.onlineCount++; }
+    if (isWalkIn(o) || o.pickedUp) { s.sales.shopAmount += amount; if (count) s.sales.shopCount++; } else { s.sales.onlineAmount += amount; if (count) s.sales.onlineCount++; }
     if (count) s.sales.count++;
   };
   for (const o of all<Order>('orders')) {
@@ -270,7 +270,8 @@ export function report(from: string, to: string): Report {
     if (inR(o.dispatchedAt)) {
       const value = nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0);
       addSale(o, value, nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0), true);
-      if (o.status !== 'cancelled') { const d = deliveryNet(o); s.deliveries.push({ o, courierId: isPickupZone(o.zoneId) ? '' : o.courierId || '', value, ...d, settled: !!o.courierSettledAt }); }
+      if (o.pickedUp && o.status !== 'cancelled') s.walkIns.push(o);
+      else if (o.status !== 'cancelled') { const d = deliveryNet(o); s.deliveries.push({ o, courierId: isPickupZone(o.zoneId) ? '' : o.courierId || '', value, ...d, settled: !!o.courierSettledAt }); }
     }
     const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
     if (inR(back)) {

@@ -1,10 +1,10 @@
 // Vente sur place : écran de comptoir rapide (recherche, panier, encaissement, monnaie à rendre).
 import { useMemo, useState } from 'react';
 import { useCan, useMe, type User } from '../lib/auth';
-import { useMyScope } from '../lib/scope';
+import { rootOf, useMyScope } from '../lib/scope';
 import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
-import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, productText} from '../lib/catalog';
+import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, productText, attrSummary, findProductByCode, findVariantBySku, type Category} from '../lib/catalog';
 import {
   availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
   type Order, type OrderLine, type PayMethod,
@@ -23,6 +23,8 @@ export function PosPage() {
   const { products } = useCatalog();
   const orders = useTable<Order>('orders');
   const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
+  const cats = useTable<Category>('categories');
   const [lines, setLines] = useState<OrderLine[]>([]);
   const [wholesale, setWholesale] = useState<Order['wholesale']>('auto');
   const [discount, setDiscount] = useState('');
@@ -53,10 +55,20 @@ export function PosPage() {
 
   const n = q.trim().toLowerCase();
   const found = useMemo(() => products
-    .filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n)))
+    .filter((p) => p.active !== false && scope.product(p.id) && (!cat || rootOf(p.categoryId) === cat) && (!n || matchQuery(productText(p), n)))
     .map((p) => ({ p, avail: productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
     .sort((a, b) => Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
-    .slice(0, 48), [products, n, reserved, scope.on]);
+    .slice(0, 60), [products, n, reserved, scope.on, cat]);
+  const pages = cats.filter((c) => !c.parentId && products.some((p) => p.active !== false && rootOf(p.categoryId) === c.id)).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  /** Lecteur de code-barres ou saisie du code + Entrée : l'article est ajouté directement au panier. */
+  function onEnter() {
+    const code = q.trim().toUpperCase().replace(/\s+/g, '');
+    if (!code) return;
+    const byCode = findProductByCode(code);
+    const v = findVariantBySku(code) ?? (byCode ? productVariants(byCode.id).find((x) => x.active !== false) : undefined);
+    if (v) { add([{ variantId: v.id, qty: 1 }]); setQ(''); toast(`Ajouté : ${get<Product>('products', v.productId)?.name ?? code}`); return; }
+    if (found.length === 1) { pick(found[0].p); setQ(''); }
+  }
 
   const today = todayYmd();
   const todaySales = orders.filter((o) => isWalkIn(o) && o.createdAt.slice(0, 10) === today && o.status !== 'cancelled' && (allSales || o.createdBy === me.id || (!o.createdBy && o.createdByName === me.fullName))).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -88,14 +100,18 @@ export function PosPage() {
       )}
       <div className="pos-layout">
         <section className="pos-catalog card stack">
-          <div className="field"><input aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus /></div>
+          <div className="field"><input aria-label="Rechercher un article" placeholder="Rechercher ou scanner un code (Entrée pour ajouter)…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }} autoFocus /></div>
+          {pages.length > 1 && <div className="chips-scroll" role="group" aria-label="Pages">
+            <button type="button" className="chip" aria-pressed={!cat} onClick={() => setCat('')}>Toutes</button>
+            {pages.map((c) => <button key={c.id} type="button" className="chip" aria-pressed={cat === c.id} onClick={() => setCat(cat === c.id ? '' : c.id)}>{c.name}</button>)}
+          </div>}
           {found.length === 0 ? <Empty icon="search" title="Aucun article trouvé" /> : (
             <div className="pos-grid">
               {found.map(({ p, avail }) => (
                 <button key={p.id} className={`pos-tile ${avail <= 0 ? 'is-out' : ''}`} onClick={() => pick(p)}>
                   <Thumb src={p.photo} size={140} />
                   <span className="pos-tile-name">{p.name}</span>
-                  <span className="small muted">{p.code}</span>
+                  <span className="small muted pos-tile-sub">{p.attrs ? attrSummary(p, ', ') : p.code}</span>
                   <span className="pos-tile-foot"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span></span>
                 </button>
               ))}
@@ -103,7 +119,7 @@ export function PosPage() {
           )}
         </section>
 
-        <aside className="pos-cart card stack">
+        <aside className="pos-cart card stack" id="pos-cart">
           <div className="row-between"><h2>Panier</h2>{lines.length > 0 && <Button variant="quiet" onClick={reset}>Vider</Button>}</div>
           <div className="segmented" role="group" aria-label="Type de vente">
             <button type="button" aria-pressed={!internal} onClick={() => setInternal(false)}>Client</button>
@@ -121,7 +137,7 @@ export function PosPage() {
                   <li key={l.id} className="cart-line">
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong className="cart-name">{p?.name}</strong>
-                      <div className="small muted">{p?.code} · {variantLabel(v)}</div>
+                      <div className="small muted">{p?.attrs ? attrSummary(p, ', ') : `${p?.code} · ${variantLabel(v)}`}</div>
                       <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: internal ? 'wrap' : 'nowrap' }}>
                         <IconButton icon="x" label="Retirer un" onClick={() => setLine(l.id, { qty: l.qty - 1 })} />
                         <span className="num" style={{ minWidth: 24, textAlign: 'center', fontWeight: 700 }}>{l.qty}</span>
@@ -158,6 +174,9 @@ export function PosPage() {
         </aside>
       </div>
 
+      {priced.length > 0 && <button type="button" className="pos-mobile-bar" onClick={() => document.getElementById('pos-cart')?.scrollIntoView({ behavior: 'smooth' })}>
+        <span>Panier · {fmtNum(count)} article(s)</span><strong className="num">{fmtAr(total)}</strong><span>Encaisser ›</span>
+      </button>}
       <div className="card card-flush">
         <div className="card-pad row-between"><h2>{allSales ? 'Ventes du jour' : 'Mes ventes du jour'}</h2>
           <div className="segmented" role="group" aria-label="Ventes"><button type="button" aria-pressed={!allSales} onClick={() => setAllSales(false)}>Mes ventes</button><button type="button" aria-pressed={allSales} onClick={() => setAllSales(true)}>Toutes</button></div></div>

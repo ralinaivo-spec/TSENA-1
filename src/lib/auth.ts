@@ -16,6 +16,8 @@ export interface User extends BaseRecord {
   secretAnswerHash?: string;
   /** Pages (catégories principales) attribuées au vendeur : il voit d'abord ce qui les concerne. */
   pageIds?: string[];
+  /** Rôle Livreur : sa fiche livreur (colis, compte). */
+  courierId?: string;
 }
 export interface Role extends BaseRecord {
   name: string;

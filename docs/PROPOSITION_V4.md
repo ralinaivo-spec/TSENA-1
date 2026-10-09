@@ -228,7 +228,7 @@ Déjà en place :
 | Phase | Contenu | Pourquoi d'abord |
 |---|---|---|
 | **1** ✅ | Pages / catégories, variantes libres, articles, import Excel par catégorie (points 1-2) — **en ligne le 09/10/2026** | Indispensable avant de charger le stock |
-| **2** | Ventes : caisse sur place, livraison en 4 étapes, étiquette colis, retrait en boutique, retour livreur, livreurs-utilisateurs (point 3) | Cœur du travail quotidien |
+| **2** ✅ | Ventes : caisse sur place, livraison en 4 étapes, étiquette colis, retrait en boutique, retour livreur, livreurs-utilisateurs (point 3) — **en ligne le 09/10/2026** | Cœur du travail quotidien |
 | **3** | Dépenses et charges, notifications (points 4, 7) | Suivi de l'argent |
 | **4** | Clients, recherche, menus déroulants (points 5, 6, 10) | Confort de saisie |
 | **5** | Thème, tableau de bord, nouveau menu (Achats et réceptions, Import / Export), page d'installation, compatibilité (points 8, 9, 11, 13) | Présentation finale |

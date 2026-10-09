@@ -1,6 +1,7 @@
 // Moyens d'impression : Bluetooth, USB, port série (navigateurs Chrome/Edge), fenêtre d'impression
 // du système (tous les appareils) et image à partager (WhatsApp, enregistrer…).
 import { layout, type Paper, type PrintDoc, type Row } from './doc';
+import { qrMatrix, qrSvg } from '../qr';
 
 const nav = navigator as any;
 export const support = {
@@ -115,6 +116,7 @@ export function docHtml(doc: PrintDoc, paper: Paper, logo?: string): string {
   return layout(doc, cols).map((r: Row) => {
     if (r.logo) return logo ? `<div class="tk-logo"><img src="${logo}" alt=""></div>` : '';
     if (r.cut) return '<div class="tk-cut"></div>';
+    if (r.qr) return `<div class="tk-qr">${qrSvg(r.qr, 3)}</div>`;
     const cls = [r.bold && 'b', r.big && 'big'].filter(Boolean).join(' ');
     return `<div class="tk-row ${cls}">${esc(r.s) || '&nbsp;'}</div>`;
   }).join('');
@@ -123,7 +125,8 @@ export function docHtml(doc: PrintDoc, paper: Paper, logo?: string): string {
 /** Ouvre la fenêtre d'impression de l'appareil (AirPrint sur iPhone, imprimantes installées sur Windows/Mac…). */
 export function systemPrint(doc: PrintDoc, paper: Paper, logo?: string, copies = 1): Promise<void> {
   return new Promise((resolve) => {
-    const rows = layout(doc, paper === '58' ? 32 : 48).length;
+    const lay = layout(doc, paper === '58' ? 32 : 48);
+    const rows = lay.length + lay.filter((r) => r.qr).length * 7;
     const area = document.createElement('div');
     area.className = `print-area ticket paper-${paper}`;
     const one = `<div class="tk-page">${docHtml(doc, paper, logo)}</div>`;
@@ -162,7 +165,9 @@ export async function docImage(doc: PrintDoc, paper: Paper, logo?: string): Prom
   let logoImg: HTMLImageElement | null = null;
   if (logo && rows.some((r) => r.logo)) { logoImg = new Image(); logoImg.src = logo; try { await logoImg.decode(); } catch { logoImg = null; } }
   const logoH = logoImg ? Math.min(140, (logoImg.height * Math.min(width * 0.5, logoImg.width)) / logoImg.width) : 0;
-  const height = pad * 2 + rows.reduce((h, r) => h + (r.logo ? (logoImg ? logoH + 10 : 0) : r.cut ? 30 : r.big ? lineH * 2 : lineH), 0);
+  const qrPx = 5;
+  const qrH = (r: Row) => (qrMatrix(r.qr!).length + 8) * qrPx;
+  const height = pad * 2 + rows.reduce((h, r) => h + (r.qr ? qrH(r) : r.logo ? (logoImg ? logoH + 10 : 0) : r.cut ? 30 : r.big ? lineH * 2 : lineH), 0);
   const canvas = document.createElement('canvas');
   canvas.width = width * scale; canvas.height = height * scale;
   const ctx = canvas.getContext('2d')!;
@@ -174,6 +179,11 @@ export async function docImage(doc: PrintDoc, paper: Paper, logo?: string): Prom
     if (r.logo) {
       if (logoImg) { const w = (logoImg.width * logoH) / logoImg.height; ctx.drawImage(logoImg, (width - w) / 2, y, w, logoH); y += logoH + 10; }
       continue;
+    }
+    if (r.qr) {
+      const m = qrMatrix(r.qr), s = (m.length + 8) * qrPx, x0 = (width - s) / 2;
+      m.forEach((row, yy) => row.forEach((on, xx) => { if (on) ctx.fillRect(x0 + (xx + 4) * qrPx, y + (yy + 4) * qrPx, qrPx, qrPx); }));
+      y += s; continue;
     }
     if (r.cut) { ctx.setLineDash([6, 6]); ctx.strokeStyle = '#999'; ctx.beginPath(); ctx.moveTo(pad, y + 15); ctx.lineTo(width - pad, y + 15); ctx.stroke(); ctx.setLineDash([]); y += 30; continue; }
     const size = r.big ? 40 : 20;

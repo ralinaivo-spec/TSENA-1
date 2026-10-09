@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 4.0, mise à jour le 09/10/2026 — refonte v4, phase 1)
+# TSENA — Cahier des charges (version 4.1, mise à jour le 09/10/2026 — refonte v4, phases 1 et 2)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -125,6 +125,48 @@ Menu **Stock → Pages et variantes**.
 ---
 
 ## 7. Commandes en ligne (Facebook) et livraison
+
+### 7.A Refonte v4 — phase 2 *(09/10/2026)* — prime sur les points ci-dessous en cas de différence
+**Deux types de vente seulement : vente sur place et vente à livraison.**
+
+**Vente à livraison en 4 étapes** :
+1. **Enregistrée** (la commande saisie ; l’ancienne étape « À confirmer » est supprimée) ;
+2. **En attente de livraison** (bouton « Préparée — en attente de livraison ») ;
+3. **En livraison** (remise au livreur) ;
+4. **Retour livreur** → **Terminée** (livrée, livrée en partie ou refusée).
+
+Onglets des commandes : Enregistrées, En attente de livraison, En livraison, Terminées, Annulées.
+
+- **Étiquette du colis** (ticket **58 mm**) pendant la préparation :
+  - contenu : n° de commande, client, téléphone et lieu en gros, articles avec les **choix**, articles, remise, frais de livraison, paiements déjà reçus, **« À ENCAISSER »** (dont articles / dont frais), ou « RIEN À ENCAISSER — DÉJÀ PAYÉ », observations ;
+  - **QR code** qui ouvre la commande ;
+  - impression depuis la commande, ou toutes les étiquettes d’un coup (Livraisons → En attente de livraison, cochées ou toutes) ;
+  - QR natif sur imprimante ticket, image sur les autres imprimantes.
+- **Paiement avant le retour du livreur** (MVola, espèces en boutique) : « Paiement reçu » à toute étape ; il est affiché comme déjà payé et n’est pas demandé au livreur.
+- **Retrait en boutique** :
+  - **commande enregistrée ou en attente** : bouton « Retrait en boutique » → la livraison est **annulée** (pas de frais, pas de livreur) et la commande devient une **vente sur place** au moment du paiement ;
+  - **commande déjà chez le livreur** : au retour, « Le client vient chercher en boutique » → les articles reviennent en boutique, réservés pour le client, sans frais pour le client ni dédommagement pour le livreur ; elle devient une vente sur place quand le client paie.
+  - Dans les récapitulatifs, ces ventes comptent comme ventes sur place.
+- **Retour livreur** (Livraisons → Retour livreur), le compte avec le livreur en un seul écran :
+  - par colis : **Livrée / Refusée**, « En partie / choix… », « Client en boutique… » ;
+  - **frais de livraison modifiables** (client qui a payé moins) ; paiements déjà reçus affichés ;
+  - totaux séparés : **prix des articles encaissés**, **frais encaissés auprès des clients**, **total que le livreur a en main**, frais qui lui reviennent (dont frais déjà payés à la boutique), reste des fois précédentes ;
+  - **règlement des frais du livreur** :
+    - **retenus** sur l’argent versé ;
+    - **payés à part** (caisse ou Mobile Money, le livreur remet tout) ;
+    - **plus tard** (sur son compte, à payer un autre jour depuis Comptes livreurs → Versement) ;
+  - montant remis modifiable, compte de réception ; un colis avec un choix à préciser bloque seulement ce colis.
+- **Livreurs = utilisateurs** :
+  - rôle **« Livreur »** dans Utilisateurs, relié à une fiche livreur (existante ou créée automatiquement) ;
+  - avec son accès, il voit **seulement « Mes livraisons »** : ses colis en cours (adresse, téléphone, articles, montant à encaisser, articles et frais séparés), ce qu’il doit rendre, ses dernières livraisons et ses versements ;
+  - un livreur sans accès reste une simple fiche (Comptes livreurs).
+- **Choix de tailles avec les articles par variantes** : en ajoutant un article à une commande, les articles voisins (même page, une seule variante différente, ex. les autres âges du même modèle) sont proposés pour « Vendu » ou « En choix ».
+- **Caisse (vente sur place)** :
+  - filtre par page ;
+  - recherche dans le libellé des variantes ;
+  - **code ou code-barres + Entrée = ajout direct** au panier (lecteur de code-barres) ;
+  - tuiles avec les valeurs des variantes ;
+  - sur téléphone, barre « Panier · total · Encaisser » toujours visible.
 
 ### 7.0 Saisie (validé avec le gérant, reprend le cahier des vendeurs)
 - **Contact du client : obligatoire.** Nom : facultatif. La fiche client est créée ou complétée automatiquement.

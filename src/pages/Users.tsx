@@ -8,6 +8,8 @@ import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordFie
 import { Icon } from '../ui/icons';
 import { pageNames, userPages } from '../lib/scope';
 import type { Category } from '../lib/catalog';
+import type { Courier } from '../lib/orders';
+import { COURIER_ROLE } from '../lib/permissions';
 
 /** Mot de passe provisoire facile à dicter : 3 lettres + 4 chiffres. */
 function tempPassword() {
@@ -119,6 +121,10 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
   const [email, setEmail] = useState(user?.email ?? '');
   const [active, setActive] = useState(user?.active ?? true);
   const [pageIds, setPageIds] = useState<string[]>(user?.pageIds ?? []);
+  const couriers = useTable<Courier>('couriers');
+  const isCourier = roleId === COURIER_ROLE;
+  const freeCouriers = couriers.filter((c) => c.id === user?.courierId || !users.some((u) => u.courierId === c.id));
+  const [courierId, setCourierId] = useState(user?.courierId ?? '__new');
   const pages = useTable<Category>('categories').filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
   // Mot de passe : visible et modifiable uniquement par le super-admin et le gérant.
   const canSetPwd = me.roleId === SUPERADMIN_ROLE || me.roleId === ADMIN_ROLE;
@@ -142,7 +148,12 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
     if (canSetPwd && pwd && pwd !== pwd.trim()) return setError('Le mot de passe ne doit pas commencer ni finir par un espace.');
     setBusy(true);
     try {
-      const data = { fullName: fullName.trim(), username: uname, roleId, phone: phone.trim(), email: email.trim(), active, pageIds };
+      let linked: string | undefined = undefined;
+      if (isCourier) {
+        if (courierId === '__new' || !couriers.some((c) => c.id === courierId)) { const [c] = await save('couriers', { name: fullName.trim(), phone: phone.trim() || undefined, active: true }); linked = c.id; await audit('Livreur ajouté', `${fullName.trim()} (utilisateur)`); }
+        else linked = courierId;
+      }
+      const data = { fullName: fullName.trim(), username: uname, roleId, phone: phone.trim(), email: email.trim(), active, pageIds: isCourier ? [] : pageIds, courierId: linked ?? null as unknown as undefined };
       if (user) {
         await save('users', { id: user.id, ...data });
         if (canSetPwd && pwd) {
@@ -170,7 +181,12 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
         <SelectField label="Rôle" value={roleId} onChange={setRoleId} options={roleOptions} hint={roles.find((r) => r.id === roleId)?.description} />
         <TextField label="Téléphone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
         <TextField label="E-mail (facultatif)" value={email} onChange={setEmail} type="email" autoCapitalize="none" />
-        <div className="card stack-s" style={{ background: 'var(--surface-2)' }}>
+        {isCourier && (
+          <div className="card stack-s" style={{ background: 'var(--surface-2)' }}>
+            <SelectField label="Fiche livreur" value={courierId} onChange={setCourierId} options={[{ value: '__new', label: '+ Créer sa fiche (même nom et téléphone)' }, ...freeCouriers.map((c) => ({ value: c.id, label: c.name }))]} hint="Le livreur verra seulement ses colis et son compte. Ses livraisons et ses versements sont ceux de cette fiche." />
+          </div>
+        )}
+        {!isCourier && <div className="card stack-s" style={{ background: 'var(--surface-2)' }}>
           <strong>Pages attribuées (catégories)</strong>
           <p className="small muted">Le vendeur verra d’abord le stock, les articles, ses commandes et ses clients de ces pages. Les livraisons restent visibles par tous. Ne cochez rien pour qu’il voie tout.</p>
           {pages.length === 0 ? <p className="small muted">Créez d’abord les catégories (une par page) dans Articles.</p> : (
@@ -178,7 +194,7 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
               {pages.map((c) => <button key={c.id} type="button" className="chip" aria-pressed={pageIds.includes(c.id)} onClick={() => setPageIds(pageIds.includes(c.id) ? pageIds.filter((x) => x !== c.id) : [...pageIds, c.id])}>{c.name}</button>)}
             </div>
           )}
-        </div>
+        </div>}
         {user && !isSelf && !isSuper && <Toggle checked={active} onChange={setActive} label="Compte actif (décochez pour bloquer l'accès)" />}
         {canSetPwd ? (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>

@@ -17,6 +17,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { group: 'Livraison', key: 'orders.dispatch', label: 'Assigner les commandes aux livreurs' },
   { group: 'Livraison', key: 'deliveries.manage', label: 'Enregistrer le retour des livreurs (livré, refusé, choix rendus, argent rapporté)' },
   { group: 'Livraison', key: 'couriers.view', label: 'Consulter le compte des livreurs (frais gagnés, argent à rendre)' },
+  { group: 'Livraison', key: 'courier.self', label: 'Livreur : voir seulement ses colis et son compte' },
   { group: 'Livraison', key: 'couriers.manage', label: 'Créer et modifier les fiches livreurs' },
   { group: 'Argent', key: 'treasury.view', label: 'Voir la trésorerie et les soldes' },
   { group: 'Argent', key: 'cashday.use', label: 'Caisse du jour : saisir les dépenses de la caisse commune et envoyer le récapitulatif global par WhatsApp' },
@@ -40,11 +41,13 @@ const not = (...ex: string[]) => ALL.filter((k) => !ex.includes(k));
 export interface RoleSeed { id: string; name: string; description: string; permissions: string[]; locked?: boolean; system?: boolean }
 
 /** Rôles de départ (identifiants fixes pour être identiques sur tous les appareils). */
+export const COURIER_ROLE = 'role-courier';
 export const DEFAULT_ROLES: RoleSeed[] = [
   { id: 'role-superadmin', name: 'Super-admin', description: 'Compte technique de secours : mots de passe, restauration, réinitialisation.', permissions: ALL, locked: true, system: true },
-  { id: 'role-admin', name: 'Admin / Gérant', description: "Gère toute l'activité, les utilisateurs et leurs accès.", permissions: not('system.admin'), system: true },
+  { id: 'role-admin', name: 'Admin / Gérant', description: "Gère toute l'activité, les utilisateurs et leurs accès.", permissions: not('system.admin', 'courier.self'), system: true },
   { id: 'role-owner', name: 'Propriétaire', description: 'Consulte les tableaux de bord et les rapports, sans rien modifier.', permissions: ['dashboard.view', 'costs.view', 'catalog.view', 'treasury.view', 'reports.view', 'audit.view', 'boosts.view'], system: true },
   { id: 'role-seller', name: 'Vendeur', description: 'Répond aux clients, crée les commandes, prépare, vend en boutique et gère les livraisons des livreurs.', permissions: ['dashboard.view', 'catalog.view', 'orders.create', 'orders.prepare', 'orders.dispatch', 'deliveries.manage', 'couriers.view', 'pos.sell', 'returns.manage', 'boosts.enter', 'boosts.view', 'cashday.use'], system: true },
+  { id: 'role-courier', name: 'Livreur', description: 'Voit seulement ses colis à livrer (adresse, téléphone, montant à encaisser) et son compte : argent à rendre, frais gagnés.', permissions: ['courier.self'], system: true },
   { id: 'role-stock', name: 'Magasinier', description: 'Réceptionne la marchandise et fait les inventaires.', permissions: ['dashboard.view', 'catalog.view', 'purchases.receive', 'stock.adjust'], system: true },
 ];
 

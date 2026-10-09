@@ -14,6 +14,7 @@ export type Block =
   | { k: 'pair'; l: string; r: string; bold?: boolean; big?: boolean }
   | { k: 'line'; ch?: '-' | '=' }
   | { k: 'logo' }
+  | { k: 'qr'; data: string }
   | { k: 'feed'; n?: number }
   | { k: 'cut' };
 
@@ -43,13 +44,14 @@ export function wrap(s: string, width: number): string[] {
   return out;
 }
 
-export interface Row { s: string; bold?: boolean; big?: boolean; logo?: boolean; cut?: boolean }
+export interface Row { s: string; bold?: boolean; big?: boolean; logo?: boolean; cut?: boolean; qr?: string }
 
 /** Transforme les blocs en lignes de texte de largeur fixe (utilisé pour l'aperçu, l'image et l'imprimante). */
 export function layout(doc: PrintDoc, cols: number): Row[] {
   const rows: Row[] = [];
   for (const b of doc.blocks) {
     if (b.k === 'logo') rows.push({ s: '', logo: true });
+    else if (b.k === 'qr') rows.push({ s: '', qr: b.data });
     else if (b.k === 'cut') rows.push({ s: '', cut: true });
     else if (b.k === 'feed') for (let i = 0; i < (b.n ?? 1); i++) rows.push({ s: '' });
     else if (b.k === 'line') rows.push({ s: (b.ch ?? '-').repeat(cols) });
@@ -204,6 +206,44 @@ export function deliveryNoteDoc(o: Order, c: Company): PrintDoc {
   b.push(T('Signature client :'));
   b.push({ k: 'feed', n: 3 });
   return { title: `Bon de livraison ${o.number}`, blocks: b };
+}
+
+// ---------- Étiquette du colis (ticket 58 mm collé sur le colis pendant la préparation) ----------
+export const orderUrl = (id: string) => (typeof location !== 'undefined' ? `${location.origin}${location.pathname}#/commandes/${id}` : id);
+export function parcelLabelDoc(o: Order, c: Company): PrintDoc {
+  const zone = get<Zone>('zones', o.zoneId || '');
+  const courier = get<Courier>('couriers', o.courierId || '');
+  const x = courierSplit(o);
+  const rest = Math.max(0, remaining(o));
+  const b: Block[] = [T(c.name, { align: 'center', bold: true }), L('=')];
+  b.push(T(o.number, { align: 'center', bold: true, big: true }));
+  b.push(L());
+  b.push(T(o.name || 'Client', { bold: true, big: true }));
+  if (o.phone) b.push(T(fmtPhone(o.phone), { bold: true, big: true }));
+  b.push(T(`${zone?.name || ''}${o.place ? ' - ' + o.place : ''}`, { bold: true }));
+  if (o.wantedDate) b.push(T(`Livraison souhaitée : ${new Date(o.wantedDate + 'T12:00:00').toLocaleDateString('fr-FR')}`));
+  if (courier) b.push(T(`Livreur : ${courier.name}`));
+  b.push(L());
+  for (const l of o.lines) b.push(T(`${fmtNum(l.qty)} x ${itemName(l.variantId)}${l.isChoice ? ' (CHOIX)' : ''}`));
+  if (o.lines.some((l) => l.isChoice)) b.push(T('CHOIX : le client paie seulement ce qu\u2019il garde.'));
+  b.push(L());
+  const items = sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  b.push(P('Articles', ar(items)));
+  if (o.discount) b.push(P('Remise', '- ' + ar(o.discount)));
+  if (o.credit) b.push(P('Articles repris', '- ' + ar(o.credit)));
+  b.push(P('Frais de livraison', ar(o.deliveryFee || 0)));
+  const pays = o.payments || [];
+  for (const p of pays) b.push(P(`Déjà payé ${PAY_METHODS[p.method]}`, '- ' + ar(p.amount)));
+  if (rest > 0) {
+    b.push(P('À ENCAISSER', ar(rest), { bold: true, big: true }));
+    b.push(P('  dont articles', ar(x.toCollect)));
+    if (x.feeKept) b.push(P('  dont frais livraison', ar(x.feeKept)));
+  } else b.push(T('RIEN À ENCAISSER - DÉJÀ PAYÉ', { align: 'center', bold: true }));
+  if (o.notes) { b.push(L()); b.push(T(`Obs. : ${o.notes}`)); }
+  b.push({ k: 'qr', data: orderUrl(o.id) });
+  b.push(T(`Scanner pour ouvrir ${o.number}`, { align: 'center' }));
+  b.push({ k: 'feed', n: 2 });
+  return { title: `Étiquette ${o.number}`, blocks: b };
 }
 
 // ---------- Ticket des livraisons d'un livreur (feuille de route) ----------

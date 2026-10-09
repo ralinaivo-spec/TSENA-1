@@ -74,12 +74,14 @@ export interface Order extends BaseRecord {
   internal?: boolean;
   employeeId?: string;
   employeeName?: string;
+  /** Prévue en livraison, finalement retirée par le client en boutique : comptée comme vente sur place. */
+  pickedUp?: boolean;
 }
 
 export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: 'neutral' | 'brand' | 'warn' | 'ok' | 'danger' }> = {
-  new: { label: 'À confirmer', tone: 'warn' },
-  confirmed: { label: 'À préparer', tone: 'brand' },
-  ready: { label: 'Prête', tone: 'brand' },
+  new: { label: 'Enregistrée', tone: 'brand' },
+  confirmed: { label: 'Enregistrée', tone: 'brand' },
+  ready: { label: 'En attente de livraison', tone: 'warn' },
   out: { label: 'En livraison', tone: 'warn' },
   delivered: { label: 'Livrée', tone: 'ok' },
   partial: { label: 'Livrée en partie', tone: 'ok' },
@@ -277,7 +279,13 @@ export async function completeAtShop(o: Order, pay?: { amount: number; method: P
 /** Retrait en boutique : le client repart avec ses articles et paie sur place. */
 export async function handOverAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
   assertOpenNow('Retrait en boutique');
+  if (o.status === 'out') throw new Error('Le colis est chez le livreur : enregistrez d’abord son retour (« Le client vient chercher en boutique »).');
   const at = bizNow();
+  // Une commande prévue en livraison devient une vente sur place : plus de livreur ni de frais de livraison.
+  if (!isPickupZone(o.zoneId) || o.deliveryFee || o.courierId) {
+    o = { ...o, zoneId: 'zone-retrait', deliveryFee: 0, courierId: undefined };
+    await save('orders', { id: o.id, zoneId: 'zone-retrait', deliveryFee: 0, courierId: null as unknown as undefined, pickedUp: true, events: [...(o.events || []), { at, text: 'Livraison annulée : le client récupère en boutique (vente sur place)', user: currentUser()?.fullName }] });
+  }
   await addMoves(o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — retiré en boutique`, at })));
   const u = currentUser();
   const pays = pay?.amount ? [{ id: newId(), at, amount: pay.amount, method: pay.method, ref: pay.ref, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
@@ -285,6 +293,25 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
     await addMoves(o.returnLines.map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })));
   }
   await setStatus(o, 'delivered', { lines: o.lines.map((l) => ({ ...l, qtyKept: l.isChoice ? 0 : l.qty, qtyReturned: 0 })), feeCharged: 0, payments: [...(o.payments || []), ...pays], returnedAt: at, dispatchedAt: at });
+}
+
+/**
+ * Colis déjà parti avec le livreur, mais le client vient finalement le chercher en boutique : la livraison est
+ * annulée (pas de frais pour le client, pas de dédommagement pour le livreur). Les articles reviennent en boutique,
+ * réservés pour le client ; la commande attend le client et deviendra une vente sur place quand il paiera.
+ */
+export async function cancelDeliveryToShop(o: Order) {
+  assertOpenNow('Retour du livreur');
+  if (o.status !== 'out') throw new Error('La commande n’est pas en livraison.');
+  const at = bizNow();
+  await addMoves(o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, type: 'delivery_return' as const, refType: 'order', refId: o.id, reason: `${o.number} — livraison annulée, retrait en boutique`, at })));
+  const courier = get<Courier>('couriers', o.courierId || '')?.name;
+  await save('orders', {
+    id: o.id, status: 'ready', zoneId: 'zone-retrait', deliveryFee: 0, feeCharged: 0, courierId: null as unknown as undefined, dispatchedAt: null as unknown as undefined, pickedUp: true,
+    statusDates: { ...(o.statusDates || {}), ready: at },
+    events: [...(o.events || []), { at, text: `Livraison annulée${courier ? ` (rapportée par ${courier})` : ''} : le client vient chercher en boutique`, user: currentUser()?.fullName }],
+  });
+  await audit('Commande', `${o.number} : livraison annulée, retrait en boutique`, 'orders', o.id);
 }
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */

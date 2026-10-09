@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, productText} from '../lib/catalog';
 import {
-  addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone,
@@ -16,13 +16,13 @@ import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
-import { deliveryNoteDoc, ticketDoc } from '../lib/print';
+import { siblingsOf } from '../lib/attrs';
+import { deliveryNoteDoc, parcelLabelDoc, ticketDoc } from '../lib/print';
 import { PrintButton, type DocChoice } from '../ui/print';
 
 const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
-  { key: 'confirmer', label: 'À confirmer', statuses: ['new'] },
-  { key: 'preparer', label: 'À préparer', statuses: ['confirmed'] },
-  { key: 'pretes', label: 'Prêtes', statuses: ['ready'] },
+  { key: 'enregistrees', label: 'Enregistrées', statuses: ['new', 'confirmed'] },
+  { key: 'attente', label: 'En attente de livraison', statuses: ['ready'] },
   { key: 'livraison', label: 'En livraison', statuses: ['out'] },
   { key: 'terminees', label: 'Terminées', statuses: ['delivered', 'partial', 'refused'] },
   { key: 'annulees', label: 'Annulées', statuses: ['cancelled'] },
@@ -30,7 +30,8 @@ const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
 
 export function OrdersPage() {
   const route = useRoute();
-  const seg = route.split('/')[2]?.split('?')[0];
+  const raw = route.split('/')[2]?.split('?')[0];
+  const seg = raw && ({ confirmer: 'enregistrees', preparer: 'enregistrees', pretes: 'attente' } as Record<string, string>)[raw] || raw;
   if (seg && !TABS.some((t) => t.key === seg)) return <OrderDetail id={seg} />;
   return <OrderList tabKey={seg} />;
 }
@@ -80,7 +81,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
         {done && !q && <PeriodPicker value={period} onChange={setPeriod} />}
       </div>
       <div className="card card-flush">
-        {list.length === 0 ? <Empty icon="list" title={q ? 'Aucune commande trouvée' : 'Aucune commande ici'}>{tab.key === 'confirmer' && can('orders.create') && !q && <Button icon="plus" onClick={() => setCreating(true)}>Saisir une commande</Button>}</Empty> : (
+        {list.length === 0 ? <Empty icon="list" title={q ? 'Aucune commande trouvée' : 'Aucune commande ici'}>{tab.key === 'enregistrees' && can('orders.create') && !q && <Button icon="plus" onClick={() => setCreating(true)}>Saisir une commande</Button>}</Empty> : (
           <ul className="list">{list.map((o) => <OrderRow key={o.id} o={o} />)}</ul>
         )}
       </div>
@@ -212,7 +213,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
         const payments = parseNum(prepay) ? [{ id: newId(), at: now.toISOString(), amount: parseNum(prepay)!, method: prepayMethod, ref: prepayRef.trim() || undefined, receivedBy: 'shop' as const, userName: u?.fullName }] : [];
         const [o] = await save('orders', {
           ...data, number: nextNumber(exchangeOf ? 'ECH' : 'C', 'orders'), kind: exchangeOf ? 'exchange' : 'order', parentId: exchangeOf?.parent.id,
-          returnLines: exchangeOf?.returnLines, credit: draft.credit || undefined, payments, status: 'new', statusDates: { new: now.toISOString() },
+          returnLines: exchangeOf?.returnLines, credit: draft.credit || undefined, payments, status: 'confirmed', statusDates: { confirmed: now.toISOString() },
           outsideHours: isOutsideHours(now, company), createdBy: u?.id, createdByName: u?.fullName,
         });
         await audit(exchangeOf ? 'Échange créé' : 'Commande créée', `${(o as Order).number} — ${fmtPhone(p)} — ${fmtAr(total)}`, 'orders', o.id);
@@ -337,7 +338,9 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
   const scope = useMyScope();
   const n = q.trim().toLowerCase();
   const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
-  const variants = prod ? productVariants(prod.id).filter((v) => v.active !== false) : [];
+  const family = prod?.attrs ? [prod, ...siblingsOf(prod)] : prod ? [prod] : [];
+  const variants = family.flatMap((p) => productVariants(p.id).filter((v) => v.active !== false));
+  const cellLabel = (v: Variant) => { const p = get<Product>('products', v.productId); return p?.attrs ? (p.id === prod?.id ? `${p.name} (choisi)` : p.name) : variantLabel(v); };
   const picked = variants.flatMap((v) => [
     ...(parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(qty[v.id])! }] : []),
     ...(parseNum(choice[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(choice[v.id])!, isChoice: true }] : []),
@@ -366,6 +369,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
       ) : (
         <div className="stack">
           <div className="row" style={{ gap: 12 }}><Thumb src={prod.photo} size={120} zoom alt={prod.name} /><div><strong>{prod.code}</strong> {prod.name}<p className="small muted">{fmtAr(prod.priceRetail)}{prod.priceWholesale ? ` · gros ${fmtAr(prod.priceWholesale)}` : ''}</p></div></div>
+          {family.length > 1 && <p className="small muted">Les articles voisins (une seule variante différente, ex. les autres tailles) sont proposés pour envoyer des choix.</p>}
           {!noChoice && <p className="small muted">« Vendu » : ce que le client achète. « En choix » : les tailles ou couleurs envoyées en plus pour qu’il choisisse sur place.</p>}
           <div className="variant-grid">
             {variants.map((v) => {
@@ -373,7 +377,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
               return (
                 <div key={v.id} className={`variant-cell ${a <= 0 ? 'is-out' : ''}`}>
                   {variants.some((x) => x.photo) && <Thumb src={photoOf(v)} size={84} zoom alt={`${prod.code} ${variantLabel(v)}`} />}
-                  <span className="small"><strong>{variantLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
+                  <span className="small"><strong>{cellLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
                   <label className="small">{noChoice ? 'Quantité' : 'Vendu'}<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
                   {!noChoice && <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>}
                 </div>
@@ -392,6 +396,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
 function printDocs(o: Order, company: ReturnType<typeof useCompany>): DocChoice[] {
   const d: DocChoice[] = [{ key: 'ticket', label: isWalkIn(o) ? 'Ticket de caisse' : 'Ticket client', build: () => ticketDoc(o, company) }];
   if (!isWalkIn(o) && !isPickupZone(o.zoneId)) d.unshift({ key: 'bon', label: 'Bon de livraison', build: () => deliveryNoteDoc(o, company) });
+  if (!isWalkIn(o) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status)) d.unshift({ key: 'etiquette', label: 'Étiquette du colis (58 mm)', build: () => parcelLabelDoc(o, company) });
   return d;
 }
 
@@ -442,11 +447,10 @@ function OrderDetail({ id }: { id: string }) {
         {hasPendingChoice(o) && <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}><strong>Choix du client à préciser</strong> : {choiceQty(o)} pièce(s) sont parties en choix. Dès que le livreur revient, touchez « Préciser le choix du client » et indiquez ce que le client a gardé. Tant que ce n’est pas fait, le versement du livreur pour cette livraison est bloqué.</span></div>}
 
         <div className="action-bar">
-          {o.status === 'new' && can('orders.prepare') && <Button icon="check" onClick={act(async () => { await confirmOrder(o); }, 'Commande confirmée')}>Confirmer (client joint)</Button>}
-          {o.status === 'confirmed' && can('orders.prepare') && <Button icon="package" onClick={act(async () => { await markReady(o); }, 'Commande prête')}>Commande préparée</Button>}
-          {o.status === 'ready' && !isPickupZone(o.zoneId) && can('orders.dispatch') && <Button icon="truck" onClick={() => setModal('dispatch')}>Remettre au livreur</Button>}
-          {(o.status === 'ready' || (isWalkIn(o) && ['new', 'confirmed'].includes(o.status))) && isPickupZone(o.zoneId) && can('orders.create') && <Button icon="store" onClick={() => setModal('pickup')}>Remis au client en boutique</Button>}
-          {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Remise en préparation')}>Revenir à « à préparer »</Button>}
+          {['new', 'confirmed'].includes(o.status) && !isWalkIn(o) && can('orders.prepare') && <Button icon="package" onClick={act(async () => { await markReady(o); }, 'Commande préparée : en attente de livraison')}>{isPickupZone(o.zoneId) ? 'Préparée — le client vient la chercher' : 'Préparée — en attente de livraison'}</Button>}
+          {o.status === 'ready' && !isPickupZone(o.zoneId) && can('orders.dispatch') && <Button icon="truck" onClick={() => setModal('dispatch')}>Remettre au livreur (en livraison)</Button>}
+          {['new', 'confirmed', 'ready'].includes(o.status) && can('orders.create') && <Button variant={isPickupZone(o.zoneId) ? 'primary' : 'ghost'} icon="store" onClick={() => setModal('pickup')}>{isPickupZone(o.zoneId) ? 'Remise au client en boutique' : 'Retrait en boutique (le client vient la chercher)'}</Button>}
+          {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Commande revenue à « enregistrée »')}>Revenir à « enregistrée »</Button>}
           {o.status === 'out' && can('deliveries.manage') && <Button icon="inbox" onClick={() => setModal('return')}>{hasPendingChoice(o) ? 'Préciser le choix du client' : 'Enregistrer le retour du livreur'}</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
           {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
@@ -538,13 +542,13 @@ function OrderDetail({ id }: { id: string }) {
 export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
   const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false);
   const zoneIds = new Set(orders.map((o) => o.zoneId));
-  const preset = orders.every((o) => o.courierId && o.courierId === orders[0].courierId) ? orders[0].courierId : undefined;
+  const preset = orders.length && orders.every((o) => o.courierId && o.courierId === orders[0].courierId) ? orders[0].courierId : undefined;
   const suggested = couriers.find((c) => c.id === preset) ?? couriers.find((c) => c.zoneIds?.some((z) => zoneIds.has(z)));
   const [courierId, setCourierId] = useState(suggested?.id ?? couriers[0]?.id ?? '');
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
   return (
-    <Modal title={orders.length > 1 ? `Remettre ${orders.length} commandes au livreur` : `Remettre ${orders[0].number} au livreur`} onClose={onClose}
+    <Modal title={orders.length > 1 ? `Remettre ${orders.length} commandes au livreur` : `Remettre ${orders[0]?.number ?? ''} au livreur`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!courierId || (courierId === '__new' && !newName.trim())} onClick={async () => {
         setBusy(true);
         let cid = courierId;
@@ -577,6 +581,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const [ref, setRef] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [toShop, setToShop] = useState(false);
   const amountVal = amount == null ? toCollect : parseNum(amount) ?? 0;
   return (
     <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
@@ -590,7 +595,10 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         <div className="row">
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>{hasChoice ? 'Tout livré, choix tous rendus' : 'Tout livré'}</Button>
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, '0'])))}>Tout refusé</Button>
+          {o.status === 'out' && <Button variant="ghost" icon="store" onClick={() => setToShop(true)}>Le client vient chercher en boutique</Button>}
         </div>
+        {toShop && <Confirm title="Livraison annulée : retrait en boutique" confirmLabel="Annuler la livraison" message={<div className="stack-s"><p>Le livreur rapporte le colis : les articles reviennent en boutique, <strong>réservés pour ce client</strong>.</p><p>Pas de frais de livraison pour le client, pas de dédommagement pour le livreur. Quand le client passera, ouvrez la commande et touchez « Remise au client en boutique » : elle sera comptée comme <strong>vente sur place</strong>.</p></div>}
+          onClose={() => setToShop(false)} onConfirm={async () => { await cancelDeliveryToShop(o); toast('Livraison annulée : la commande attend le client en boutique'); onClose(); }} />}
         <div className="table-wrap">
           <table className="table">
             <thead><tr><th>Article</th><th className="t-num">Parti</th><th style={{ width: 110 }}>Gardé par le client</th><th className="t-num">Revient en stock</th></tr></thead>
@@ -723,20 +731,21 @@ function ShopExchangeModal({ order: o, onClose }: { order: Order; onClose: () =>
 }
 
 function PickupModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const rest = Math.max(0, remaining(o));
+  const converting = !isPickupZone(o.zoneId) || !!o.deliveryFee || !!o.courierId;
+  const rest = Math.max(0, remaining(o) - (converting ? o.deliveryFee || 0 : 0));
   const [amount, setAmount] = useState(String(rest));
   const [method, setMethod] = useState<PayMethod>('cash');
   const [ref, setRef] = useState('');
   const [busy, setBusy] = useState(false);
   return (
-    <Modal title={`Remis au client — ${o.number}`} onClose={onClose}
+    <Modal title={`Retrait en boutique — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={async () => {
         setBusy(true);
         try { await handOverAtShop(o, parseNum(amount) ? { amount: parseNum(amount)!, method, ref: ref.trim() || undefined } : undefined); } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast('Commande remise au client'); setBusy(false); onClose();
       }}>Valider</Button></>}>
       <div className="stack">
-        <p>Le client est venu chercher sa commande en boutique. Les articles sortent du stock, sans frais de livraison.</p>
+        <p>Le client est venu chercher sa commande en boutique : elle devient une <strong>vente sur place</strong>. Les articles sortent du stock{converting ? ', la livraison est annulée (pas de frais de livraison, pas de livreur)' : ''}.</p>
         <TextField label="Montant encaissé (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={`Reste à payer : ${fmtAr(rest)}`} />
         <SelectField label="Moyen de paiement" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}

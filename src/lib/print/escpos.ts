@@ -71,6 +71,18 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   let bold = false, big = false;
   for (const r of rows) {
     if (r.logo) { if (logo.length) one.push(ESC, 0x61, 1, ...logo, ESC, 0x61, 0); continue; }
+    if (r.qr) {
+      const data = [...new TextEncoder().encode(r.qr)];
+      const len = data.length + 3;
+      one.push(ESC, 0x61, 1);
+      one.push(GS, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00); // modèle 2
+      one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x43, 6);          // taille des points
+      one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x31);       // correction M
+      one.push(GS, 0x28, 0x6b, len & 0xff, len >> 8, 0x31, 0x50, 0x30, ...data);
+      one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30, 0x0a); // impression
+      one.push(ESC, 0x61, 0);
+      continue;
+    }
     if (r.cut) { one.push(ESC, 0x64, 4); if (o.cut) one.push(GS, 0x56, 0x42, 0x00); continue; }
     if (!!r.bold !== bold) { bold = !!r.bold; one.push(ESC, 0x45, bold ? 1 : 0); }
     if (!!r.big !== big) { big = !!r.big; one.push(GS, 0x21, big ? 0x11 : 0x00); }

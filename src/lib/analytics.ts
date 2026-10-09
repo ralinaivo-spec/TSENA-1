@@ -30,7 +30,7 @@ export function salesLedger(from?: string, to?: string): SaleLine[] {
     const p = v && get<Product>('products', v.productId);
     const d = new Date(at);
     out.push({
-      at, day: dayOf(at), hour: d.getHours(), kind, order: o, channel: isWalkIn(o) ? 'shop' : 'online', variantId, productId: v?.productId ?? '', categoryId: p?.categoryId,
+      at, day: dayOf(at), hour: d.getHours(), kind, order: o, channel: isWalkIn(o) || o.pickedUp ? 'shop' : 'online', variantId, productId: v?.productId ?? '', categoryId: p?.categoryId,
       qty, amount, cost: qty * costOf(variantId), userName: o.createdByName, courierId: isPickupZone(o.zoneId) ? undefined : o.courierId, zoneId: o.zoneId, customerId: o.customerId,
     });
   };

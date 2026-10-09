@@ -8,15 +8,17 @@ import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
+import { CourierReturn } from './CourierReturn';
 import { useCompany } from '../lib/settings';
-import { deliveryNoteDoc, joinDocs, routeSheetDoc } from '../lib/print';
+import { deliveryNoteDoc, joinDocs, parcelLabelDoc, routeSheetDoc } from '../lib/print';
 import { PrintButton } from '../ui/print';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, deliveryNet, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 
 const TABS = [
-  { key: 'a-livrer', label: 'À livrer', perm: 'orders.dispatch' },
-  { key: 'en-cours', label: 'En cours', perm: 'deliveries.manage' },
-  { key: 'livreurs', label: 'Livreurs', perm: 'couriers.view' },
+  { key: 'a-livrer', label: 'En attente de livraison', perm: 'orders.dispatch' },
+  { key: 'en-cours', label: 'En livraison', perm: 'deliveries.manage' },
+  { key: 'retour', label: 'Retour livreur', perm: 'deliveries.manage' },
+  { key: 'livreurs', label: 'Comptes livreurs', perm: 'couriers.view' },
   { key: 'zones', label: 'Zones et frais', perm: 'couriers.view' },
 ];
 
@@ -32,6 +34,7 @@ export function DeliveriesPage() {
       <div className="tabs" role="tablist">{tabs.map((t) => <button key={t.key} role="tab" aria-selected={cur.key === t.key} onClick={() => navigate('/livraisons/' + t.key)}>{t.label}</button>)}</div>
       {cur.key === 'a-livrer' && <ToDeliver />}
       {cur.key === 'en-cours' && <OutNow />}
+      {cur.key === 'retour' && <CourierReturn />}
       {cur.key === 'livreurs' && <Couriers />}
       {cur.key === 'zones' && <Zones />}
     </>
@@ -39,12 +42,13 @@ export function DeliveriesPage() {
 }
 
 function ToDeliver() {
+  const company = useCompany();
   const orders = useTable<Order>('orders');
   const zones = useTable<Zone>('zones');
   const [sel, setSel] = useState<string[]>([]);
   const [dispatch, setDispatch] = useState(false);
   const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId));
-  const preparing = orders.filter((o) => o.status === 'confirmed').length;
+  const preparing = orders.filter((o) => ['new', 'confirmed'].includes(o.status) && o.channel !== 'shop').length;
   const groups = useMemo(() => {
     const m = new Map<string, Order[]>();
     for (const o of ready) { const k = o.zoneId || ''; if (!m.has(k)) m.set(k, []); m.get(k)!.push(o); }
@@ -54,10 +58,13 @@ function ToDeliver() {
   return (
     <>
       <div className="card row-between">
-        <p className="small">{ready.length} commande(s) prête(s){preparing ? ` · ${preparing} encore à préparer` : ''}. Cochez celles d’un même axe puis remettez-les au livreur.</p>
-        <Button icon="truck" disabled={!sel.length} onClick={() => setDispatch(true)}>Remettre {sel.length || ''} au livreur</Button>
+        <p className="small">{ready.length} commande(s) en attente de livraison{preparing ? ` · ${preparing} enregistrée(s), pas encore préparée(s)` : ''}. Imprimez les étiquettes, cochez les commandes d’un même axe puis remettez-les au livreur.</p>
+        <div className="row" style={{ gap: 6 }}>
+          {ready.length > 0 && <PrintButton label={sel.length ? `Étiquettes (${sel.length})` : 'Toutes les étiquettes'} docs={[{ key: 'etq', label: `Étiquettes colis 58 mm (${(sel.length ? ready.filter((o) => sel.includes(o.id)) : ready).length})`, build: () => joinDocs('Étiquettes colis', (sel.length ? ready.filter((o) => sel.includes(o.id)) : ready).map((o) => parcelLabelDoc(o, company))) }]} />}
+          <Button icon="truck" disabled={!sel.length} onClick={() => setDispatch(true)}>Remettre {sel.length || ''} au livreur</Button>
+        </div>
       </div>
-      {groups.length === 0 ? <div className="card"><Empty icon="truck" title="Aucune commande prête"><Button variant="ghost" onClick={() => navigate('/commandes/preparer')}>Voir les commandes à préparer</Button></Empty></div> : groups.map(([zid, list]) => (
+      {groups.length === 0 ? <div className="card"><Empty icon="truck" title="Aucune commande en attente de livraison"><Button variant="ghost" onClick={() => navigate('/commandes/enregistrees')}>Voir les commandes enregistrées</Button></Empty></div> : groups.map(([zid, list]) => (
         <div key={zid} className="card card-flush">
           <div className="row-between card-pad">
             <h3>{get<Zone>('zones', zid)?.name || 'Zone non indiquée'} <span className="muted small">· {list.length} commande(s)</span></h3>
@@ -146,7 +153,7 @@ function Couriers() {
   return (
     <>
       <div className="card stack">
-        <div className="row-between"><p className="small muted">Les livreurs n’utilisent pas l’application : les vendeurs saisissent tout pour eux.</p>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
+        <div className="row-between"><p className="small muted">Un livreur peut avoir son propre accès (Utilisateurs → rôle « Livreur ») pour voir seulement ses colis et son compte. Sans accès, ajoutez simplement sa fiche ici.</p>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
         <PeriodPicker value={period} onChange={setPeriod} />
       </div>
       <div className="card card-flush">
