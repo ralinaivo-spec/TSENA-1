@@ -307,3 +307,30 @@ export function attrSummary(p: Product, sep = ' · ') {
   if (!c || !p.attrs) return '';
   return (c.attrs ?? []).map((a) => a.values.find((x) => x.id === p.attrs![a.id])?.label).filter(Boolean).join(sep);
 }
+
+/** Où un article est utilisé (ventes, commandes, achats, réceptions) : s'il l'est, on ne peut que l'archiver. */
+export function articleUsage(productId: string) {
+  const vids = new Set(all<Variant>('variants').filter((v) => v.productId === productId).map((v) => v.id));
+  const orders = all<any>('orders').filter((o) => (o.lines || []).some((l: any) => vids.has(l.variantId)) || (o.returnLines || []).some((l: any) => vids.has(l.variantId))).length;
+  const purchases = all<Purchase>('purchases').filter((p) => p.lines.some((l) => vids.has(l.variantId))).length;
+  const receptions = all<any>('receptions').filter((r) => (r.items || []).some((i: any) => vids.has(i.variantId))).length;
+  const moves = all<StockMove>('stockMoves').filter((m) => vids.has(m.variantId)).length;
+  return { orders, purchases, receptions, moves, used: orders + purchases + receptions > 0 };
+}
+/** Supprime un article jamais vendu ni acheté (ex. article de test), avec sa ligne de stock et ses mouvements de départ. */
+export async function deleteArticle(p: Product) {
+  const u = articleUsage(p.id);
+  if (u.used) throw new Error(`Cet article est utilisé (${[u.orders && `${u.orders} vente(s)/commande(s)`, u.purchases && `${u.purchases} achat(s)`, u.receptions && `${u.receptions} réception(s)`].filter(Boolean).join(', ')}) : vous pouvez seulement l’archiver.`);
+  const vs = all<Variant>('variants').filter((v) => v.productId === p.id);
+  const vids = new Set(vs.map((v) => v.id));
+  const moves = all<StockMove>('stockMoves').filter((m) => vids.has(m.variantId));
+  if (moves.length) await save('stockMoves', moves.map((m) => ({ id: m.id, deleted: true })));
+  if (vs.length) await save('variants', vs.map((v) => ({ id: v.id, deleted: true })));
+  await save('products', { id: p.id, deleted: true });
+  await audit('Article supprimé', `${p.code} — ${p.name}${moves.length ? ` (${moves.length} mouvement(s) de stock de départ effacés)` : ''}`, 'products', p.id);
+}
+/** Recrée la ligne de stock d'un article par variantes (si elle a été supprimée). */
+export async function repairArticle(p: Product) {
+  await save('variants', { id: `v_${p.id}`, productId: p.id, sku: p.code, active: true, deleted: false });
+  await audit('Article réparé', `${p.code} — ligne de stock rétablie`, 'products', p.id);
+}

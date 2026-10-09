@@ -6,7 +6,7 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import {
   ADJUST_REASONS, addMoves, categoryPath, createProduct, fmtAr, fmtNum, incomingOf, makeSku, MOVE_LABELS, normSize, parseNum,
-  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel, matchQuery, productText, attrSummary,
+  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel, matchQuery, productText, attrSummary, articleUsage, deleteArticle, repairArticle,
   type Category, type Product, type StockMove, type Variant,
 } from '../lib/catalog';
 import { blobToThumb } from '../lib/xlsx';
@@ -166,6 +166,7 @@ function ProductDetail({ id }: { id: string }) {
   const [adjust, setAdjust] = useState<Variant[] | null>(null);
   const [archive, setArchive] = useState(false);
   const [editVariant, setEditVariant] = useState<Variant | null>(null);
+  const [delArt, setDelArt] = useState(false);
   if (!p) return <Empty icon="store" title="Article introuvable"><Button variant="ghost" onClick={() => navigate('/articles')}>Retour aux articles</Button></Empty>;
   const variants = productVariants(p.id);
   const vIds = new Set(variants.map((v) => v.id));
@@ -206,6 +207,10 @@ function ProductDetail({ id }: { id: string }) {
         </div>
       </div>
 
+      {variants.length === 0 && (
+        <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}>Cet article n’a plus de ligne de stock : impossible d’y ajouter du stock.</span>
+          {can('catalog.edit') && <Button onClick={async () => { await repairArticle(p); toast('Ligne de stock rétablie'); }}>Rétablir</Button>}</div>
+      )}
       <div className="card card-flush">
         <div className="row-between card-pad">
           <h2>{p.attrs ? 'Stock et coût' : 'Variantes'}</h2>
@@ -263,9 +268,12 @@ function ProductDetail({ id }: { id: string }) {
 
       {can('catalog.edit') && (
         <div className="row">
-          <Button variant="quiet" icon={p.active === false ? 'refresh' : 'trash'} onClick={() => setArchive(true)}>{p.active === false ? 'Réactiver l’article' : 'Archiver l’article'}</Button>
+          <Button variant="quiet" icon={p.active === false ? 'refresh' : 'list'} onClick={() => setArchive(true)}>{p.active === false ? 'Réactiver l’article' : 'Archiver l’article'}</Button>
+          {!articleUsage(p.id).used && <Button variant="quiet" icon="trash" onClick={() => setDelArt(true)}>Supprimer l’article</Button>}
         </div>
       )}
+      {delArt && <Confirm title="Supprimer l’article" danger confirmLabel="Supprimer définitivement" message={<div className="stack-s"><p>L’article <strong>{p.name}</strong> ({p.code}) sera supprimé{articleUsage(p.id).moves ? ', avec son stock de départ' : ''}.</p><p className="small muted">Possible seulement pour un article jamais vendu, commandé ni acheté (ex. article de test). Sinon, utilisez « Archiver ».</p></div>}
+        onClose={() => setDelArt(false)} onConfirm={async () => { await deleteArticle(p); toast('Article supprimé'); navigate('/articles'); }} />}
 
       {editing && <ProductForm product={p} onClose={() => setEditing(false)} />}
       {adding && <AddVariantsModal product={p} onClose={() => setAdding(false)} />}
@@ -422,10 +430,11 @@ function VariantForm({ product, variant, onClose }: { product: Product; variant:
   const [cost, setCost] = useState(variant.costAvg?.toString() ?? '');
   const [del, setDel] = useState(false);
   const hasMoves = useTable<StockMove>('stockMoves').some((m) => m.variantId === variant.id);
+  const attr = !!product.attrs;
   return (
-    <Modal title={`Variante ${variantLabel(variant)}`} onClose={onClose}
+    <Modal title={attr ? `Code et coût — ${product.name}` : `Variante ${variantLabel(variant)}`} onClose={onClose}
       footer={<>
-        {!hasMoves && <Button variant="quiet" icon="trash" onClick={() => setDel(true)}>Supprimer</Button>}
+        {!hasMoves && !attr && <Button variant="quiet" icon="trash" onClick={() => setDel(true)}>Supprimer</Button>}
         <Button variant="ghost" onClick={onClose}>Annuler</Button>
         <Button onClick={async () => {
           await save('variants', { id: variant.id, color: color.trim() || undefined, size: normSize(size) || undefined, sku: sku.trim() || makeSku(product.code, color, size), priceRetail: parseNum(price), priceWholesale: parseNum(wholesale), ...(can('costs.view') ? { costAvg: parseNum(cost) } : {}) });
@@ -434,15 +443,16 @@ function VariantForm({ product, variant, onClose }: { product: Product; variant:
         }}>Enregistrer</Button>
       </>}>
       <div className="stack">
+        {attr ? <p className="small muted">Les valeurs ({variantLabel(variant)}) et les prix de vente se changent avec « Modifier » en haut de la fiche.</p> : (
         <div className="grid-2">
           <TextField label="Couleur" value={color} onChange={setColor} />
           <TextField label="Taille" value={size} onChange={setSize} />
-        </div>
-        <TextField label="Code de la variante" value={sku} onChange={setSku} />
-        <div className="grid-2">
+        </div>)}
+        <TextField label={attr ? 'Code (code-barres)' : 'Code de la variante'} value={sku} onChange={setSku} />
+        {!attr && <div className="grid-2">
           <TextField label="Prix détail propre (facultatif)" value={price} onChange={setPrice} inputMode="numeric" hint={`Sinon : ${fmtAr(product.priceRetail)}`} />
           <TextField label="Prix de gros propre (facultatif)" value={wholesale} onChange={setWholesale} inputMode="numeric" hint={`Sinon : ${fmtAr(product.priceWholesale)}`} />
-        </div>
+        </div>}
         {can('costs.view') && <TextField label="Coût de revient moyen (Ar)" value={cost} onChange={setCost} inputMode="decimal" hint="Calculé automatiquement à chaque réception. Ne le modifiez que pour corriger." />}
       </div>
       {del && <Confirm title="Supprimer la variante" danger confirmLabel="Supprimer" message={<p>La variante {variantLabel(variant)} sera supprimée.</p>}
