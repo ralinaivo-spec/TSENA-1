@@ -250,3 +250,61 @@ Chaque phase est mise en ligne et testée avec vous avant de passer à la suivan
 | Le client récupère sa commande lui-même | **« Retrait en boutique »** : la livraison est annulée (sans frais ni dédommagement livreur) et la commande devient une vente sur place (point 3.2) |
 
 **Proposition validée de votre côté : plus aucun point en attente.**
+
+---
+
+## 15. Clients à suivre (prospects) — *ajout du 09/10/2026, à valider*
+
+**Votre besoin.** En répondant aux messages privés de la page, le vendeur repère des clients qui vont probablement acheter mais pas tout de suite. Ils attendent une confirmation, une information (taille, couleur, quantité, prix, photo), un paiement, ou autre chose. Ce n'est pas encore une commande, car il manque des informations essentielles. On veut pourtant les noter tout de suite, les suivre, puis les transformer en commande en un clic dès que tout est complet.
+
+### 15.1 Un nouvel onglet « À suivre » dans Commandes clients
+Onglets : **À suivre** · Enregistrées · En attente de livraison · En livraison · Terminées · Annulées.
+
+### 15.2 La fiche « à suivre » : on note ce qu'on sait, rien n'est obligatoire sauf un moyen de retrouver le client
+
+| Champ | Exemple | Obligatoire ? |
+|---|---|---|
+| Client : téléphone **ou** nom Facebook | Soa Rakoto (Messenger) | **Un des deux** |
+| Page | Pyjama enfant | Proposée selon le vendeur |
+| Ce qui l'intéresse | Article du catalogue (LAP 4A), ou texte libre (« pyjama lapin, taille à voir ») | Non |
+| Quantité | 2 (ou vide) | Non |
+| **On attend quoi ?** | Confirmation du client · Une information (taille / couleur / quantité / prix / photo) · Le paiement (acompte MVola) · Arrivage / stock · Autre (texte) | **Oui** (un choix) |
+| **Relancer le** | demain 9 h (proposé automatiquement) | Oui, modifiable |
+| Lieu de livraison, frais | Ivandry | Non |
+| Notes / historique des échanges | « 10/10 : envoyé photos, attend avis de son mari » | Non |
+
+### 15.3 Suivi simple
+- La liste « À suivre » est triée **par date de relance** : en retard (rouge), aujourd'hui, plus tard.
+- Elle affiche le **motif d'attente** en badge (« Attend paiement », « Attend info : taille »).
+- Bouton **« Relancé »** : on écrit en une ligne ce qui s'est passé (« pas de réponse », « veut la taille 6A ») et on choisit la prochaine relance. Tout reste dans l'historique de la fiche.
+- **Notification** quand une relance arrive : « Relancer Soa Rakoto — attend le paiement » (× = rappel plus tard).
+- Chaque vendeur voit d'abord **ses** suivis ; le gérant voit tout.
+
+### 15.4 Transformer en commande : seulement quand les critères essentiels sont remplis
+La fiche affiche une **liste de contrôle**. Le bouton **« Transformer en commande »** ne s'active que quand tout est coché :
+
+| Critère essentiel | Pourquoi |
+|---|---|
+| ✓ Téléphone du client | Le livreur doit pouvoir l'appeler |
+| ✓ Lieu de livraison (zone + lieu) ou « retrait en boutique » | Pour préparer la livraison |
+| ✓ Au moins un **article précis du catalogue** (avec ses variantes : modèle, taille…) | Un texte libre ne suffit pas pour sortir le stock |
+| ✓ **Quantité** de chaque article | Pour le prix et le stock |
+| ✓ Motif d'attente levé (si c'était « attend le paiement » : paiement noté ou confirmé) | Évite de lancer une commande pas encore décidée |
+
+- La commande est créée **pré-remplie** (client, articles, quantités, lieu, frais, paiement déjà reçu, notes) à l'étape **Enregistrée**.
+- La fiche passe en **« Transformée en commande »** avec le lien vers la commande.
+- S'il manque quelque chose, le bouton reste grisé et dit précisément quoi : « Il manque : téléphone, quantité de LAP 4A ».
+
+### 15.5 Fermer un suivi sans commande
+Bouton **« Abandonner »** avec une raison : pas de réponse, trop cher, a acheté ailleurs, article indisponible, autre. Le suivi reste dans l'historique du client.
+
+### 15.6 Ce que cela apporte
+- Plus aucun client « oublié » dans Messenger.
+- Le stock n'est **pas bloqué** par un simple suivi : la disponibilité est seulement affichée.
+- Plus tard, dans les rapports : **taux de transformation** par vendeur et par page, et motifs d'abandon les plus fréquents.
+
+### Questions à valider
+1. Les critères essentiels du 15.4 vous conviennent-ils (téléphone, lieu, article précis, quantité, motif levé) ?
+2. Le suivi ne réserve pas le stock (proposé) : d'accord ?
+3. Relance proposée par défaut : **le lendemain à 9 h**. Vous préférez un autre délai ?
+4. Faut-il proposer automatiquement « Abandonner » après **7 jours** sans réponse (le vendeur décide) ?
