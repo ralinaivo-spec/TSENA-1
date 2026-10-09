@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 3.2, validée le 08/10/2026)
+# TSENA — Cahier des charges (version 3.3, mise à jour le 09/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -222,6 +222,21 @@ Journée ou semaine, en un clic : WhatsApp, SMS, e-mail, partage (Messenger…),
 
 - **Détail du bénéfice brut** *(ajout du 08/10/2026)* : tableau dépliable, article par article (variante) : pièces vendues (moins les retours), ventes, prix de revient par pièce, coût total, bénéfice. Bénéfice brut = total des ventes (remises et retours déduits) − pièces × prix de revient de chaque variante ; frais de livraison non comptés. Les articles vendus sans prix de revient sont signalés.
 
+### 10.4 Tableau de la semaine et versement au patron *(ajout du 09/10/2026)*
+Inspiré du cahier Excel « Recette et Dépense » (onglets RECAP JOURNALIER / HEBDOMADAIRE / MENSUEL).
+
+- **Tableau de la semaine** (Récapitulatifs → Semaine) : une ligne par jour (lundi → samedi), une colonne par **page** (catégorie principale ayant des ventes ou un boost), puis **Total ventes**, **Dépenses** et **Reste** (= ventes − dépenses) ; ligne Total ; ligne **Boost** (dépense $ × taux du dollar, réglable dans Paramètres → Société, 4 700 Ar par défaut) ; ligne **Bénéfice** par page (ventes − coût des articles − boost, visible seulement avec le droit « Voir les prix d’achat… »). Export Excel (onglets Semaine et Dépenses).
+- **Versement de la semaine** (droit « Valider le versement de la semaine au patron », donné à l’Admin / Gérant) :
+  - semaine = **lundi → samedi** ; en ouvrant la vue Semaine un jour de semaine, c’est la **semaine précédente** qui s’affiche ;
+  - **Montant à verser = total des ventes de la semaine − total des dépenses de la semaine** ;
+  - avant de valider, le gérant voit le détail : ventes par page, chaque dépense (jour, libellé, catégorie, compte, montant) et le montant à verser ; il saisit le **montant réellement remis** (par défaut le montant à verser), le compte d’où sort l’argent (caisse espèces par défaut) et une remarque (**obligatoire en cas d’écart**), puis coche la confirmation ;
+  - possible seulement une fois la semaine terminée (à partir du samedi) ;
+  - à la validation : une sortie de trésorerie « Versement au patron » est créée, la semaine est **clôturée**, et l’opération est tracée : période, montant attendu, montant remis, écart, date et heure, gérant, appareil, détail des ventes par page et des dépenses ;
+  - **jamais deux fois la même semaine** : un seul versement par semaine (identifiant unique de la semaine, même depuis deux appareils hors ligne) ;
+  - **semaine clôturée** : plus aucune vente sur place, remise au livreur, retour de livreur, retrait ou échange en boutique, ni ajout ou suppression de dépense ou de revenu ne peut y être daté ; le message indique qui a validé et quand ;
+  - **annulation** (en cas d’erreur seulement, même droit) avec une raison obligatoire : la semaine est rouverte, l’annulation reste visible dans l’historique et le journal d’activité.
+- **Historique des versements** : semaine, ventes, dépenses, à verser, remis, écart, validé par / le, remarque, état (versé / annulé) ; liste des **semaines terminées pas encore versées** (12 dernières) ; export Excel.
+
 ---
 
 ## 10 bis. Boosts publicitaires *(ajout du 08/10/2026)*
@@ -261,6 +276,7 @@ Menu **Ventes → Boosts pub** (droits « Saisir les résultats des boosts » po
 - **Accueil (admin, gérant, propriétaire)** : période au choix (retenue sur l'appareil) ; chiffre d'affaires, bénéfice brut, dépenses, **bénéfice ou perte nette**, taux de marge, nombre de ventes (sur place / en ligne), panier moyen, taux de retour, chacun **comparé à la période précédente** ; graphique du bénéfice net par heure / jour / mois (barres rouges = perte) ; trésorerie par compte + à verser par les livreurs ; stock (pièces, valeur au coût et au prix de vente), arrivages en attente, reste à payer aux fournisseurs ; meilleurs articles ; articles dormants (60 jours sans vente).
 - **Accueil (vendeur)** : ses ventes de la période (nombre, montant, pièces, graphique), sans les marges.
 - **Menu Argent → Rapports** (droit « Voir les rapports complets ») : Bénéfice et perte (compte de résultat avec comparaison, graphique, mois par mois), Journal des ventes (filtres canal, vendeur, livreur, zone, paiement, recherche), Articles (par article ou catégorie, marge, retours, stock ; articles dormants), Clients, Livreurs (livraisons, taux de réussite, à encaisser sans les frais, frais à reverser, versé, solde), Vendeurs, Stock (valorisation), Achats. Tri sur chaque colonne, ligne de total, **export Excel**.
+- **Récapitulatif mensuel** *(ajout du 09/10/2026, premier onglet des Rapports)* : 3, 6 ou 12 derniers mois ; par mois : ventes par page, **CA réalisé**, **dépenses**, **reste** (CA − dépenses), **versé au patron** (versements validés des semaines commençant dans le mois), **boost** en ariary et **bénéfice net estimé** (CA − coût des articles − boost − dépenses) ; cartes de totaux en tête ; export Excel.
 - Les montants de coût et de marge ne s'affichent qu'avec le droit « Voir les prix d'achat, marges et bénéfices ». Les frais de livraison ne sont jamais dans le chiffre d'affaires.
 
 ---

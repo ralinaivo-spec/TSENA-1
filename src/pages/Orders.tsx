@@ -549,7 +549,7 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
         setBusy(true);
         let cid = courierId;
         if (cid === '__new') { const [c] = await save('couriers', { name: newName.trim(), active: true }); cid = c.id; }
-        for (const o of orders) await dispatchOrder(o, cid);
+        try { for (const o of orders) await dispatchOrder(o, cid); } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast(`${orders.length} commande(s) remise(s) au livreur`); setBusy(false); onClose();
       }}>Remettre</Button></>}>
       <div className="stack">
@@ -582,7 +582,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
     <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0} onClick={async () => {
         setBusy(true);
-        await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined });
+        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }); } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast(hasChoice ? 'Choix du client enregistré' : 'Retour enregistré'); setBusy(false); onClose();
       }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : hasChoice ? 'Valider le choix et le retour' : 'Valider le retour'}</Button></>}>
       <div className="stack">
@@ -709,7 +709,7 @@ function ShopExchangeModal({ order: o, onClose }: { order: Order; onClose: () =>
   return (
     <Modal title={`Échange en boutique — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={async () => {
-        await completeAtShop(o, bal !== 0 ? { amount: bal, method, ref: ref.trim() || undefined } : undefined);
+        try { await completeAtShop(o, bal !== 0 ? { amount: bal, method, ref: ref.trim() || undefined } : undefined); } catch (e: any) { toast(e.message, 'error'); return; }
         toast('Échange terminé'); onClose();
       }}>Valider l’échange</Button></>}>
       <div className="stack">
@@ -732,7 +732,7 @@ function PickupModal({ order: o, onClose }: { order: Order; onClose: () => void 
     <Modal title={`Remis au client — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={async () => {
         setBusy(true);
-        await handOverAtShop(o, parseNum(amount) ? { amount: parseNum(amount)!, method, ref: ref.trim() || undefined } : undefined);
+        try { await handOverAtShop(o, parseNum(amount) ? { amount: parseNum(amount)!, method, ref: ref.trim() || undefined } : undefined); } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast('Commande remise au client'); setBusy(false); onClose();
       }}>Valider</Button></>}>
       <div className="stack">

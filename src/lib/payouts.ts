@@ -1,0 +1,143 @@
+// Tableau de la semaine (comme le cahier « Recette et Dépense ») et versement de la semaine au patron.
+//
+// Semaine = lundi → samedi. Montant à verser = total des ventes de la semaine − total des dépenses de la semaine.
+// Le gérant vérifie le détail, saisit le montant réellement remis, valide : la semaine est clôturée (identifiant
+// unique par semaine : impossible de la verser deux fois, même depuis deux appareils), le versement est tracé
+// (période, montant, date, gérant, appareil) et gardé dans l'historique.
+import { all, get, getMeta, save, type BaseRecord } from './db';
+import { audit, currentUser } from './auth';
+import { salesLedger } from './analytics';
+import { rootOf } from './scope';
+import { addDays, dayOf, type AccountId, type CashMove, type FinanceCategory } from './money';
+import type { Category } from './catalog';
+import { readingsOf } from './boosts';
+import { payoutId, type Payout } from './closed';
+import { DEFAULT_COMPANY, type Company } from './settings';
+
+export const weekOf = (monday: string) => ({ start: monday, end: addDays(monday, 5), days: Array.from({ length: 6 }, (_, i) => addDays(monday, i)) });
+export const usdRate = () => (get<Company>('settings', 'company')?.usdRate ?? DEFAULT_COMPANY.usdRate ?? 4700);
+
+export interface PageCol { id: string; name: string }
+export interface Grid {
+  from: string; to: string; days: string[];
+  pages: PageCol[];
+  sales: Record<string, Record<string, number>>;        // jour → page → ventes nettes
+  cost: Record<string, number>;                           // page → coût des articles vendus
+  boostUsd: Record<string, number>;                       // page → dépense boost ($)
+  expensesByDay: Record<string, number>;
+  expenseMoves: CashMove[];
+  salesTotal: number; expensesTotal: number; rest: number;
+  pageTotals: Record<string, number>;
+  dayTotals: Record<string, number>;
+}
+
+/** Ventes par page et par jour, dépenses, boost, sur une période (jours inclus). */
+export function grid(from: string, to: string): Grid {
+  const days: string[] = []; for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
+  const sales: Grid['sales'] = Object.fromEntries(days.map((d) => [d, {}]));
+  const cost: Record<string, number> = {};
+  const seen = new Set<string>();
+  for (const l of salesLedger(from, to)) {
+    const page = rootOf(l.categoryId) || '_';
+    seen.add(page);
+    sales[l.day][page] = (sales[l.day][page] ?? 0) + l.amount;
+    cost[page] = (cost[page] ?? 0) + l.cost;
+  }
+  const boostUsd: Record<string, number> = {};
+  for (const b of all<BaseRecord & { pageId: string }>('boosts')) {
+    let prev = 0; // dépense cumulée : la dépense du jour = saisie du jour − saisie précédente
+    for (const r of readingsOf(b.id)) {
+      if (r.date >= from && r.date <= to) { boostUsd[b.pageId] = (boostUsd[b.pageId] ?? 0) + Math.max(0, r.spend - prev); seen.add(b.pageId); }
+      prev = Math.max(prev, r.spend);
+    }
+  }
+  const expenseMoves = all<CashMove>('cashMoves').filter((m) => m.type === 'expense' && dayOf(m.at) >= from && dayOf(m.at) <= to).sort((a, b) => a.at.localeCompare(b.at));
+  const expensesByDay: Record<string, number> = Object.fromEntries(days.map((d) => [d, 0]));
+  for (const m of expenseMoves) expensesByDay[dayOf(m.at)] = (expensesByDay[dayOf(m.at)] ?? 0) - m.amount;
+  // Colonnes : toutes les pages (catégories principales), dans l'ordre alphabétique ; « Sans page » à la fin si besoin.
+  const pages: PageCol[] = all<Category>('categories').filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name, 'fr')).map((c) => ({ id: c.id, name: c.name }));
+  if (seen.has('_')) pages.push({ id: '_', name: 'Sans page' });
+  const pageTotals = Object.fromEntries(pages.map((p) => [p.id, days.reduce((t, d) => t + (sales[d][p.id] ?? 0), 0)]));
+  const dayTotals = Object.fromEntries(days.map((d) => [d, Object.values(sales[d]).reduce((t, v) => t + v, 0)]));
+  const salesTotal = Object.values(dayTotals).reduce((t, v) => t + v, 0);
+  const expensesTotal = Object.values(expensesByDay).reduce((t, v) => t + v, 0);
+  return { from, to, days, pages, sales, cost, boostUsd, expensesByDay, expenseMoves, salesTotal, expensesTotal, rest: salesTotal - expensesTotal, pageTotals, dayTotals };
+}
+
+export const payoutOf = (monday: string) => get<Payout>('payouts', payoutId(monday));
+export const payouts = () => all<Payout>('payouts').sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+
+/** Valide le versement de la semaine. Refusé si la semaine est déjà versée ou pas encore terminée. */
+export async function validatePayout(monday: string, amount: number, account: AccountId, note?: string) {
+  const w = weekOf(monday);
+  const existing = payoutOf(monday);
+  if (existing?.status === 'paid') throw new Error(`Cette semaine a déjà été versée le ${existing.at.slice(0, 10)} par ${existing.byName ?? '?'}.`);
+  const todayYmd = dayOf(new Date().toISOString());
+  if (w.end > todayYmd) throw new Error('La semaine n’est pas terminée : le versement se fait à partir du samedi soir.');
+  if (!(amount >= 0)) throw new Error('Montant versé invalide.');
+  const g = grid(w.start, w.end);
+  const u = currentUser();
+  const expected = g.salesTotal - g.expensesTotal;
+  const at = new Date().toISOString();
+  const label = `Versement au patron — semaine du ${fr(w.start)} au ${fr(w.end)}`;
+  const [mv] = await save('cashMoves', { id: `pomv_${monday}`, deleted: false, at, account, amount: -amount, type: 'owner_out', label, note, refType: 'payouts', refId: payoutId(monday), userName: u?.fullName });
+  await save('payouts', {
+    id: payoutId(monday), weekStart: w.start, weekEnd: w.end, sales: g.salesTotal, expenses: g.expensesTotal, expected, amount, account, gap: amount - expected, note,
+    byId: u?.id, byName: u?.fullName, at, device: getMeta('deviceName', '') || undefined,
+    perPage: g.pages.map((p) => ({ pageId: p.id, name: p.name, sales: g.pageTotals[p.id] ?? 0 })).filter((p) => p.sales),
+    expenseIds: g.expenseMoves.map((m) => m.id), moveId: mv.id, status: 'paid', cancelledBy: undefined, cancelledAt: undefined, cancelReason: undefined,
+  } as Partial<Payout>);
+  await audit('Versement de la semaine', `${label} : ${amount.toLocaleString('fr-FR')} Ar remis (attendu ${expected.toLocaleString('fr-FR')} Ar${amount !== expected ? `, écart ${(amount - expected).toLocaleString('fr-FR')} Ar` : ''})`, 'payouts', payoutId(monday));
+}
+
+/** Annule un versement (erreur de saisie) : la semaine est rouverte, l'annulation reste dans l'historique. */
+export async function cancelPayout(p: Payout, reason: string) {
+  const u = currentUser();
+  if (p.moveId) await save('cashMoves', { id: p.moveId, deleted: true });
+  await save('payouts', { id: p.id, status: 'cancelled', cancelledBy: u?.fullName, cancelledAt: new Date().toISOString(), cancelReason: reason });
+  await audit('Versement annulé', `Semaine du ${fr(p.weekStart)} au ${fr(p.weekEnd)} : ${p.amount.toLocaleString('fr-FR')} Ar — ${reason}`, 'payouts', p.id);
+}
+
+export const catName = (id?: string) => (id ? get<FinanceCategory>('financeCategories', id)?.name : undefined);
+const fr = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** Semaines terminées (lundi → samedi) avec ventes ou dépenses et sans versement validé (les 12 dernières). */
+export function unpaidWeeks(todayYmd: string, mondayOf: (d: string) => string): { monday: string; expected: number }[] {
+  const out: { monday: string; expected: number }[] = [];
+  let mon = mondayOf(todayYmd);
+  if (addDays(mon, 5) > todayYmd) mon = addDays(mon, -7);
+  for (let i = 0; i < 12; i++, mon = addDays(mon, -7)) {
+    if (payoutOf(mon)?.status === 'paid') continue;
+    const g = grid(mon, addDays(mon, 5));
+    if (g.salesTotal || g.expensesTotal) out.push({ monday: mon, expected: g.rest });
+  }
+  return out;
+}
+
+export interface MonthRow { key: string; label: string; from: string; to: string; pages: Record<string, number>; sales: number; expenses: number; rest: number; paid: number; boostAr: number; cost: number; profit: number; weeks: number }
+/** Récapitulatif mensuel (comme l'onglet « RECAP MENSUEL ») : les n derniers mois, le plus récent en premier. */
+export function monthly(n: number, todayYmd: string): { rows: MonthRow[]; pages: PageCol[] } {
+  const rate = usdRate();
+  const [y0, m0] = todayYmd.split('-').map(Number);
+  const rows: MonthRow[] = [];
+  const pageIds = new Map<string, string>();
+  const paidList = payouts().filter((p) => p.status === 'paid');
+  for (let i = 0; i < n; i++) {
+    const d = new Date(y0, m0 - 1 - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const from = `${key}-01`;
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const to = `${key}-${String(last).padStart(2, '0')}`;
+    const g = grid(from, to < todayYmd ? to : todayYmd);
+    for (const p of g.pages) if (g.pageTotals[p.id] || g.boostUsd[p.id]) pageIds.set(p.id, p.name);
+    const boostAr = Object.values(g.boostUsd).reduce((t, v) => t + v, 0) * rate;
+    const cost = Object.values(g.cost).reduce((t, v) => t + v, 0);
+    const paid = paidList.filter((p) => p.weekStart >= from && p.weekStart <= to);
+    rows.push({
+      key, label: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), from, to, pages: g.pageTotals, sales: g.salesTotal, expenses: g.expensesTotal, rest: g.rest,
+      paid: paid.reduce((t, p) => t + p.amount, 0), weeks: paid.length, boostAr, cost, profit: g.salesTotal - cost - boostAr - g.expensesTotal,
+    });
+  }
+  const pages = [...pageIds.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => (a.id === '_' ? 1 : b.id === '_' ? -1 : a.name.localeCompare(b.name, 'fr')));
+  return { rows, pages };
+}

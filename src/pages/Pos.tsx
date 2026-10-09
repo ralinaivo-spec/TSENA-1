@@ -206,7 +206,7 @@ function PayDialog({ total, onClose, onPaid }: { total: number; onClose: () => v
     <Modal title={`Encaisser ${fmtAr(total)}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={sum <= 0 || sum > total} onClick={async () => {
         setBusy(true);
-        try { await onPaid(pays.map((p) => ({ amount: parseNum(p.amount) || 0, method: p.method, ref: p.ref.trim() || undefined })), parseNum(given) || undefined); } finally { setBusy(false); }
+        try { await onPaid(pays.map((p) => ({ amount: parseNum(p.amount) || 0, method: p.method, ref: p.ref.trim() || undefined })), parseNum(given) || undefined); } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
       }}>{missing > 0 ? `Valider (reste ${fmtAr(missing)})` : 'Valider la vente'}</Button></>}>
       <div className="stack">
         {pays.map((p, i) => (

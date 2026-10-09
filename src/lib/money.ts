@@ -2,6 +2,7 @@
 // livreurs, chiffres d'une journée et clôture (« Z de caisse »).
 import { all, applyRemote, bizNow, get, newId, nowIso, remove, save, workDate, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
+import { assertOpenAt } from './closed';
 import { variantCost, type Variant } from './catalog';
 import { courierSplit, isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
@@ -100,6 +101,7 @@ export function flows(from?: string, to?: string, account?: AccountId): Flow[] {
 // ---------- Opérations ----------
 const who = () => currentUser()?.fullName;
 export async function addMove(m: Omit<CashMove, 'id' | 'createdAt' | 'updatedAt' | 'userName'>) {
+  if (m.type === 'expense' || m.type === 'income') assertOpenAt(m.at, m.type === 'expense' ? 'Dépense' : 'Revenu');
   const [r] = await save('cashMoves', { ...m, userName: who() });
   await audit(MOVE_TYPES[m.type], `${ACCOUNTS[m.account]} : ${m.amount > 0 ? '+' : ''}${m.amount} Ar${m.label ? ' — ' + m.label : ''}`, 'cashMoves', r.id);
   return r as CashMove;
@@ -115,6 +117,8 @@ export async function addTransfer(from: AccountId, to: AccountId, amount: number
   await audit('Virement entre comptes', `${label} : ${amount} Ar${fee ? ` (frais ${fee} Ar)` : ''}`, 'cashMoves', transferId);
 }
 export async function deleteMove(m: CashMove) {
+  if (m.refType === 'payouts') throw new Error('Ce mouvement est un versement de la semaine : annulez-le depuis Récapitulatif → Semaine → Historique des versements.');
+  if (m.type === 'expense' || m.type === 'income') assertOpenAt(m.at, 'Suppression');
   const linked = m.transferId ? all<CashMove>('cashMoves').filter((x) => x.transferId === m.transferId) : [m];
   for (const x of linked) await remove('cashMoves', x.id);
   await audit('Opération supprimée', `${MOVE_TYPES[m.type]} ${m.amount} Ar (${ACCOUNTS[m.account]})${m.label ? ' — ' + m.label : ''}`, 'cashMoves', m.id);

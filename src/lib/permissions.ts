@@ -21,6 +21,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { group: 'Argent', key: 'treasury.view', label: 'Voir la trésorerie et les soldes' },
   { group: 'Argent', key: 'expenses.manage', label: 'Saisir les dépenses et autres revenus' },
   { group: 'Argent', key: 'couriers.settle', label: 'Faire les règlements des livreurs' },
+  { group: 'Argent', key: 'payout.validate', label: 'Valider le versement de la semaine au patron (clôture la semaine)' },
   { group: 'Argent', key: 'closing.do', label: 'Faire la clôture de journée' },
   { group: 'Publicité', key: 'boosts.enter', label: 'Saisir les résultats des boosts et les messages reçus, ajouter ou arrêter un boost' },
   { group: 'Publicité', key: 'boosts.view', label: 'Voir le suivi et l’analyse des boosts' },

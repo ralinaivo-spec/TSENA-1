@@ -14,6 +14,7 @@ import { daySynthesis } from '../lib/synthesis';
 import { Badge, Button, Empty, IconButton, PageHead, fmtDate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PrintDialog } from '../ui/print';
+import { PayoutCard, PayoutHistory, WeekGrid } from './WeekBoard';
 
 export function RecapPage() {
   const can = useCan();
@@ -40,7 +41,7 @@ export function RecapPage() {
       <div className="card row" style={{ alignItems: 'center' }}>
         <div className="segmented" role="group" aria-label="Période">
           <button type="button" aria-pressed={mode === 'day'} onClick={() => setMode('day')}>Journée</button>
-          <button type="button" aria-pressed={mode === 'week'} onClick={() => setMode('week')}>Semaine (lun. → sam.)</button>
+          <button type="button" aria-pressed={mode === 'week'} onClick={() => { setMode('week'); const mon = mondayOf(date); if (date === today() && addDays(mon, 5) > today()) setDate(addDays(mon, -7)); }}>Semaine (lun. → sam.)</button>
         </div>
         <div className="row" style={{ alignItems: 'center', gap: 6 }}>
           <IconButton icon="chevronLeft" label="Précédent" onClick={() => step(-1)} />
@@ -62,9 +63,11 @@ export function RecapPage() {
         {withProfit && <Stat label="Bénéfice brut" value={r.grossProfit} />}
       </div>
 
+      {mode === 'week' && <><PayoutCard monday={monday} /><WeekGrid monday={monday} withProfit={withProfit} /></>}
       {withProfit && <ProfitDetail from={r.from} to={r.to} gross={r.grossProfit} sales={r.netSales} cost={r.cost} />}
       {mode === 'week' ? <WeekTables days={days} r={r} /> : <DayTables r={r} />}
       <MoneyCard r={r} />
+      {mode === 'week' && <PayoutHistory onPick={(mon) => { setDate(mon); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
       <Share text={text} title={mode === 'week' ? 'Récapitulatif de la semaine' : 'Récapitulatif du jour'} sub={mode === 'week' ? `${fmtDate(monday)} au ${fmtDate(end)}` : fmtDate(date)} sections={sections} />
     </>
   );

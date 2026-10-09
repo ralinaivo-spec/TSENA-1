@@ -1,4 +1,5 @@
 // Trésorerie : soldes des comptes, mouvements, dépenses, autres revenus, virements, opérations récurrentes.
+import { closedBy } from '../lib/closed';
 import { useMemo, useRef, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { save, useTable } from '../lib/db';
@@ -131,17 +132,18 @@ function MoveForm({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
   const title = { expense: 'Nouvelle dépense', income: 'Autre revenu', owner_in: 'Apport du gérant', owner_out: 'Retrait du gérant', opening: 'Solde de départ d’un compte' }[kind];
   const n = parseNum(amount) || 0;
   const dayLocked = locked(date);
+  const weekClosed = kind === 'expense' || kind === 'income' ? closedBy(date) : undefined;
   async function submit() {
     setBusy(true);
     try {
       const sign = kind === 'expense' || kind === 'owner_out' ? -1 : 1;
       await addMove({ at: atFor(date), account, amount: kind === 'opening' ? n : sign * Math.abs(n), type: kind as MoveType, categoryId: withCat ? cat : undefined, label: label.trim() || undefined, note: note.trim() || undefined, photo });
       toast(`${title} enregistré${kind === 'expense' ? 'e' : ''}`); onClose();
-    } finally { setBusy(false); }
+    } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
   }
   return (
     <Modal title={title} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || dayLocked || (withCat && !cat)} onClick={submit}>Enregistrer</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || dayLocked || !!weekClosed || (withCat && !cat)} onClick={submit}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="grid-2">
           <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
@@ -159,6 +161,7 @@ function MoveForm({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
             <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { setPhoto(await compressPhoto(f, { max: 1000, targetBytes: 110_000 })); } catch (err: any) { toast(err.message, 'error'); } } e.target.value = ''; }} />
           </div>
         )}
+        {weekClosed && <div className="notice notice-danger"><Icon name="lock" /><span>Semaine clôturée : le versement de la semaine du {fmtDate(weekClosed.weekStart)} au {fmtDate(weekClosed.weekEnd)} a été validé par {weekClosed.byName ?? '?'}. Choisissez une autre date.</span></div>}
         {dayLocked && <div className="notice notice-danger"><Icon name="lock" /><span>Cette journée est clôturée. Seuls l’admin ou le gérant peuvent encore y ajouter une opération.</span></div>}
       </div>
     </Modal>

@@ -8,7 +8,7 @@ import { Badge, Button, Empty, fmtDateTime, timeAgo, toast } from '../ui/kit';
 const TABLES: Record<string, string> = {
   orders: 'Commande', customers: 'Client', products: 'Article', variants: 'Variante', categories: 'Catégorie', couriers: 'Livreur', zones: 'Zone',
   purchases: 'Achat', receptions: 'Réception', cashMoves: 'Mouvement de trésorerie', users: 'Utilisateur', roles: 'Rôle', settings: 'Paramètres',
-  suppliers: 'Fournisseur', boosts: 'Boost', boostReadings: 'Résultat de boost', pageMessages: 'Messages réels', courierSettlements: 'Versement livreur',
+  suppliers: 'Fournisseur', boosts: 'Boost', boostReadings: 'Résultat de boost', pageMessages: 'Messages réels', courierSettlements: 'Versement livreur', payouts: 'Versement au patron',
 };
 const FIELDS: Record<string, string> = {
   status: 'statut', name: 'nom', phone: 'téléphone', place: 'lieu', notes: 'observations', discount: 'remise', deliveryFee: 'frais de livraison',

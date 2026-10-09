@@ -14,8 +14,10 @@ import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { BarChart } from '../ui/chart';
 import { SortTable, exportTables, type Col } from '../ui/table';
 import { today } from '../lib/money';
+import { MonthlyRecap } from './WeekBoard';
 
 const TABS = [
+  { key: 'mensuel', label: 'Récapitulatif mensuel' },
   { key: 'resultat', label: 'Bénéfice et perte' },
   { key: 'ventes', label: 'Journal des ventes' },
   { key: 'articles', label: 'Articles' },
@@ -40,7 +42,8 @@ export function ReportsPage() {
     <>
       <PageHead title="Rapports" subtitle="Toutes les analyses par période, triables et exportables en Excel" />
       <div className="tabs" role="tablist">{TABS.map((t) => <button key={t.key} role="tab" aria-selected={cur.key === t.key} onClick={() => navigate('/rapports/' + t.key)}>{t.label}</button>)}</div>
-      {cur.key !== 'stock' && <div className="card"><PeriodPicker value={period} onChange={setPeriod} /></div>}
+      {cur.key !== 'stock' && cur.key !== 'mensuel' && <div className="card"><PeriodPicker value={period} onChange={setPeriod} /></div>}
+      {cur.key === 'mensuel' && <MonthlyRecap />}
       {cur.key === 'resultat' && <ProfitLoss from={from} to={to} />}
       {cur.key === 'ventes' && <SalesJournal from={from} to={to} />}
       {cur.key === 'articles' && <Articles from={from} to={to} />}

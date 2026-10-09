@@ -3,6 +3,7 @@ import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './d
 import { audit, currentUser } from './auth';
 import { addMoves, nextNumber, stockOf, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
+import { assertOpenNow } from './closed';
 
 export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean; pickup?: boolean }
 /** Zone « Sur boutique » : le client vient chercher, pas de frais ni de livreur. */
@@ -231,6 +232,7 @@ export const backToPrepare = (o: Order) => setStatus(o, 'confirmed');
 
 /** Remise au livreur : les articles (y compris les choix) quittent la boutique. */
 export async function dispatchOrder(o: Order, courierId: string) {
+  assertOpenNow('Remise au livreur');
   const at = bizNow();
   await addMoves(o.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number}${l.isChoice ? ' (choix)' : ''}`, at })));
   await setStatus(o, 'out', { courierId, dispatchedAt: at });
@@ -238,6 +240,7 @@ export async function dispatchOrder(o: Order, courierId: string) {
 
 /** Retour du livreur : ce qui est gardé, rendu, l'argent encaissé. */
 export async function recordReturn(o: Order, r: { kept: Record<string, number>; feeCharged: number; collected: { amount: number; method: PayMethod; ref?: string }[]; note?: string }) {
+  assertOpenNow('Retour du livreur');
   const at = bizNow();
   const lines = o.lines.map((l) => {
     const kept = Math.max(0, Math.min(l.qty, r.kept[l.id] ?? 0));
@@ -260,6 +263,7 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
 
 /** Échange traité directement en boutique (sans livraison). */
 export async function completeAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
+  assertOpenNow('Échange en boutique');
   const at = bizNow();
   await addMoves([
     ...o.lines.map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — remis en boutique`, at })),
@@ -272,6 +276,7 @@ export async function completeAtShop(o: Order, pay?: { amount: number; method: P
 
 /** Retrait en boutique : le client repart avec ses articles et paie sur place. */
 export async function handOverAtShop(o: Order, pay?: { amount: number; method: PayMethod; ref?: string }) {
+  assertOpenNow('Retrait en boutique');
   const at = bizNow();
   await addMoves(o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, qty: -l.qty, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — retiré en boutique`, at })));
   const u = currentUser();
@@ -284,6 +289,7 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
 export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number; employee?: { id: string; name: string } }) {
+  assertOpenNow('Vente');
   const at = bizNow();
   const u = currentUser();
   const pickup = all<Zone>('zones').find((z) => isPickupZone(z));
