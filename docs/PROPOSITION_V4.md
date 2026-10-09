@@ -1,34 +1,60 @@
-# TSENA — Proposition de refonte v4 (à valider)
+# TSENA — Proposition de refonte v4.1 (à valider)
 
-> Reformulation de vos 14 demandes du 09/10/2026, avec une solution simple pour chacune.
+> Reformulation de vos demandes du 09/10/2026, complétée avec vos réponses du même jour (v4.1), avec une solution simple pour chacune.
 > Les **boosts publicitaires** sont gardés tels quels : vous les reverrez à part.
 > ✅ = déjà en place (à garder ou à ajuster) · 🆕 = à créer · 🔧 = à modifier.
 
 ---
 
-## 1. Catégories, variantes et articles 🔧
+## 1. Pages (catégories), variantes et articles 🔧
 
-**Votre besoin.** Chaque catégorie définit d'abord ses propres variantes (plusieurs niveaux, avec leurs valeurs). Ensuite seulement, on crée les articles en choisissant une valeur par variante.
+**Règle de base : une page Facebook = une catégorie.**
 
-**Solution proposée : la catégorie porte ses « critères ».**
+**Votre besoin.** Chaque catégorie définit d'abord ses propres variantes, puis on crée les articles en choisissant une valeur par variante. Rien n'est figé : cela doit marcher pour toute sorte de produits (lampes, pyjamas, sandales, coffrets, motos…).
 
-| Étape | Exemple : catégorie « Lampe rechargeable » |
-|---|---|
-| 1. Créer la catégorie | Lampe rechargeable (rattachée à sa page Facebook) |
-| 2. Lui donner ses critères (jusqu'à 4) et leurs valeurs | **Modèle** : LP1 (simple batterie), LP2 (double batterie), LP3 (tube), LP4 (barre LED) · **Type** : E27 (à vis), B22 (baïonnette) · **Puissance** : 7 W, 12 W, 20 W, 30 W |
-| 3. Créer un article = choisir une valeur par critère | Modèle LP1 · Type B22 · Puissance 7 W |
-| 4. Le nom se fait tout seul (modifiable) | **LP1 B22 7W** |
-| 5. Prix | Prix de revient 4 486 Ar · PV détail 9 000 Ar · PV gros 9 000 Ar |
+### 1.1 Les variantes de chaque catégorie, libres et sans limite
+- Une catégorie peut avoir **autant de variantes que nécessaire** (Modèle, Type, Puissance, Taille, Couleur, Matière, Âge…).
+- Chaque variante a sa **liste de valeurs**. On peut à tout moment **ajouter, renommer, réordonner, désactiver ou supprimer** une variante ou une valeur.
+- Une valeur déjà utilisée par des articles n'est pas supprimée mais **désactivée** : elle disparaît des choix, et l'historique reste juste.
+- **Variante obligatoire ou facultative** : par exemple, « Couleur » peut rester vide pour certains articles.
 
-- Un bouton **« Créer toutes les combinaisons »** propose d'un coup tous les articles possibles (ex. 4 × 2 × 4 = 32) ; on décoche ceux qui n'existent pas.
-- Une valeur ajoutée plus tard (ex. Puissance 40 W) est disponible pour les nouveaux articles.
-- Remplace le système actuel « couleur / taille » unique pour tout le magasin.
+### 1.2 Des modèles de variantes proposés par défaut (on garde ce qu'on veut)
+À la création d'une catégorie, TSENA **propose** des variantes courantes, à cocher ou décocher. On peut aussi en créer de nouvelles.
+
+| Modèle proposé | Variantes suggérées | Valeurs d'exemple (modifiables) |
+|---|---|---|
+| Vêtements | Taille, Couleur, Âge | S, M, L, XL · Rouge, Bleu · 2 ans, 4 ans… |
+| Chaussures | Pointure, Couleur | 36 → 45 |
+| Électrique / lampes | Modèle, Type de culot, Puissance | E27, B22 · 7 W, 12 W… |
+| Accessoires / bijoux | Modèle, Couleur, Matière | — |
+| Vide | Aucune | On crée tout soi-même |
+
+### 1.3 Le nom de l'article : automatique, avec des abréviations qui ont un sens
+Chaque valeur a un **libellé complet** et un **code court** (abréviation). TSENA propose le code, et vous pouvez le corriger.
+
+| Variante | Libellé complet | Code court |
+|---|---|---|
+| Modèle | LP1 — simple batterie | LP1 |
+| Type | B22 — baïonnette | B22 |
+| Puissance | 7 watts | 7W |
+| Couleur | Bleu marine | BLM |
+
+- **Nom de l'article** = codes mis bout à bout : **LP1 B22 7W**. Il reste modifiable.
+- Le **libellé complet** s'affiche à côté du nom à l'écran, sur le ticket et sur l'étiquette du colis : « LP1 B22 7W — simple batterie, baïonnette, 7 watts ».
+- **Code article** (pour la recherche et le code-barres) = code de la page + codes des valeurs, par exemple **LAMP-LP1-B22-7W**.
+
+### 1.4 Créer les articles
+1. Choisir la catégorie.
+2. Choisir une valeur par variante.
+3. Saisir le prix de revient, le PV détail, le PV gros et le stock de départ.
+
+Un bouton **« Créer toutes les combinaisons »** propose d'un coup tous les articles possibles ; on décoche ceux qui n'existent pas, et on peut saisir les prix en tableau, comme dans Excel. Cela remplace le système actuel « couleur / taille » commun à tout le magasin.
 
 ## 2. Import du stock par Excel 🔧
 
 Ordre imposé, simple :
-1. Vous créez **à la main** la catégorie et ses critères (point 1).
-2. Le logiciel génère **un fichier Excel propre à cette catégorie** : une colonne par critère, avec une **liste déroulante** des valeurs permises, puis Prix de revient, PV détail, PV gros, Quantité en stock.
+1. Vous créez **à la main** la catégorie et ses variantes, avec leurs valeurs et leurs codes (point 1).
+2. Le logiciel génère **un fichier Excel propre à cette catégorie** : une colonne par variante (autant qu'il y en a), avec une **liste déroulante** des valeurs permises, puis Prix de revient, PV détail, PV gros, Quantité en stock.
 3. Vous le remplissez et vous l'importez. Le logiciel contrôle chaque ligne (valeur inconnue, prix manquant, doublon) **avant** d'enregistrer, et affiche les erreurs ligne par ligne.
 
 ## 3. Ventes : deux types seulement 🔧
@@ -36,7 +62,7 @@ Ordre imposé, simple :
 ### 3.1 Vente sur place ✅ (écran à refaire pour la caisse)
 Le client est là : il choisit, paie, repart avec l'article.
 - **Écran « caisse » adapté** à l'ordinateur, la tablette et le téléphone : grandes tuiles d'articles, recherche, lecteur de code-barres, panier à droite (en bas sur téléphone), gros boutons de paiement (espèces, MVola, Orange Money, Airtel Money, mixte).
-- **Ticket** 58 mm ou 80 mm et **ouverture du tiroir-caisse** par l'imprimante, au moment du paiement en espèces.
+- **Ticket** imprimé depuis l'ordinateur ou le téléphone, avec n'importe quelle imprimante : format A4/A5, ou ticket 58 mm / 80 mm. Le tiroir-caisse s'ouvrira par l'imprimante ticket quand vous aurez l'appareil.
 
 ### 3.2 Vente à livraison 🔧 (4 étapes claires)
 
@@ -49,6 +75,21 @@ Le client est là : il choisit, paie, repart avec l'article.
 | → **Terminée** | Livrée, livrée en partie ou refusée, et le compte est soldé | — |
 
 L'étape « À confirmer » actuelle disparaît.
+
+**Étiquette du colis 🆕.** Pendant la préparation (étape 2), un bouton **« Imprimer l'étiquette »** imprime une fiche à coller sur le colis :
+- nom du client ou nom Facebook, **téléphone**, **lieu de livraison** et repère, date et créneau prévus ;
+- numéro de commande et **QR code**, qui ouvre la commande quand on le scanne avec le téléphone ;
+- articles et quantités, en indiquant les **choix** (« 3 tailles à essayer, 1 seule à payer ») ;
+- **montant à encaisser**, avec le prix des articles et les frais de livraison séparés : « déjà payé : 20 000 Ar par MVola » ou « RIEN À ENCAISSER — déjà payé » ;
+- livreur prévu et observations.
+
+On peut imprimer plusieurs étiquettes d'un coup : toutes les commandes en attente d'un livreur, en A4 avec 4 ou 8 étiquettes par page, ou une par une sur une imprimante d'étiquettes.
+
+**Le client vient finalement chercher sa commande 🆕.** Quand une commande est **en attente de livraison** ou **déjà en livraison** et que le client décide de venir la récupérer en boutique, un bouton **« Retrait en boutique »** :
+- **si le colis est encore à la boutique** : la commande devient une **vente sur place**. On encaisse, la commande est terminée, il n'y a pas de frais de livraison et pas de livreur ;
+- **si le colis est déjà chez le livreur** : le livreur le rapporte. Au retour, on choisit « Le client récupère en boutique » au lieu de « Livré » ou « Refusé ». Le colis revient en stock réservé pour ce client ; quand le client passe, on encaisse et la commande devient une **vente sur place** ;
+- **frais de livraison** : retirés pour le client. Le livreur peut quand même recevoir un **dédommagement de course** si vous le décidez (montant saisi, 0 par défaut) ;
+- la commande garde son historique (« Prévue en livraison → retirée en boutique le … ») et elle est comptée dans les **ventes sur place** du jour où le client paie.
 
 **Paiement avant le retour du livreur.** Aux étapes 2 et 3, on peut enregistrer un paiement déjà reçu (MVola, espèces en boutique). Au retour, ce montant est affiché comme « déjà payé » et n'est pas demandé au livreur.
 
@@ -68,7 +109,10 @@ Pour payer les frais du livreur, trois choix en un clic :
 - **Payés à part**, en espèces de la caisse ou par Mobile Money.
 - **Plus tard** : le montant va dans le **compte du livreur**, réglé un autre jour.
 
-Le compte de chaque livreur montre ce qu'il doit, ce qu'on lui doit et l'historique. Un livreur peut avoir son propre accès (rôle « Livreur ») pour voir **seulement** son compte.
+Le compte de chaque livreur montre ce qu'il doit, ce qu'on lui doit et l'historique. **Les livreurs deviennent des utilisateurs 🆕.**
+- Dans **Utilisateurs**, on choisit le rôle **« Livreur »**. Sa fiche (nom, téléphone, zones, frais habituels) est créée en même temps : il n'y a plus de liste de livreurs à part.
+- Avec son propre accès, il voit **seulement** ses colis du jour (adresse, téléphone, montant à encaisser), ce qu'il doit à la boutique, ce que la boutique lui doit, et son historique.
+- Un livreur sans téléphone ou sans compte peut quand même exister : on lui crée un utilisateur **sans accès**, simplement pour suivre son compte.
 
 ## 4. Dépenses et charges : un menu à part 🔧
 
@@ -85,7 +129,7 @@ Le compte de chaque livreur montre ce qu'il doit, ce qu'on lui doit et l'histori
 
 ## 6. Recherche partout 🔧
 
-Chaque champ de recherche cherche dans **tout le contenu** : nom, téléphone, nom Facebook, lieu, observations, numéro, articles, valeurs des critères (ex. « B22 », « 7W »), montants. Il ignore les accents, les majuscules et les espaces dans les numéros (« 034 12 » = « 03412 »).
+Chaque champ de recherche cherche dans **tout le contenu** : nom, téléphone, nom Facebook, lieu, observations, numéro, articles, valeurs des variantes (ex. « B22 », « 7W »), montants. Il ignore les accents, les majuscules et les espaces dans les numéros (« 034 12 » = « 03412 »).
 
 ## 7. Notifications 🆕
 
@@ -114,28 +158,34 @@ Chaque champ de recherche cherche dans **tout le contenu** : nom, téléphone, n
 4. Dépenses et bénéfice net, **par jour au minimum** : le détail par heure est supprimé.
 5. Stock faible, puis le reste.
 
-**Menu de gauche :**
+**Menu de gauche (réorganisé) :**
 
-| Ordre | Menu |
-|---|---|
-| 1 | Tableau de bord |
-| 2 | Vente sur place |
-| 3 | Ventes à livraison |
-| 4 | Retour livreurs / comptes livreurs |
-| 5 | Clients |
-| 6 | Dépenses |
-| 7 | Caisse du jour et récapitulatifs |
-| 8 | Articles et stock |
-| 9 | Boosts pub |
-| 10 | Rapports |
-| 11 | Achats et réceptions |
-| 12 | Paramètres et administration |
+| Ordre | Menu | Contenu |
+|---|---|---|
+| 1 | **Tableau de bord** | Ventes, commandes, argent |
+| 2 | **Vente sur place** | Caisse |
+| 3 | **Ventes à livraison** | Enregistrées, en attente, en livraison, terminées |
+| 4 | **Livreurs** | Retour livreur, comptes livreurs |
+| 5 | **Clients** | Fiches et historique |
+| 6 | **Dépenses** | Dépenses et charges fixes |
+| 7 | **Caisse du jour et récapitulatifs** | Jour, semaine, versement au patron |
+| 8 | **Articles et stock** | Pages / catégories, variantes, articles, stock |
+| 9 | **Achats et réceptions** | Un seul menu : commandes Chine, frais, arrivages, réception en stock |
+| 10 | **Boosts pub** | Inchangé |
+| 11 | **Rapports** | Analyses par période |
+| 12 | **Import / Export** 🆕 | Tout ce qui s'importe ou s'exporte au même endroit |
+| 13 | **Paramètres** | Société, utilisateurs et rôles, impression, sauvegarde, cloud, outils… |
 
-Les modules que vous n'utilisez pas (ex. Achats Chine, Impression) peuvent être **masqués** dans Paramètres.
+**Import / Export (menu à part).**
+- Importer : articles et stock par catégorie, clients, achats.
+- Exporter en Excel : ventes, commandes, clients, dépenses, stock, rapports, versements, et tout en un seul classeur.
+- Chaque écran garde aussi son petit bouton « Excel » pour exporter ce qui est affiché.
+
+**Paramètres** garde les **réglages** (société, numéros WhatsApp, utilisateurs et rôles, impression et imprimantes, sauvegarde, cloud, date de saisie, outils) : ce qu'on règle une fois, pas ce qu'on utilise chaque jour.
 
 ## 10. Listes longues : menus déroulants 🔧
 
-Toute longue liste (clients, articles, livreurs, catégories, valeurs de critères…) devient un **menu déroulant avec recherche**, sur une seule ligne, au lieu de prendre toute la page.
+Toute longue liste (clients, articles, livreurs, catégories, valeurs de variantes…) devient un **menu déroulant avec recherche**, sur une seule ligne, au lieu de prendre toute la page.
 
 ## 11. Page d'installation 🆕
 
@@ -177,20 +227,28 @@ Déjà en place :
 
 | Phase | Contenu | Pourquoi d'abord |
 |---|---|---|
-| **1** | Catégories, critères, articles, import Excel par catégorie (points 1-2) | Indispensable avant de charger le stock |
-| **2** | Ventes : caisse sur place, livraison en 4 étapes, retour livreur, comptes livreurs (point 3) | Cœur du travail quotidien |
+| **1** | Pages / catégories, variantes libres, articles, import Excel par catégorie (points 1-2) | Indispensable avant de charger le stock |
+| **2** | Ventes : caisse sur place, livraison en 4 étapes, étiquette colis, retrait en boutique, retour livreur, livreurs-utilisateurs (point 3) | Cœur du travail quotidien |
 | **3** | Dépenses et charges, notifications (points 4, 7) | Suivi de l'argent |
 | **4** | Clients, recherche, menus déroulants (points 5, 6, 10) | Confort de saisie |
-| **5** | Thème, tableau de bord, menu, page d'installation, compatibilité (points 8, 9, 11, 13) | Présentation finale |
+| **5** | Thème, tableau de bord, nouveau menu (Achats et réceptions, Import / Export), page d'installation, compatibilité (points 8, 9, 11, 13) | Présentation finale |
 | **6** | Sauvegardes, historique de synchronisation (points 12, 14) | Sécurité |
 
 Chaque phase est mise en ligne et testée avec vous avant de passer à la suivante.
 
-## Questions à trancher avant de commencer
+## Vos décisions du 09/10/2026
 
-1. **Catégorie et page Facebook** : une catégorie = une page ? Ou une page peut-elle regrouper plusieurs catégories (ex. page « Maison » = Lampes + Coffrets) ?
-2. **Nombre de critères** : 4 maximum par catégorie, est-ce suffisant ?
-3. **Nom de l'article** : le nom automatique « LP1 B22 7W » vous convient-il ?
-4. **Livreurs** : faut-il leur donner un accès personnel pour consulter leur compte ?
-5. **Modules à masquer** : Achats Chine, Réceptions, Impression… lesquels n'utilisez-vous pas ?
-6. **Imprimante et tiroir-caisse** : quel modèle (ou quel budget), et branché à quoi (PC en USB, téléphone en Bluetooth) ?
+| Question | Décision |
+|---|---|
+| Catégorie et page Facebook | **Une page = une catégorie** |
+| Nombre de variantes | **Sans limite**, rien n'est figé. Des modèles sont proposés par défaut, et on garde ce qu'on veut. |
+| Nom de l'article | Automatique, avec des **abréviations qui ont un sens** (code court par valeur, libellé complet affiché à côté) |
+| Livreurs | Ce sont des **utilisateurs avec le rôle « Livreur »** |
+| Achats | Surtout en Chine : **Achats et réceptions réunis** dans un seul menu. Import et export réunis dans un menu à part. Les réglages restent dans Paramètres. |
+| Imprimante et tiroir-caisse | Pas encore achetés : impression **générale** depuis le PC ou le téléphone (A4/A5, étiquettes, ticket 58/80 mm). Le tiroir-caisse viendra avec l'appareil. |
+| Étiquette colis | **Ajoutée** (point 3.2) |
+| Le client récupère sa commande lui-même | **« Retrait en boutique »**, la commande devient une vente sur place (point 3.2) |
+
+## Il reste à préciser plus tard (sans bloquer la phase 1)
+- Le format préféré de l'étiquette colis, à décider en essayant : A4 avec 4 ou 8 étiquettes par page, A6, ou étiquette 100 × 150 mm.
+- Le dédommagement du livreur quand le client vient finalement chercher lui-même : 0 par défaut ?
