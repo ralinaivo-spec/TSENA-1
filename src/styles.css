@@ -972,3 +972,13 @@ tr.row-error td { background: var(--danger-soft); }
 .req::after { content: " *"; color: var(--danger); font-weight: 800; }
 .back-bar { display: flex; margin: 0 0 10px; }
 .back-bar .btn { min-height: 36px; padding: 0 12px; }
+/* Retour livreur : lignes a → g */
+.parcel.is-off { opacity: .6; }
+.parcel.is-checked { box-shadow: inset 4px 0 0 var(--brand); }
+.money-lines { display: grid; gap: 2px; }
+.money-lines > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 2px; border-bottom: 1px dashed var(--line); }
+.money-lines > div > span { min-width: 0; }
+.money-lines .num-input { width: 110px; text-align: right; }
+.money-lines .ml-total { font-weight: 700; }
+.money-lines .ml-strong { font-weight: 800; background: var(--brand-soft); border-radius: 10px; padding: 8px 10px; border-bottom: 0; }
+.ml-expected { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); font-weight: 800; font-size: 1.05rem; }

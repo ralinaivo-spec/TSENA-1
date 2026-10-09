@@ -6,7 +6,8 @@ import { useCan } from './auth';
 import { getMeta, setMeta, useMeta, useTable } from './db';
 import { productStock, type Product } from './catalog';
 import { hasPendingChoice, type Order } from './orders';
-import { dueRecurring, mondayOf, today, type Recurring } from './money';
+import { courierBalance, dueRecurring, mondayOf, today, type Recurring } from './money';
+import type { Courier } from './orders';
 import { unpaidWeeks } from './payouts';
 import { dueProspects } from './prospects';
 import { currentUser } from './auth';
@@ -31,7 +32,7 @@ export const unsnooze = (id: string) => { const cur = { ...getMeta<Snoozes>('not
 export function useNotifications() {
   const can = useCan();
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); const recs = useTable<Recurring>('recurring');
-  const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts'); const prospects = useTable('prospects');
+  const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts'); const prospects = useTable('prospects'); const couriers = useTable<Courier>('couriers'); const settles = useTable('courierSettlements');
   const snoozes = useMeta<Snoozes>('notifSnooze', {});
   const lastFile = useMeta<string | null>('lastFileBackup', null); const lastCloud = useMeta<string | null>('lastCloudBackup', null);
   // Le temps passe : les charges « à telle heure » apparaissent sans autre changement (rafraîchi chaque minute par le composant).
@@ -45,6 +46,15 @@ export function useNotifications() {
       for (const [rid, ds] of byRec) {
         const d = ds[0];
         out.push({ id: `due:${rid}:${d.period}`, level: 'urgent', title: `${d.r.label} ${d.r.kind === 'income' ? 'à encaisser' : 'à payer'} : ${fmtAr(d.r.amount)}`, text: `Échéance du ${new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR')}${d.r.time ? ` à ${d.r.time}` : ''}${ds.length > 1 ? ` · ${ds.length} échéances en attente` : ''}`, href: '#/depenses', due: d });
+      }
+    }
+    if (can('couriers.settle')) {
+      // Frais de livraison différés : à payer au livreur au plus vite (urgent le soir, ou s'il les a réclamés).
+      for (const c of couriers) {
+        const owed = -courierBalance(c.id).carry;
+        if (owed <= 0) continue;
+        const evening = new Date().getHours() >= 17;
+        out.push({ id: `frais:${c.id}:${today()}${c.feeClaimAt ? ':r' + c.feeClaimAt : ''}`, level: c.feeClaimAt || evening ? 'urgent' : 'important', title: `${c.feeClaimAt ? `${c.name} réclame ses frais` : `Frais de livraison à payer à ${c.name}`} : ${fmtAr(owed)}`, text: c.feeClaimAt ? `Réclamé le ${new Date(c.feeClaimAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Frais différés : à régler au plus tard à la clôture du soir', href: '#/livraisons/retour' });
       }
     }
     if (can('deliveries.manage')) {
@@ -76,7 +86,7 @@ export function useNotifications() {
     }
     const rank: Record<Level, number> = { urgent: 0, important: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
-  }, [orders, moves, recs, products, sm, conflicts, payouts, prospects, lastFile, lastCloud, minute]);
+  }, [orders, moves, recs, products, sm, conflicts, payouts, prospects, couriers, settles, lastFile, lastCloud, minute]);
   const now = new Date().toISOString();
   return list.map((n) => ({ ...n, until: snoozes[n.id] && snoozes[n.id] > now ? snoozes[n.id] : undefined }));
 }

@@ -5,10 +5,10 @@
 // (retenus sur l'argent versé, payés à part, ou plus tard sur son compte).
 import { useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
-import { get, useTable } from '../lib/db';
+import { get, save, useTable } from '../lib/db';
 import { fmtAr, parseNum } from '../lib/catalog';
 import {
-  cancelDeliveryToShop, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining,
+  cancelDeliveryToShop, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
   type Courier, type Order, type Zone,
 } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
@@ -48,6 +48,18 @@ export function CourierReturn() {
   );
 }
 
+/** Paiement des frais différés dus au livreur. */
+function PayOwedModal({ courier, amount, onClose }: { courier: Courier; amount: number; onClose: () => void }) {
+  const [acc, setAcc] = useState<AccountId>('cash');
+  const [val, setVal] = useState(String(amount));
+  return (
+    <Confirm title={`Payer les frais de ${courier.name}`} confirmLabel="Enregistrer le paiement" onClose={onClose}
+      onConfirm={async () => { const v = parseNum(val) || 0; if (v <= 0) throw new Error('Montant à saisir.'); await settleCourier(courier, [], -v, acc, 'Frais de livraison différés payés'); await save('couriers', { id: courier.id, feeClaimAt: null as unknown as undefined }); toast(`${fmtAr(v)} payés à ${courier.name}`); }}
+      message={<div className="stack-s"><p>La boutique doit <strong>{fmtAr(amount)}</strong> de frais de livraison à {courier.name}.</p>
+        <div className="grid-2"><TextField label="Montant payé (Ar)" required value={val} onChange={setVal} inputMode="numeric" /><SelectField label="Payé depuis" value={acc} onChange={(v) => setAcc(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} /></div></div>} />
+  );
+}
+
 function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boolean }) {
   const b = courierBalance(courier.id);
   const [dec, setDec] = useState<Record<string, Decision>>({});
@@ -70,8 +82,12 @@ function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boo
     const fee = open ? (fees[o.id] != null ? parseNum(fees[o.id]) ?? 0 : d === 'refused' ? 0 : o.deliveryFee || 0) : (o.feeCharged ?? o.deliveryFee ?? 0);
     const sim = open && !blocked ? simulate(o, d, fee) : o;
     const x = courierSplit(sim);
-    const prepaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((s, p) => s + p.amount, 0);
-    return { o, open, blocked, d, fee, x, prepaid, on: !blocked && !off[o.id] };
+    const shopPays = (o.payments || []).filter((p) => p.receivedBy === 'shop');
+    const prepaid = shopPays.reduce((s, p) => s + p.amount, 0);
+    const paidHow = [...new Set(shopPays.map((p) => `${PAY_METHODS[p.method] ?? p.method}${p.ref ? ' réf. ' + p.ref : ''}`))].join(', ');
+    const e = x.toCollect + x.feeKept;            // ce que le client a payé au livreur
+    const c = e + prepaid;                        // total payé par le client
+    return { o, open, blocked, d, fee, x, prepaid, paidHow, a: c - fee, c, e, on: !blocked && !off[o.id] };
   }), [b.pending, dec, fees, off]);
 
   const on = rows.filter((r) => r.on);
@@ -104,79 +120,96 @@ function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boo
     setBusy(false);
   }
 
+  const expected = Math.max(0, handOver);
+  const gap = n - expected;
+  const feeChoice = mode === 'apart' ? `apart:${feeAccount}` : mode;
+  const setFeeChoice = (v: string) => { if (v.startsWith('apart:')) { setMode('apart'); setFeeAccount(v.slice(6) as AccountId); } else setMode(v as FeeMode); setAmount(null); };
+  const tot = { a: on.reduce((t, r) => t + r.a, 0), b: on.reduce((t, r) => t + r.fee, 0), c: on.reduce((t, r) => t + r.c, 0), d: on.reduce((t, r) => t + r.prepaid, 0), e: inHand };
+  const [payOwed, setPayOwed] = useState<AccountId | null>(null);
   return (
     <>
-      <div className="card card-flush">
-        <div className="card-pad row-between">
-          <div><h2>{courier.name}</h2><p className="small muted">{courier.phone ? fmtPhone(courier.phone) + ' · ' : ''}{b.pending.length} colis à régler{b.carry ? ` · reste des fois précédentes : ${b.carry > 0 ? `il doit ${fmtAr(b.carry)}` : `on lui doit ${fmtAr(-b.carry)}`}` : ''}</p></div>
+      <div className="card stack-s">
+        <div className="row-between">
+          <div><h2>{courier.name}</h2><p className="small muted">{courier.phone ? fmtPhone(courier.phone) + ' · ' : ''}{b.pending.length} colis à régler{b.carry ? ` · reste des fois précédentes : ${b.carry > 0 ? `il doit ${fmtAr(b.carry)}` : `la boutique lui doit ${fmtAr(-b.carry)}`}` : ''}</p></div>
         </div>
-        {blockedRows.length > 0 && <div className="card-pad"><div className="notice notice-danger"><Icon name="alert" /><span>{blockedRows.length} colis avec un <strong>choix à préciser</strong> : touchez « Préciser le choix » pour indiquer ce que le client a gardé.</span></div></div>}
-        {rows.length === 0 ? <p className="card-pad small muted">Aucun colis à régler.</p> : (
-          <div className="table-wrap"><table className="table return-table">
-            <thead><tr><th></th><th>Colis</th><th>Résultat</th><th className="t-num">Articles à encaisser</th><th className="t-num">Frais de livraison</th><th className="t-num">Déjà payé</th><th className="t-num">Il a en main</th></tr></thead>
-            <tbody>{rows.map((r) => (
-              <tr key={r.o.id} className={r.on ? 'is-checked' : ''}>
-                <td><input type="checkbox" className="perm-check" checked={r.on} disabled={r.blocked} onChange={(e) => setOff({ ...off, [r.o.id]: !e.target.checked })} aria-label={`Régler ${r.o.number}`} /></td>
-                <td><a href={`#/commandes/${r.o.id}`}><strong>{r.o.number}</strong></a> <span className="small">{orderLabel(r.o)}</span>
-                  <div className="small muted">{get<Zone>('zones', r.o.zoneId || '')?.name}{r.o.place ? ` — ${r.o.place}` : ''} · parti le {fmtDateTime(r.o.dispatchedAt)}</div></td>
-                <td>
-                  {r.open ? (r.blocked ? <Button onClick={() => setRet(r.o)}>Préciser le choix ({choiceQty(r.o)})</Button> : (
-                    <div className="stack-s">
-                      <div className="segmented small-seg" role="group" aria-label={`Résultat ${r.o.number}`}>
-                        <button type="button" aria-pressed={r.d === 'delivered'} onClick={() => setDec({ ...dec, [r.o.id]: 'delivered' })}>Livrée</button>
-                        <button type="button" aria-pressed={r.d === 'refused'} onClick={() => setDec({ ...dec, [r.o.id]: 'refused' })}>Refusée</button>
-                      </div>
-                      <div className="row" style={{ gap: 4 }}>
-                        <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setRet(r.o)}>En partie / choix…</button>
-                        <button type="button" className="link-btn" onClick={() => setToShop(r.o)}>Client en boutique…</button>
-                      </div>
-                    </div>
-                  )) : <Badge tone={r.o.status === 'refused' ? 'danger' : 'ok'}>{r.o.status === 'refused' ? 'Refusée' : r.o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}
-                </td>
-                <td className="t-num"><strong>{fmtAr(r.x.toCollect)}</strong></td>
-                <td className="t-num">{r.open && !r.blocked ? <input className="cell-input num-input" inputMode="numeric" aria-label={`Frais ${r.o.number}`} value={fees[r.o.id] ?? String(r.fee)} onChange={(e) => setFees({ ...fees, [r.o.id]: e.target.value })} /> : fmtAr(r.fee)}
-                  {r.open && r.fee !== (r.o.deliveryFee || 0) && <div className="small muted">prévu {fmtAr(r.o.deliveryFee)}</div>}</td>
-                <td className="t-num">{r.prepaid ? <>{fmtAr(r.prepaid)}<div className="small muted">payé avant</div></> : '—'}</td>
-                <td className="t-num"><strong>{fmtAr(r.x.toCollect + r.x.feeKept)}</strong></td>
-              </tr>
-            ))}</tbody>
-          </table></div>
+        {b.carry < 0 && canSettle && (
+          <div className="notice notice-warn" style={{ flexWrap: 'wrap', alignItems: 'center' }}><Icon name="alert" /><span style={{ flex: '1 1 220px' }}><strong>Frais différés à payer à {courier.name} : {fmtAr(-b.carry)}</strong>. À régler au plus vite (au plus tard à la clôture du soir).</span>
+            <Button onClick={() => setPayOwed('cash')}>Payer maintenant</Button></div>
         )}
+        {blockedRows.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>{blockedRows.length} colis avec un <strong>choix à préciser</strong> : touchez « Préciser le choix » pour indiquer ce que le client a gardé.</span></div>}
+        {rows.length === 0 && <p className="small muted">Aucun colis à régler.</p>}
       </div>
+      {rows.map((r) => (
+        <div key={r.o.id} className={`card stack-s parcel ${r.on ? 'is-checked' : 'is-off'}`}>
+          <div className="row-between" style={{ alignItems: 'flex-start' }}>
+            <label className="row" style={{ gap: 10, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
+              <input type="checkbox" className="perm-check" checked={r.on} disabled={r.blocked} onChange={(e) => setOff({ ...off, [r.o.id]: !e.target.checked })} aria-label={`Régler ${r.o.number}`} />
+              <span><a href={`#/commandes/${r.o.id}`}><strong>{r.o.number}</strong></a> {orderLabel(r.o)}
+                <span className="small muted" style={{ display: 'block' }}>{get<Zone>('zones', r.o.zoneId || '')?.name}{r.o.place ? ` — ${r.o.place}` : ''} · parti le {fmtDateTime(r.o.dispatchedAt)}</span></span>
+            </label>
+            {r.open ? (r.blocked ? <Button onClick={() => setRet(r.o)}>Préciser le choix ({choiceQty(r.o)})</Button> : (
+              <div className="stack-s" style={{ alignItems: 'flex-end' }}>
+                <div className="segmented small-seg" role="group" aria-label={`Résultat ${r.o.number}`}>
+                  <button type="button" aria-pressed={r.d === 'delivered'} onClick={() => setDec({ ...dec, [r.o.id]: 'delivered' })}>Livrée</button>
+                  <button type="button" aria-pressed={r.d === 'refused'} onClick={() => setDec({ ...dec, [r.o.id]: 'refused' })}>Refusée</button>
+                </div>
+                <div className="row" style={{ gap: 8 }}>
+                  <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setRet(r.o)}>En partie / choix…</button>
+                  <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setToShop(r.o)}>Client en boutique…</button>
+                </div>
+              </div>
+            )) : <Badge tone={r.o.status === 'refused' ? 'danger' : 'ok'}>{r.o.status === 'refused' ? 'Refusée' : r.o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}
+          </div>
+          {!r.blocked && <div className="money-lines">
+            <div><span>a. Articles (après le choix du client)</span><strong className="num">{fmtAr(r.a)}</strong></div>
+            <div><span>b. Frais de livraison</span>{r.open ? <input className="cell-input num-input" inputMode="numeric" aria-label={`Frais ${r.o.number}`} value={fees[r.o.id] ?? String(r.fee)} onChange={(e) => setFees({ ...fees, [r.o.id]: e.target.value })} /> : <strong className="num">{fmtAr(r.fee)}</strong>}</div>
+            {r.open && r.fee !== (r.o.deliveryFee || 0) && <div className="small muted"><span>prévu</span><span>{fmtAr(r.o.deliveryFee)}</span></div>}
+            <div className="ml-total"><span>c. À payer par le client (a + b)</span><strong className="num">{fmtAr(r.c)}</strong></div>
+            <div><span>d. Déjà payé à la boutique{r.paidHow ? ` (${r.paidHow})` : ''}</span><strong className="num">{r.prepaid ? '− ' + fmtAr(r.prepaid) : '—'}</strong></div>
+            <div className="ml-strong"><span>e. Le livreur doit verser (frais compris)</span><strong className="num">{fmtAr(r.e)}</strong></div>
+          </div>}
+        </div>
+      ))}
 
       {on.length > 0 && (
         <div className="card stack">
-          <h2>Compte avec {courier.name}</h2>
-          <table className="kv-table"><tbody>
-            <tr><td>Prix des articles encaissés ({on.length} colis)</td><td>{fmtAr(collect)}</td></tr>
-            <tr><td>Frais de livraison encaissés auprès des clients</td><td>{fmtAr(feeKept)}</td></tr>
-            <tr className="total"><td>Total que le livreur a en main</td><td>{fmtAr(inHand)}</td></tr>
-            <tr><td className="sub">Frais qui reviennent au livreur</td><td>{fmtAr(feeAll)}</td></tr>
-            {feeOwed > 0 && <tr><td className="sub">dont déjà payés à la boutique par le client (à lui rendre)</td><td>{fmtAr(feeOwed)}</td></tr>}
-            {b.carry !== 0 && <tr><td className="sub">Reste des fois précédentes</td><td>{b.carry > 0 ? '+ ' : '− '}{fmtAr(Math.abs(b.carry))}</td></tr>}
-          </tbody></table>
-          <div className="stack-s">
-            <strong className="small">Frais du livreur :</strong>
-            <div className="segmented" role="group" aria-label="Paiement des frais du livreur">
-              <button type="button" aria-pressed={mode === 'retenue'} onClick={() => { setMode('retenue'); setAmount(null); }}>Retenus sur l’argent versé</button>
-              <button type="button" aria-pressed={mode === 'apart'} onClick={() => { setMode('apart'); setAmount(null); }}>Payés à part</button>
-              <button type="button" aria-pressed={mode === 'plustard'} onClick={() => { setMode('plustard'); setAmount(null); }}>Plus tard (son compte)</button>
-            </div>
-            <p className="small muted">{mode === 'retenue' ? `Il garde ses frais : il vous remet ${fmtAr(Math.max(0, handOver))}.` : mode === 'apart' ? `Il vous remet tout (${fmtAr(Math.max(0, handOver))}) et vous lui payez ses frais (${fmtAr(feeAll)}) à part.` : `Il vous remet tout (${fmtAr(Math.max(0, handOver))}) ; ses frais (${fmtAr(feeAll)}) restent sur son compte et seront payés un autre jour.`}</p>
+          <h2>Compte avec {courier.name} ({on.length} colis)</h2>
+          <div className="money-lines">
+            <div><span>a. Articles</span><strong className="num">{fmtAr(tot.a)}</strong></div>
+            <div><span>b. Frais de livraison</span><strong className="num">{fmtAr(tot.b)}</strong></div>
+            <div className="ml-total"><span>c. Payé par les clients (a + b)</span><strong className="num">{fmtAr(tot.c)}</strong></div>
+            <div><span>d. Déjà payé directement à la boutique</span><strong className="num">{tot.d ? '− ' + fmtAr(tot.d) : '—'}</strong></div>
+            <div className="ml-strong"><span>e. Le livreur doit verser (frais compris)</span><strong className="num">{fmtAr(tot.e)}</strong></div>
+            {b.carry !== 0 && <div><span>Reste des fois précédentes</span><strong className="num">{b.carry > 0 ? '+ ' : '− '}{fmtAr(Math.abs(b.carry))}</strong></div>}
+            <div><span>g. Frais de livraison qui reviennent au livreur{feeOwed ? ` (dont ${fmtAr(feeOwed)} payés à la boutique par le client)` : ''}</span><strong className="num">{fmtAr(feeAll)}</strong></div>
           </div>
+          <SelectField label="g. Les frais du livreur sont payés…" required value={feeChoice} onChange={setFeeChoice} options={[
+            { value: 'retenue', label: 'Gardés par le livreur sur l’argent versé' },
+            ...ACCOUNT_IDS.filter((x) => x !== 'bank').map((x) => ({ value: 'apart:' + x, label: `Payés à part — ${ACCOUNTS[x]}` })),
+            { value: 'plustard', label: 'Différés (à payer au plus vite, au plus tard ce soir)' },
+          ]} />
+          <div className="ml-expected"><span>Attendu du livreur maintenant</span><strong className="num">{fmtAr(expected)}</strong></div>
           <div className="grid-2">
-            <TextField label="Montant remis par le livreur (Ar)" value={amount ?? String(Math.max(0, handOver))} onChange={setAmount} inputMode="numeric" />
+            <TextField label="f. Montant versé par le livreur (Ar)" required value={amount ?? String(expected)} onChange={setAmount} inputMode="numeric" />
             <SelectField label="Reçu sur" value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
-            {mode === 'apart' && <SelectField label={`Frais (${fmtAr(feeAll)}) payés depuis`} value={feeAccount} onChange={(v) => setFeeAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />}
           </div>
-          <TextField label="Remarque (facultatif)" value={note} onChange={setNote} />
-          <p className="small">{after === 0 ? '✓ Après validation, le compte du livreur est à zéro.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (reporté au prochain retour).` : `La boutique lui devra ${fmtAr(-after)} (sur son compte, à payer plus tard).`}</p>
-          <div className="row"><Button busy={busy} disabled={!canSettle} icon="check" onClick={() => setAsk(true)}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
+          <TextField label={gap ? 'Remarque (écart)' : 'Remarque (facultatif)'} required={gap !== 0} value={note} onChange={setNote} />
+          <div className={`notice ${gap === 0 && after === 0 ? 'notice-ok' : gap !== 0 ? 'notice-danger' : ''}`}><Icon name={gap === 0 ? 'check' : 'alert'} />
+            <span>{gap !== 0 ? <><strong>Écart : {gap > 0 ? '+' : '−'} {fmtAr(Math.abs(gap))}</strong> par rapport à l’attendu. </> : null}
+              {after === 0 ? 'Après validation, le compte du livreur est à zéro.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (au prochain retour).` : `La boutique lui devra ${fmtAr(-after)} : à payer au plus vite (rappel jusqu’au paiement).`}</span></div>
+          <div className="row"><Button busy={busy} disabled={!canSettle || (gap !== 0 && !note.trim())} icon="check" onClick={() => setAsk(true)}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
         </div>
       )}
+      {payOwed && <PayOwedModal courier={courier} amount={-b.carry} onClose={() => setPayOwed(null)} />}
       {ask && <Confirm title={`Valider le retour de ${courier.name} ?`} confirmLabel="Valider" onClose={() => setAsk(false)} onConfirm={validate}
         message={<div className="stack-s"><p>{on.length} colis seront enregistrés et réglés : {on.filter((r) => r.open).map((r) => `${r.o.number} ${r.d === 'delivered' ? 'livrée' : 'refusée'}`).join(', ') || 'déjà saisis'}.</p>
-          <p><strong>{courier.name} vous remet {fmtAr(n)}</strong> ({ACCOUNTS[account]}){payFees ? <> ; vous lui payez <strong>{fmtAr(payFees)}</strong> de frais ({ACCOUNTS[feeAccount]})</> : ''}.</p>
+          <table className="kv-table"><tbody>
+            <tr><td>a. Articles</td><td>{fmtAr(tot.a)}</td></tr><tr><td>b. Frais de livraison</td><td>{fmtAr(tot.b)}</td></tr>
+            <tr><td>c. Payé par les clients</td><td>{fmtAr(tot.c)}</td></tr><tr><td>d. Déjà payé à la boutique</td><td>{fmtAr(tot.d)}</td></tr>
+            <tr><td>e. À verser par le livreur</td><td>{fmtAr(tot.e)}</td></tr>
+            <tr className="total"><td>f. Versé par {courier.name} ({ACCOUNTS[account]})</td><td>{fmtAr(n)}</td></tr>
+            <tr><td>g. Frais du livreur</td><td>{fmtAr(feeAll)} — {mode === 'retenue' ? 'gardés sur le versement' : mode === 'apart' ? `payés à part (${ACCOUNTS[feeAccount]})` : 'différés'}</td></tr>
+          </tbody></table>
           <p className="small muted">Après validation, ces colis ne peuvent plus changer de livreur. Une erreur se corrige ensuite par un nouveau versement.</p></div>} />}
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
       {toShop && <Confirm title="Le client vient chercher en boutique" confirmLabel="Annuler la livraison" message={<p>Le colis {toShop.number} revient en boutique, réservé pour le client. Pas de frais de livraison, pas de dédommagement pour le livreur. La commande deviendra une vente sur place quand le client passera.</p>}

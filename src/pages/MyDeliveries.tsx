@@ -1,10 +1,10 @@
 // Espace du livreur (rôle « Livreur ») : seulement ses colis et son compte. Lecture seule.
 import { useMe } from '../lib/auth';
-import { get, useTable } from '../lib/db';
+import { get, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, variantLabel, type Product, type Variant } from '../lib/catalog';
 import { courierSplit, fmtPhone, orderLabel, remaining, type Courier, type Order, type Zone } from '../lib/orders';
 import { courierBalance, type CourierSettlement } from '../lib/money';
-import { Badge, Empty, PageHead, fmtDateTime } from '../ui/kit';
+import { Badge, Button, Empty, PageHead, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const itemName = (variantId: string) => {
@@ -35,6 +35,10 @@ export function MyDeliveriesPage() {
         <div className="card stat"><span className="small muted">Mes frais de livraison (colis en cours)</span><strong className="stat-value num">{fmtAr(fees)}</strong></div>
         <div className="card stat"><span className="small muted">{bal.due >= 0 ? 'À rendre à la boutique (colis en cours compris)' : 'La boutique me doit'}</span><strong className={`stat-value num ${bal.due < 0 ? 'pos' : ''}`}>{fmtAr(Math.abs(bal.due))}</strong></div>
       </div>
+      {bal.carry < 0 && (
+        <div className="notice notice-warn" style={{ flexWrap: 'wrap', alignItems: 'center' }}><Icon name="wallet" /><span style={{ flex: '1 1 220px' }}><strong>La boutique vous doit {fmtAr(-bal.carry)} de frais de livraison.</strong> {courier.feeClaimAt ? `Réclamé le ${new Date(courier.feeClaimAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} : le gérant est prévenu.` : 'Si on oublie de vous payer, réclamez-les.'}</span>
+          <Button variant="ghost" onClick={async () => { await save('couriers', { id: courier.id, feeClaimAt: new Date().toISOString() }); toast('Réclamation envoyée au gérant'); }}>{courier.feeClaimAt ? 'Réclamer de nouveau' : 'Réclamer mes frais'}</Button></div>
+      )}
       <div className="card card-flush">
         <div className="card-pad"><h2>Colis à livrer</h2></div>
         {out.length === 0 ? <Empty icon="truck" title="Aucun colis en cours" /> : (
