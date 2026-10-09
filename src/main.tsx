@@ -1,4 +1,5 @@
 // Point d'entrée : ouvre la base locale, prépare les comptes, lance la synchro, affiche l'application.
+import './polyfills';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { getMeta, newId, openDb, setMeta } from './lib/db';

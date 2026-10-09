@@ -150,7 +150,7 @@ export function ImportPage() {
   if (!can('catalog.edit')) return <Empty icon="lock" title="Accès réservé au gérant" />;
   return (
     <>
-      <PageHead title="Import Excel" subtitle="Téléchargez un modèle, remplissez-le, puis importez-le. Vos fichiers habituels sont aussi acceptés." />
+      <PageHead title="Importer depuis Excel" subtitle="Téléchargez un modèle, remplissez-le, puis importez-le. Vos fichiers habituels sont aussi acceptés." />
       <div className="card stack">
         <h2>Importer un fichier</h2>
         <label className="dropzone">

@@ -15,6 +15,7 @@ import { Icon, type IconName } from './ui/icons';
 import { Button, IconButton, Toasts, navigate, useRoute } from './ui/kit';
 import { BrandLogo, FirstSetupScreen, LockScreen, LoginScreen } from './pages/Auth';
 import { DashboardPage } from './pages/Dashboard';
+import { InstallScreen, wantsInstallPage } from './pages/Install';
 import { UsersPage } from './pages/Users';
 import { RolesPage } from './pages/Roles';
 import { AuditPage } from './pages/Audit';
@@ -24,7 +25,7 @@ import { ProductsPage } from './pages/Products';
 import { StockPage } from './pages/Stock';
 import { PurchasesPage } from './pages/Purchases';
 import { ReceptionsPage } from './pages/Receptions';
-import { ImportPage } from './pages/Import';
+import { ImportExportPage } from './pages/ImportExport';
 import { OrdersPage } from './pages/Orders';
 import { DeliveriesPage } from './pages/Deliveries';
 import { CustomersPage } from './pages/Customers';
@@ -36,33 +37,38 @@ import { MyDeliveriesPage } from './pages/MyDeliveries';
 import { ExpensesPage } from './pages/Expenses';
 import { NotifBar, NotifBell } from './ui/notifications';
 
-interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
+interface NavItem { path: string; label: string; short?: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
+// Menu du plus important au moins important (proposition v4, point 9).
 const NAV: NavItem[] = [
   { path: '/', label: 'Accueil', icon: 'home', group: '', page: () => <DashboardPage />, mobile: true },
   { path: '/vente', label: 'Vente sur place', icon: 'store', perm: 'pos.sell', group: 'Ventes', page: () => <PosPage />, mobile: true },
   { path: '/commandes', label: 'Commandes clients', icon: 'list', perm: 'orders.create', group: 'Ventes', page: () => <OrdersPage />, mobile: true },
   { path: '/mes-livraisons', label: 'Mes livraisons', icon: 'truck', perm: 'courier.self', group: 'Ventes', page: () => <MyDeliveriesPage />, mobile: true },
-  { path: '/livraisons', label: 'Livraisons', icon: 'truck', perm: 'deliveries.manage', group: 'Ventes', page: () => <DeliveriesPage />, mobile: true },
-  { path: '/caisse-du-jour', label: 'Caisse du jour', icon: 'wallet', perm: 'cashday.use', group: 'Ventes', page: () => <DayCashPage /> },
-  { path: '/boosts', label: 'Boosts pub', icon: 'megaphone', perm: 'boosts.view', group: 'Ventes', page: () => <BoostsPage /> },
+  { path: '/livraisons', label: 'Livraisons et livreurs', short: 'Livraisons', icon: 'truck', perm: 'deliveries.manage', group: 'Ventes', page: () => <DeliveriesPage />, mobile: true },
   { path: '/clients', label: 'Clients', icon: 'users', perm: 'orders.create', group: 'Ventes', page: () => <CustomersPage /> },
-  { path: '/pages', label: 'Pages et variantes', icon: 'list', perm: 'catalog.view', group: 'Stock', page: () => <CategoriesPage /> },
-  { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Stock', page: () => <ProductsPage /> },
-  { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage /> },
-  { path: '/achats', label: 'Achats Chine', icon: 'inbox', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage /> },
-  { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
   { path: '/depenses', label: 'Dépenses', icon: 'wallet', perm: 'expenses.manage', group: 'Argent', page: () => <ExpensesPage /> },
-  { path: '/tresorerie', label: 'Trésorerie', icon: 'wallet', perm: 'treasury.view', group: 'Argent', page: () => <TreasuryPage /> },
+  { path: '/caisse-du-jour', label: 'Caisse du jour', icon: 'wallet', perm: 'cashday.use', group: 'Argent', page: () => <DayCashPage /> },
   { path: '/recapitulatif', label: 'Récapitulatifs', icon: 'list', perm: 'treasury.view', group: 'Argent', page: () => <RecapPage /> },
-  { path: '/rapports', label: 'Rapports', icon: 'chart', perm: 'reports.view', group: 'Argent', page: () => <ReportsPage /> },
+  { path: '/tresorerie', label: 'Trésorerie', icon: 'wallet', perm: 'treasury.view', group: 'Argent', page: () => <TreasuryPage /> },
+  { path: '/pages', label: 'Pages et variantes', icon: 'list', perm: 'catalog.view', group: 'Articles et stock', page: () => <CategoriesPage /> },
+  { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Articles et stock', page: () => <ProductsPage /> },
+  { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Articles et stock', page: () => <StockPage /> },
+  { path: '/achats', label: 'Achats et réceptions', icon: 'inbox', perm: 'purchases.manage|purchases.receive', group: 'Articles et stock', page: () => <PurchasingHub /> },
+  { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'hidden', page: () => <ReceptionsPage /> },
+  { path: '/boosts', label: 'Boosts pub', icon: 'megaphone', perm: 'boosts.view', group: 'Analyse', page: () => <BoostsPage /> },
+  { path: '/rapports', label: 'Rapports', icon: 'chart', perm: 'reports.view', group: 'Analyse', page: () => <ReportsPage /> },
   { path: '/utilisateurs', label: 'Utilisateurs', icon: 'users', perm: 'users.manage', group: 'Administration', page: () => <UsersPage /> },
   { path: '/roles', label: 'Rôles et accès', icon: 'shield', perm: 'users.manage', group: 'Administration', page: () => <RolesPage /> },
   { path: '/journal', label: "Journal d'activité", icon: 'list', perm: 'audit.view', group: 'Administration', page: () => <AuditPage /> },
-  { path: '/import', label: 'Import Excel', icon: 'fileSheet', perm: 'catalog.edit', group: 'Réglages', page: () => <ImportPage /> },
-  { path: '/parametres', label: 'Paramètres', icon: 'settings', group: 'Réglages', page: () => <SettingsPage /> },
+  { path: '/import-export', label: 'Import / Export', icon: 'fileSheet', perm: 'catalog.edit|orders.create|treasury.view|catalog.view', group: 'Administration', page: () => <ImportExportPage /> },
+  { path: '/import', label: 'Import Excel', icon: 'fileSheet', perm: 'catalog.edit', group: 'hidden', page: () => <ImportExportPage /> },
+  { path: '/parametres', label: 'Paramètres', icon: 'settings', group: 'Administration', page: () => <SettingsPage /> },
   { path: '/compte', label: 'Mon compte', icon: 'user', group: 'hidden', page: () => <AccountPage /> },
 ];
+/** Achats et réceptions : un seul menu ; le magasinier (réception seulement) arrive directement sur les réceptions. */
+function PurchasingHub() { const can = useCan(); return can('purchases.manage') ? <PurchasesPage /> : <ReceptionsPage />; }
+
 
 export function App() {
   useApplyAppearance();
@@ -94,8 +100,10 @@ export function App() {
   useEffect(() => { if (!user) return; autoBackups(); const t = setInterval(autoBackups, 3600_000); return () => clearInterval(t); }, [user?.id]);
   const resetGranted = useMeta<{ at: number } | null>('resetGranted', null);
 
+  const [installPage, setInstallPage] = useState(wantsInstallPage);
   let screen: ReactNode;
-  if (resetGranted && Date.now() - resetGranted.at < 30 * 60_000) screen = <EmailResetScreen />;
+  if (installPage && !user) screen = <InstallScreen onSkip={() => setInstallPage(false)} />;
+  else if (resetGranted && Date.now() - resetGranted.at < 30 * 60_000) screen = <EmailResetScreen />;
   else if (!user) screen = <LoginScreen />;
   else if (locked) screen = <LockScreen user={user} onUnlock={() => setLocked(false)} />;
   else if (managesOwnPassword(user) && (user.mustChangePassword || !user.secretAnswerHash) && !setupSkipped) screen = <FirstSetupScreen user={user} />;
@@ -129,7 +137,7 @@ function Shell() {
   const company = useCompany();
   const route = useRoute();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => (!n.perm || can(n.perm) || (n.path === '/depenses' && can('treasury.view'))) && (n.path !== '/mes-livraisons' || !!user?.courierId));
+  const items = NAV.filter((n) => (!n.perm || n.perm.split('|').some((x) => can(x)) || (n.path === '/depenses' && can('treasury.view'))) && (n.path !== '/mes-livraisons' || !!user?.courierId));
   const current = [...items].sort((a, b) => b.path.length - a.path.length).find((n) => n.path === '/' ? route === '/' : route.startsWith(n.path)) ?? items[0];
   useEffect(() => { setOpen(false); window.scrollTo(0, 0); }, [route]);
   // Menu ouvert sur téléphone : la page derrière ne défile plus, seul le menu défile.
@@ -149,7 +157,7 @@ function Shell() {
             <div key={g || 'main'} className="nav">
               {g && <div className="nav-group">{g}</div>}
               {items.filter((i) => i.group === g).map((i) => (
-                <a key={i.path} href={'#' + i.path} aria-current={current.path === i.path ? 'page' : undefined}>
+                <a key={i.path} href={'#' + i.path} aria-current={current.path === i.path || (i.path === '/achats' && current.path === '/receptions') || (i.path === '/import-export' && current.path === '/import') ? 'page' : undefined}>
                   <Icon name={i.icon} />{i.label}
                 </a>
               ))}
@@ -183,7 +191,7 @@ function Shell() {
         <nav className="bottom-nav" aria-label="Raccourcis">
           {mobileItems.map((i) => (
             <a key={i.path} href={'#' + i.path} aria-current={current.path === i.path ? 'page' : undefined}>
-              <Icon name={i.icon} size={22} />{i.label}
+              <Icon name={i.icon} size={22} />{i.short ?? i.label}
             </a>
           ))}
           <button onClick={() => setOpen(true)}><Icon name="menu" size={22} />Menu</button>

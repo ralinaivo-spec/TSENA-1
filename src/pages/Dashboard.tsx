@@ -1,7 +1,9 @@
 // Accueil : tableau de bord adapté au rôle (chiffres de la période, trésorerie, stock, livreurs, meilleurs articles).
 import { useMemo } from 'react';
 import { setMeta } from '../lib/db';
-import { fmtAr } from '../lib/catalog';
+import { fmtAr, productStock, type Product } from '../lib/catalog';
+import { bucketOf, type Prospect } from '../lib/prospects';
+import { OrderRow } from './Orders';
 import { ACCOUNTS, balances, courierBalance, today as todayYmd, type AccountId } from '../lib/money';
 import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabel, salesLedger, series, stockValue, dormant } from '../lib/analytics';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
@@ -65,6 +67,8 @@ function Board() {
         </div>
       )}
 
+      {(can('reports.view') || can('treasury.view')) ? <ManagerSales /> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
+      {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
         <div className="card row-between daycash-shortcut">
           <div><h3>Caisse du jour</h3><p className="small muted">Saisir une dépense de la caisse commune ou envoyer le récapitulatif global du jour.</p></div>
@@ -75,16 +79,31 @@ function Board() {
         </div>
       )}
 
-      {can('orders.create') && (
-        <div className="stat-grid">
-          {([[['new', 'confirmed'], 'Enregistrées', 'enregistrees'], [['ready'], 'En attente de livraison', 'attente'], [['out'], 'En livraison', 'livraison']] as const).map(([sts, label, tab]) => (
-            <a key={tab} className="card stat" href={`#/commandes/${tab}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <span className="muted small">{label}</span>
-              <span className="stat-value">{orders.filter((o) => (sts as readonly string[]).includes(o.status) && !isWalkIn(o) && scope.mine(o)).length}</span>
-            </a>
-          ))}
+      {(can('orders.create') || can('pos.sell')) && <RecentActivity />}
+      {(can('reports.view') || can('treasury.view')) && <ManagerMore />}
+      {can('catalog.view') && <LowStock />}
+      {steps.length > 0 && doneCount < steps.length && (
+        <div className="card stack">
+          <div className="row-between">
+            <div><h2>Mise en route</h2><p className="muted small">{doneCount} sur {steps.length} terminées</p></div>
+          </div>
+          <ol className="checklist">
+            {steps.map((s, i) => (
+              <li key={s.title} className={s.done ? 'step-done' : ''}>
+                <a href={s.href}>
+                  <span className="step-mark">{s.done ? <Icon name="check" size={16} /> : i + 1}</span>
+                  <span className="list-item-main">
+                    <span className="step-title" style={{ fontWeight: 700, display: 'block' }}>{s.title}</span>
+                    <span className="small muted">{s.text}</span>
+                  </span>
+                  <Icon name="chevronRight" />
+                </a>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
+
       <div className="grid-2">
         {can('users.manage') && (
           <a className="card stat" href="#/utilisateurs" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -112,30 +131,6 @@ function Board() {
         )}
       </div>
 
-      {(can('reports.view') || can('treasury.view')) ? <ManagerBoard /> : can('orders.create') ? <SellerBoard name={me.fullName} /> : null}
-
-      {steps.length > 0 && doneCount < steps.length && (
-        <div className="card stack">
-          <div className="row-between">
-            <div><h2>Mise en route</h2><p className="muted small">{doneCount} sur {steps.length} terminées</p></div>
-          </div>
-          <ol className="checklist">
-            {steps.map((s, i) => (
-              <li key={s.title} className={s.done ? 'step-done' : ''}>
-                <a href={s.href}>
-                  <span className="step-mark">{s.done ? <Icon name="check" size={16} /> : i + 1}</span>
-                  <span className="list-item-main">
-                    <span className="step-title" style={{ fontWeight: 700, display: 'block' }}>{s.title}</span>
-                    <span className="small muted">{s.text}</span>
-                  </span>
-                  <Icon name="chevronRight" />
-                </a>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
       {!can('users.manage') && (
         <div className="card stack-s">
           <h2>Votre espace</h2>
@@ -154,7 +149,12 @@ function usePeriod() {
   return [p, (v: Period) => setMeta('dashPeriod', v)] as const;
 }
 
-function ManagerBoard() {
+/** 1. Ventes de la période (en premier). */
+function ManagerSales() { return <ManagerBoard part="sales" />; }
+/** 4. Dépenses, bénéfice, évolution par jour, trésorerie, stock, meilleurs articles. */
+function ManagerMore() { return <ManagerBoard part="more" />; }
+
+function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
   const can = useCan();
   const cost = can('costs.view');
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); useTable('variants'); useTable('stockMoves'); useTable('purchases'); useTable('courierSettlements');
@@ -165,7 +165,8 @@ function ManagerBoard() {
   const k = kpis(lines, from, to);
   const prev = previousPeriod(from, to);
   const kp = useMemo(() => kpis(salesLedger(prev.from, prev.to), prev.from, prev.to), [prev.from, prev.to, orders, moves]);
-  const bucket = bucketFor(from, to);
+  const b0 = bucketFor(from, to);
+  const bucket = b0 === 'hour' ? 'day' : b0; // au minimum par jour (le détail par heure n'est plus affiché)
   const pts = series(lines, from, to, bucket);
   const top = groupBy(lines, (l) => l.productId, productLabel).slice(0, 5);
   const bal = balances();
@@ -174,19 +175,35 @@ function ManagerBoard() {
   const courierDue = couriers.reduce((t, c) => t + Math.max(0, courierBalance(c.id).due), 0);
   const out = orders.filter((o) => o.status === 'out');
   const dorm = useMemo(() => dormant(60).slice(0, 5), [orders]);
-  const tiles = [
-    { label: "Chiffre d'affaires", value: fmtAr(k.revenue), cur: k.revenue, prev: kp.revenue, show: true },
-    { label: 'Bénéfice brut', value: fmtAr(k.gross), cur: k.gross, prev: kp.gross, show: cost },
-    { label: 'Dépenses', value: fmtAr(k.expenses), cur: k.expenses, prev: kp.expenses, show: true, invert: true },
-    { label: k.net >= 0 ? 'Bénéfice net' : 'Perte nette', value: fmtAr(k.net), cur: k.net, prev: kp.net, show: cost, strong: true },
-    { label: 'Taux de marge', value: pct(k.margin), cur: k.margin, prev: kp.margin, show: cost, isPct: true },
-    { label: `Ventes (${k.shopOrders} sur place · ${k.onlineOrders} en ligne)`, value: String(k.orders), cur: k.orders, prev: kp.orders, show: true },
-    { label: 'Panier moyen', value: fmtAr(k.avgBasket), cur: k.avgBasket, prev: kp.avgBasket, show: true },
-    { label: 'Taux de retour', value: pct(k.returnRate), cur: k.returnRate, prev: kp.returnRate, show: true, isPct: true, invert: true },
-  ].filter((t) => t.show);
+  const all = [
+    { label: "Chiffre d'affaires", value: fmtAr(k.revenue), cur: k.revenue, prev: kp.revenue, show: true, part: 'sales', strong: true },
+    { label: `Ventes (${k.shopOrders} sur place · ${k.onlineOrders} en ligne)`, value: String(k.orders), cur: k.orders, prev: kp.orders, show: true, part: 'sales' },
+    { label: 'Panier moyen', value: fmtAr(k.avgBasket), cur: k.avgBasket, prev: kp.avgBasket, show: true, part: 'sales' },
+    { label: 'Taux de retour', value: pct(k.returnRate), cur: k.returnRate, prev: kp.returnRate, show: true, isPct: true, invert: true, part: 'sales' },
+    { label: 'Dépenses', value: fmtAr(k.expenses), cur: k.expenses, prev: kp.expenses, show: true, invert: true, part: 'more' },
+    { label: 'Bénéfice brut', value: fmtAr(k.gross), cur: k.gross, prev: kp.gross, show: cost, part: 'more' },
+    { label: k.net >= 0 ? 'Bénéfice net' : 'Perte nette', value: fmtAr(k.net), cur: k.net, prev: kp.net, show: cost, strong: true, part: 'more' },
+    { label: 'Taux de marge', value: pct(k.margin), cur: k.margin, prev: kp.margin, show: cost, isPct: true, part: 'more' },
+  ] as { label: string; value: string; cur: number; prev: number; show: boolean; part: string; strong?: boolean; isPct?: boolean; invert?: boolean }[];
+  const tiles = all.filter((t) => t.show && t.part === part);
+  if (part === 'sales') return (
+    <>
+      <h2 className="dash-title">Ventes</h2>
+      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports">Tous les rapports</a>}</div>
+      <div className="stat-grid">
+        {tiles.map((t) => (
+          <div key={t.label} className={`card stat ${t.strong ? 'stat-strong' : ''}`}>
+            <span className="small muted">{t.label}</span>
+            <strong className={`stat-value num ${t.cur < 0 ? 'neg' : ''}`}>{t.value}</strong>
+            <span className="small muted"><Delta cur={t.cur} prev={t.prev} pct={t.isPct} invert={t.invert} /> vs période précédente</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
   return (
     <>
-      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports">Tous les rapports</a>}</div>
+      <h2 className="dash-title">Dépenses et bénéfice</h2>
       <div className="stat-grid">
         {tiles.map((t) => (
           <div key={t.label} className={`card stat ${t.strong ? 'stat-strong' : ''}`}>
@@ -258,5 +275,66 @@ function SellerBoard({ name }: { name: string }) {
       </div>
       {lines.length > 0 && <div className="card stack-s"><h2>Mes ventes dans le temps</h2><BarChart title="Mes ventes" bars={pts.map((p) => ({ key: p.key, label: p.label, long: p.long, value: p.revenue, extra: `${p.orders} vente(s)` }))} format={fmtAr} /></div>}
     </>
+  );
+}
+
+/** 2. État des commandes : à suivre, enregistrées, en attente, en livraison, argent à rendre par les livreurs. */
+function OrdersState() {
+  const can = useCan();
+  const orders = useTable<Order>('orders');
+  const prospects = useTable<Prospect>('prospects');
+  const couriers = useTable<Courier>('couriers');
+  useTable('courierSettlements'); useTable('cashMoves');
+  const scope = useMyScope();
+  const follow = prospects.filter((p) => p.status === 'open' && scope.mine({ createdBy: p.ownerId, createdByName: p.ownerName }) && bucketOf(p) !== 'later').length;
+  const n = (sts: string[]) => orders.filter((o) => sts.includes(o.status) && !isWalkIn(o) && scope.mine(o)).length;
+  const due = couriers.reduce((t, c) => t + Math.max(0, courierBalance(c.id).due), 0);
+  const tiles: { label: string; value: string; href: string; hot?: boolean }[] = [
+    { label: 'Clients à relancer', value: String(follow), href: '#/commandes/suivre', hot: follow > 0 },
+    { label: 'Enregistrées', value: String(n(['new', 'confirmed'])), href: '#/commandes/enregistrees' },
+    { label: 'En attente de livraison', value: String(n(['ready'])), href: '#/commandes/attente' },
+    { label: 'En livraison', value: String(n(['out'])), href: '#/commandes/livraison' },
+    ...(can('deliveries.manage') ? [{ label: 'À rendre par les livreurs', value: fmtAr(due), href: '#/livraisons/retour' }] : []),
+  ];
+  return (
+    <>
+      <h2 className="dash-title">Commandes</h2>
+      <div className="stat-grid">
+        {tiles.map((t) => (
+          <a key={t.label} className={`card stat ${t.hot ? 'stat-hot' : ''}`} href={t.href} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <span className="muted small">{t.label}</span><span className="stat-value num">{t.value}</span>
+          </a>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** 3. Dernières ventes et commandes. */
+function RecentActivity() {
+  const orders = useTable<Order>('orders');
+  const scope = useMyScope();
+  const last = [...orders].filter((o) => scope.mine(o)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
+  if (!last.length) return null;
+  return (
+    <div className="card card-flush">
+      <div className="card-pad row-between"><h2>Dernières ventes et commandes</h2><a className="btn btn-ghost" href="#/commandes">Tout voir</a></div>
+      <ul className="list">{last.map((o) => <OrderRow key={o.id} o={o} />)}</ul>
+    </div>
+  );
+}
+
+/** 5. Stock faible : articles épuisés ou presque. */
+function LowStock() {
+  const products = useTable<Product>('products'); useTable('stockMoves'); useTable('variants');
+  const scope = useMyScope();
+  const low = products.filter((p) => p.active !== false && scope.product(p.id)).map((p) => ({ p, s: productStock(p.id) })).filter((x) => x.s <= (x.p.alertQty ?? 3)).sort((a, b) => a.s - b.s);
+  if (!low.length) return null;
+  return (
+    <div className="card stack-s">
+      <div className="row-between"><h2>Stock faible ({low.length})</h2><a className="btn btn-ghost" href="#/stock">Voir le stock</a></div>
+      <table className="kv-table"><tbody>{low.slice(0, 6).map(({ p, s }) => <tr key={p.id}><td>{p.name} <span className="muted small">· {p.code}</span></td><td className={s <= 0 ? 'neg' : ''}>{s <= 0 ? 'épuisé' : `${s} pcs`}</td></tr>)}</tbody></table>
+      {low.length > 6 && <p className="small muted">… et {low.length - 6} autre(s).</p>}
+    </div>
   );
 }

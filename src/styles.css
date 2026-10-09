@@ -956,3 +956,16 @@ tr.row-error td { background: var(--danger-soft); }
 .checks svg { flex: none; }
 .ss-item { width: 100%; border: 0; background: transparent; color: var(--ink); font: 500 .95rem var(--font-body); text-align: left; }
 .ss-item.is-on { background: var(--brand-soft); font-weight: 700; }
+.dash-title { margin: 8px 0 -4px; font-size: 1.05rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.stat-hot { box-shadow: inset 4px 0 0 var(--danger); }
+.stat-hot .stat-value { color: var(--danger); }
+.export-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.export-grid .card { display: flex; flex-direction: column; }
+/* Page d'installation */
+.install { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--nav-bg, var(--brand)); }
+.install-card { width: 100%; max-width: 440px; display: grid; gap: 16px; justify-items: center; text-align: center; padding: 32px 22px; background: var(--surface); border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.install-card h1 { margin: 0; font-size: 1.8rem; }
+.install-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; text-align: left; width: 100%; }
+.install-steps li { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: var(--surface-2); }
+.install-n { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-ink); font-weight: 800; }
+.install .login-badge { position: static; transform: none; margin: 0; }

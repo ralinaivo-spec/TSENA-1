@@ -78,7 +78,7 @@ function CategoryEditor({ cat, onClose }: { cat?: Category; onClose: () => void 
   const [name, setName] = useState(cat?.name ?? '');
   const [code, setCode] = useState(cat?.code ?? '');
   const [parentId, setParentId] = useState(cat?.parentId ?? '');
-  const [attrs, setAttrs] = useState<CatAttr[]>(() => structuredClone(cat?.attrs ?? []));
+  const [attrs, setAttrs] = useState<CatAttr[]>(() => JSON.parse(JSON.stringify(cat?.attrs ?? [])));
   const [preset, setPreset] = useState('');
   const products = useTable<Product>('products').filter((p) => cat && p.categoryId === cat.id);
   const [busy, setBusy] = useState(false);

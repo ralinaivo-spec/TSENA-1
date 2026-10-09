@@ -56,6 +56,10 @@
 <body>
   <div id="root"></div>
   <noscript>Trésor en ligne a besoin de JavaScript pour fonctionner.</noscript>
+  <script nomodule>
+    // Navigateur trop ancien (avant iOS 11 / Chrome 61) : expliquer plutôt qu'une page blanche.
+    document.getElementById('root').innerHTML = '<div style="font-family:sans-serif;max-width:460px;margin:12vh auto;padding:24px;text-align:center"><h2>Navigateur trop ancien</h2><p>Tr\u00e9sor en ligne fonctionne avec Google Chrome (Android 8 ou plus r\u00e9cent), un iPhone sous iOS 12 ou plus r\u00e9cent, ou un ordinateur avec Chrome ou Edge. Mettez \u00e0 jour le navigateur ou utilisez un autre appareil.</p></div>';
+  </script>
   <!--JS-->
 </body>
 </html>

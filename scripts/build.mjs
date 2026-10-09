@@ -18,7 +18,7 @@ const result = await esbuild.build({
   minify: true,
   sourcemap: false,
   format: 'esm',
-  target: ['es2020', 'safari15', 'chrome90', 'firefox90'],
+  target: ['es2019', 'chrome64', 'firefox68', 'edge79'], // syntaxe ES2019 : Android 8 (Chrome 64+) et iPhone iOS 12.2+ ; voir src/polyfills.ts
   jsx: 'automatic',
   outdir: join(dist, 'assets'),
   entryNames: 'app',

@@ -6,6 +6,7 @@ import {
   categoryPath, fmtAr, fmtNum, nextNumber, parseNum, productVariants, PURCHASE_STATUS, todayYmd, useCatalog, variantLabel,
   type Product, type Purchase, type PurchaseLine, type PurchaseStatus, type Variant, matchQuery, productText} from '../lib/catalog';
 import { lastRate, lineTotal, purchaseGoods, purchasePaid, purchaseQty, purchaseReceivedQty, purchaseTotal, purchaseTotalAr, toAr, type Supplier } from '../lib/purchases';
+import { PurchasingTabs } from './ImportExport';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ACCOUNTS, ACCOUNT_IDS, addMove, atFor, type AccountId } from '../lib/money';
@@ -42,12 +43,13 @@ function PurchaseList() {
 
   return (
     <>
-      <PageHead title="Achats Chine" subtitle={`${open.length} commande(s) en cours`}
+      <PageHead title="Achats et réceptions" subtitle={`${open.length} commande(s) en cours`}
         actions={<>
           <Button variant="ghost" icon="users" onClick={() => navigate('/achats/fournisseurs')}>Fournisseurs</Button>
           {can('purchases.receive') && <Button variant="ghost" icon="download" onClick={() => navigate('/receptions/nouvelle')}>Réceptionner</Button>}
           {can('purchases.manage') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button>}
         </>} />
+      <PurchasingTabs current="achats" />
       <div className="stat-grid">
         <div className="card stat"><span className="muted small">Commandes en cours</span><span className="stat-value">{open.length}</span></div>
         <div className="card stat"><span className="muted small">Pièces en route</span><span className="stat-value">{fmtNum(openQty)}</span></div>
