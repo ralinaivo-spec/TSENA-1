@@ -3,12 +3,12 @@
 // catégories et types de dépenses (aussi ajoutables pendant la saisie).
 import { useMemo, useRef, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
-import { save, useTable } from '../lib/db';
+import { all, save, useTable } from '../lib/db';
 import { fmtAr, matchQuery, parseNum } from '../lib/catalog';
 import { compressPhoto } from '../lib/images';
 import {
-  ACCOUNTS, ACCOUNT_IDS, FREQS, WEEKDAYS, addMove, atFor, confirmRecurring, dayOf, deleteMove, dueRecurring, nextOccurrence, recurringText, skipRecurring, today,
-  type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring,
+  ACCOUNTS, ACCOUNT_IDS, FREQS, RHYTHMS, WEEKDAYS, addMove, atFor, catHabit, confirmRecurring, dayOf, deleteMove, dueRecurring, habitText, nextOccurrence, recurringText, skipRecurring, today, typeForCat,
+  type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring, type Rhythm,
 } from '../lib/money';
 import { closedBy } from '../lib/closed';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
@@ -93,59 +93,150 @@ export function PayDue({ d, onClose }: { d: ReturnType<typeof dueRecurring>[numb
   );
 }
 
+// ---------- Rythme d'une catégorie de dépense ----------
+interface Habit { rhythm: Rhythm; fixed: boolean; remind: boolean; amount: string; account: AccountId; day: string; weekday: string; month: string }
+const habitInit = (c?: FinanceCategory): Habit => ({ ...catHabit(c), remind: true, amount: '', account: 'cash', day: '5', weekday: '1', month: '1' });
+const TYPE_HELP: Record<string, string> = {
+  'et-courante': 'revient souvent, montant différent à chaque fois (ex. sakafo, taxi, crédit).',
+  'et-fixe': 'même montant à date fixe (ex. loyer, salaire) : un rappel « à payer » apparaît le jour venu.',
+  'et-exception': 'rare ou imprévue (ex. réparation, achat de matériel).',
+};
+const habitOk = (h: Habit, hasRec: boolean) => !(h.rhythm !== 'occasional' && h.fixed && h.remind && !hasRec && !parseNum(h.amount));
+
+/** Les questions posées dès qu'on crée (ou modifie) une catégorie de dépense : rythme, montant fixe ou variable, rappel. */
+function HabitFields({ h, set, rec }: { h: Habit; set: (h: Habit) => void; rec?: Recurring }) {
+  const cats = useTable<FinanceCategory>('financeCategories');
+  const up = (p: Partial<Habit>) => set({ ...h, ...p });
+  const periodic = h.rhythm !== 'occasional';
+  const type = typeForCat({ id: '', rhythm: h.rhythm, fixedAmount: h.fixed } as FinanceCategory);
+  return (
+    <div className="stack-s habit">
+      <SelectField label="Cette dépense revient…" value={h.rhythm} onChange={(v) => up({ rhythm: v as Rhythm })} options={Object.entries(RHYTHMS).map(([value, label]) => ({ value, label }))} />
+      {periodic && <div className="segmented" role="group" aria-label="Montant">
+        <button type="button" aria-pressed={!h.fixed} onClick={() => up({ fixed: false })}>Montant variable</button>
+        <button type="button" aria-pressed={h.fixed} onClick={() => up({ fixed: true })}>Toujours le même montant</button>
+      </div>}
+      <p className="small muted">Type : <strong>{cats.find((c) => c.id === type)?.name ?? type}</strong> — {TYPE_HELP[type]}</p>
+      {periodic && h.fixed && (rec
+        ? <p className="small muted"><Icon name="bell" size={14} /> Rappel déjà prévu : {recurringText(rec)}, {fmtAr(rec.amount)}. Modifiable dans « Charges fixes ».</p>
+        : <>
+          <Toggle checked={h.remind} onChange={(v) => up({ remind: v })} label="Me rappeler de payer (charge fixe)" />
+          {h.remind && <div className="grid-2">
+            <TextField label="Montant habituel (Ar)" value={h.amount} onChange={(v) => up({ amount: v })} inputMode="numeric" />
+            <SelectField label="Payé depuis" value={h.account} onChange={(v) => up({ account: v as AccountId })} options={accountOptions} />
+            {h.rhythm === 'weekly' && <SelectField label="Jour de la semaine" value={h.weekday} onChange={(v) => up({ weekday: v })} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} />}
+            {(h.rhythm === 'monthly' || h.rhythm === 'yearly') && <TextField label="Jour du mois" value={h.day} onChange={(v) => up({ day: v })} inputMode="numeric" />}
+            {h.rhythm === 'yearly' && <SelectField label="Mois" value={h.month} onChange={(v) => up({ month: v })} options={Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: new Date(2026, i, 1).toLocaleDateString('fr-FR', { month: 'long' }) }))} />}
+          </div>}
+        </>)}
+    </div>
+  );
+}
+
+/** Enregistre la catégorie avec son rythme ; crée la charge fixe (rappel) si demandé. */
+async function saveExpenseCat(name: string, h: Habit, existing?: FinanceCategory, active = true): Promise<string> {
+  const [c] = await save('financeCategories', { ...(existing ? { id: existing.id } : { order: 50 }), kind: 'expense', name, active, rhythm: h.rhythm, fixedAmount: h.rhythm !== 'occasional' && h.fixed });
+  const hasRec = all<Recurring>('recurring').some((r) => r.active && r.kind === 'expense' && r.categoryId === c.id);
+  if (h.rhythm !== 'occasional' && h.fixed && h.remind && !hasRec && parseNum(h.amount)) {
+    await save('recurring', { kind: 'expense', label: name, categoryId: c.id, typeId: 'et-fixe', account: h.account, amount: parseNum(h.amount)!, freq: h.rhythm as Freq,
+      day: Math.min(31, Math.max(1, Number(h.day) || 1)), weekday: Number(h.weekday), month: Number(h.month), time: '08:00', startMonth: today().slice(0, 7), active: true });
+    await audit('Charge fixe ajoutée', `${name} : ${parseNum(h.amount)} Ar, ${FREQS[h.rhythm as Freq].toLowerCase()}`);
+  }
+  await audit(existing ? 'Catégorie de dépense modifiée' : 'Catégorie de dépense ajoutée', `${name} — ${habitText(c as FinanceCategory)}`);
+  return c.id;
+}
+
 // ---------- Saisie d'une dépense ----------
 /** Liste déroulante avec « + Nouveau… » : la nouvelle catégorie (ou le nouveau type) est créée tout de suite. */
 function PickOrAdd({ label, kind, value, onChange }: { label: string; kind: 'expense' | 'etype'; value: string; onChange: (v: string) => void }) {
   const list = useTable<FinanceCategory>('financeCategories').filter((c) => c.kind === kind && c.active !== false).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name, 'fr'));
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [h, setH] = useState<Habit>(habitInit());
   if (adding) return (
-    <div className="field">
+    <div className="field add-inline" style={kind === 'expense' ? { gridColumn: '1 / -1' } : undefined}>
       <label>{label} — nouvelle</label>
-      <div className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
-        <input className="cell-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'etype' ? 'Ex. Investissement' : 'Ex. Fournitures de bureau'} aria-label={`Nom de la nouvelle ${label.toLowerCase()}`} />
-        <Button disabled={!name.trim()} onClick={async () => {
-          const exists = list.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
-          if (exists) { onChange(exists.id); setAdding(false); return; }
-          const [c] = await save('financeCategories', { kind, name: name.trim(), order: 50, active: true });
-          await audit(kind === 'etype' ? 'Type de dépense ajouté' : 'Catégorie de dépense ajoutée', name.trim());
-          onChange(c.id); setAdding(false); setName('');
-        }}>OK</Button>
-        <Button variant="quiet" onClick={() => setAdding(false)}>Annuler</Button>
+      <div className="stack-s">
+        <input className="cell-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'etype' ? 'Ex. Investissement' : 'Ex. Sakafo'} aria-label={`Nom de la nouvelle ${label.toLowerCase()}`} />
+        {kind === 'expense' && name.trim() && <HabitFields h={h} set={setH} />}
+        <div className="row" style={{ gap: 6 }}>
+          <Button disabled={!name.trim() || (kind === 'expense' && !habitOk(h, false))} onClick={async () => {
+            const exists = list.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+            if (exists) { onChange(exists.id); setAdding(false); return; }
+            if (kind === 'expense') { onChange(await saveExpenseCat(name.trim(), h)); }
+            else {
+              const [c] = await save('financeCategories', { kind, name: name.trim(), order: 50, active: true });
+              await audit('Type de dépense ajouté', name.trim());
+              onChange(c.id);
+            }
+            setAdding(false); setName(''); setH(habitInit());
+          }}>{kind === 'expense' ? 'Créer la catégorie' : 'OK'}</Button>
+          <Button variant="quiet" onClick={() => setAdding(false)}>Annuler</Button>
+        </div>
       </div>
     </div>
   );
-  return <SelectField label={label} value={value} onChange={(v) => (v === NEW ? setAdding(true) : onChange(v))} options={[...list.map((c) => ({ value: c.id, label: c.name })), { value: NEW, label: `+ ${kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie'}…` }]} />;
+  return <SelectField label={label} value={value} onChange={(v) => (v === NEW ? setAdding(true) : onChange(v))} options={[...(value ? [] : [{ value: '', label: '— Choisir —' }]), ...list.map((c) => ({ value: c.id, label: c.name })), { value: NEW, label: `+ ${kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie'}…` }]} />;
 }
 
 export function ExpenseForm({ onClose }: { onClose: () => void }) {
+  const cats = useTable<FinanceCategory>('financeCategories');
+  const moves = useTable<CashMove>('cashMoves');
+  const recs = useTable<Recurring>('recurring');
   const [date, setDate] = useState(today());
   const [amount, setAmount] = useState('');
-  const [cat, setCat] = useState('fc-divers');
-  const [type, setType] = useState('et-courante');
+  const [cat, setCat] = useState('');
+  const [typeOver, setTypeOver] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountId>('cash');
   const [label, setLabel] = useState('');
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [pay, setPay] = useState<ReturnType<typeof dueRecurring>[number] | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const n = parseNum(amount) || 0;
   const closed = closedBy(date);
+  const c = cats.find((x) => x.id === cat);
+  const type = typeOver ?? typeForCat(c);
+  // Ce que l'on sait déjà de cette catégorie : échéance à payer, dernier paiement, dernière dépense.
+  const due = cat ? dueRecurring('expense').filter((d) => d.r.categoryId === cat) : [];
+  const rec = recs.find((r) => r.active && r.kind === 'expense' && r.categoryId === cat);
+  const last = useMemo(() => moves.filter((m) => m.type === 'expense' && m.categoryId === cat).sort((a, b) => b.at.localeCompare(a.at))[0], [moves, cat]);
+  // Charge fixe déjà payée pour la période en cours (jour, 7 derniers jours, mois, année) : risque de doublon.
+  const sameDay = !!(last && rec && (() => {
+    const d = dayOf(last.at), t = today();
+    if (rec.freq === 'daily') return d === t;
+    if (rec.freq === 'weekly') return (Date.parse(t) - Date.parse(d)) / 86400_000 < 7;
+    return d.slice(0, rec.freq === 'yearly' ? 4 : 7) === t.slice(0, rec.freq === 'yearly' ? 4 : 7);
+  })());
+  const pick = (id: string) => {
+    setCat(id); setTypeOver(null);
+    const r = recs.find((x) => x.active && x.kind === 'expense' && x.categoryId === id);
+    if (r && !amount) { setAmount(String(r.amount)); setAccount(r.account); }
+  };
+  if (pay) return <PayDue d={pay} onClose={onClose} />;
   return (
     <Modal title="Nouvelle dépense" onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || !!closed || !label.trim()} onClick={async () => {
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || !!closed || !cat} onClick={async () => {
         setBusy(true);
-        try { await addMove({ at: atFor(date), account, amount: -Math.abs(n), type: 'expense', categoryId: cat, typeId: type, label: label.trim(), note: note.trim() || undefined, photo }); toast('Dépense enregistrée'); onClose(); }
+        try { await addMove({ at: atFor(date), account, amount: -Math.abs(n), type: 'expense', categoryId: cat, typeId: type, label: label.trim() || c?.name || 'Dépense', note: note.trim() || undefined, photo }); toast('Dépense enregistrée'); onClose(); }
         catch (e: any) { toast(e.message, 'error'); setBusy(false); }
       }}>Enregistrer</Button></>}>
       <div className="stack">
+        <PickOrAdd label="Catégorie" kind="expense" value={cat} onChange={pick} />
+        {c && <div className="habit-line small">
+          <span className="muted">{habitText(c)} · Type : </span>
+          {typeOver === null
+            ? <><strong>{cats.find((x) => x.id === type)?.name}</strong> <button type="button" className="link-btn" onClick={() => setTypeOver(type)}>changer</button></>
+            : <select aria-label="Type" value={typeOver} onChange={(e) => setTypeOver(e.target.value)}>{cats.filter((x) => x.kind === 'etype' && x.active !== false).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>}
+        </div>}
+        {due.length > 0 && <div className="notice notice-warn"><Icon name="bell" /><span style={{ flex: 1 }}>« {due[0].r.label} » du {fmtDate(due[0].date)} ({fmtAr(due[0].r.amount)}) est à payer. Payez cette échéance pour qu’elle ne soit plus rappelée.</span><Button onClick={() => setPay(due[0])}>Payer l’échéance</Button></div>}
+        {!due.length && sameDay && <div className="notice notice-warn"><Icon name="alert" /><span>Déjà payée pour cette période : {fmtAr(-last!.amount)} le {fmtDate(dayOf(last!.at))}. Vérifiez que ce n’est pas un doublon.</span></div>}
         <div className="grid-2">
-          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
+          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={last && !rec ? <button type="button" className="link-btn" onClick={() => setAmount(String(-last.amount))}>Dernière fois : {fmtAr(-last.amount)} le {fmtDate(dayOf(last.at))}</button> : undefined} />
           <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} />
-          <PickOrAdd label="Catégorie" kind="expense" value={cat} onChange={setCat} />
-          <PickOrAdd label="Type" kind="etype" value={type} onChange={setType} />
           <SelectField label="Payé depuis" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
-          <TextField label="Description" value={label} onChange={setLabel} placeholder="Ex. Taxi livraison Analakely" />
+          <TextField label="Description (facultatif)" value={label} onChange={setLabel} placeholder={c ? `Par défaut : ${c.name}` : 'Ex. Taxi livraison Analakely'} />
         </div>
         <TextField label="Note (facultatif)" value={note} onChange={setNote} />
         <div className="row" style={{ alignItems: 'center' }}>
@@ -306,7 +397,7 @@ function CatsAndTypes() {
             <div className="row-between"><h2>{k === 'expense' ? 'Catégories de dépenses' : 'Types de dépenses'}</h2>{manage && <Button variant="ghost" icon="plus" onClick={() => setEdit({ kind: k })}>Ajouter</Button>}</div>
             <ul className="list">{cats.filter((c) => c.kind === k).sort((a, b) => Number(b.active !== false) - Number(a.active !== false) || (a.order ?? 99) - (b.order ?? 99)).map((c) => (
               <li key={c.id} className="list-item" style={{ opacity: c.active === false ? .5 : 1 }}>
-                <span className="list-item-main">{c.name}{c.active === false && <Badge>désactivée</Badge>}</span>
+                <span className="list-item-main"><span>{c.name}{c.active === false && <Badge>désactivée</Badge>}</span>{k === 'expense' && <span className="small muted" style={{ display: 'block' }}>{habitText(c)}</span>}</span>
                 {manage && <IconButton icon="edit" label="Modifier" onClick={() => setEdit(c)} />}
               </li>
             ))}</ul>
@@ -322,12 +413,21 @@ function CatForm({ cat, onClose }: { cat: FinanceCategory | { kind: 'expense' | 
   const existing = 'id' in cat ? cat : undefined;
   const [name, setName] = useState(existing?.name ?? '');
   const [active, setActive] = useState(existing?.active !== false);
+  const [h, setH] = useState<Habit>(habitInit(existing));
+  const rec = useTable<Recurring>('recurring').find((r) => existing && r.active && r.kind === 'expense' && r.categoryId === existing.id);
+  const isExp = cat.kind === 'expense';
   return (
-    <Modal title={existing ? 'Modifier' : cat.kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie'} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!name.trim()} onClick={async () => { await save('financeCategories', { ...(existing ? { id: existing.id } : { order: 50 }), kind: cat.kind, name: name.trim(), active }); toast('Enregistré'); onClose(); }}>Enregistrer</Button></>}>
+    <Modal title={existing ? `Modifier « ${existing.name} »` : cat.kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie de dépense'} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!name.trim() || (isExp && !habitOk(h, !!rec))} onClick={async () => {
+        if (isExp) await saveExpenseCat(name.trim(), h, existing as FinanceCategory | undefined, active);
+        else await save('financeCategories', { ...(existing ? { id: existing.id } : { order: 50 }), kind: cat.kind, name: name.trim(), active });
+        toast('Enregistré'); onClose();
+      }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom" value={name} onChange={setName} autoFocus />
+        <TextField label="Nom" value={name} onChange={setName} autoFocus placeholder={isExp ? 'Ex. Sakafo' : undefined} />
+        {isExp && <HabitFields h={h} set={setH} rec={rec} />}
         {existing && <Toggle checked={active} onChange={setActive} label="Active (proposée dans les listes)" />}
+        {isExp && existing && <p className="small muted">Changer le rythme ne modifie pas les dépenses déjà enregistrées, seulement les prochaines.</p>}
       </div>
     </Modal>
   );

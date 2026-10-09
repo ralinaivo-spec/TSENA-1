@@ -34,7 +34,30 @@ export interface CashMove extends BaseRecord {
   userName?: string;
 }
 /** kind 'etype' = type de dépense (Dépense courante, Charge fixe…). */
-export interface FinanceCategory extends BaseRecord { kind: 'expense' | 'income' | 'etype'; name: string; order?: number; active: boolean }
+export interface FinanceCategory extends BaseRecord {
+  kind: 'expense' | 'income' | 'etype'; name: string; order?: number; active: boolean;
+  rhythm?: Rhythm;      // dépense : à quel rythme elle revient
+  fixedAmount?: boolean; // dépense : toujours le même montant (loyer, salaire…) → charge fixe avec rappel
+}
+/** Rythme habituel d'une catégorie de dépense : décide de son type (courante, charge fixe, exceptionnelle). */
+export type Rhythm = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'occasional';
+export const RHYTHMS: Record<Rhythm, string> = { daily: 'Chaque jour (ou presque)', weekly: 'Chaque semaine', monthly: 'Chaque mois', yearly: 'Chaque année', occasional: 'De temps en temps, imprévu' };
+const DEFAULT_HABIT: Record<string, [Rhythm, boolean]> = {
+  'fc-loyer': ['monthly', true], 'fc-salaires': ['monthly', true], 'fc-jirama': ['monthly', false], 'fc-internet': ['monthly', false],
+  'fc-transport': ['daily', false], 'fc-pub': ['weekly', false], 'fc-emballage': ['weekly', false], 'fc-transit': ['occasional', false],
+  'fc-entretien': ['occasional', false], 'fc-impots': ['yearly', false], 'fc-frais-mm': ['daily', false], 'fc-divers': ['occasional', false],
+};
+/** Rythme et montant (fixe ou variable) d'une catégorie ; les catégories d'origine ont des valeurs par défaut. */
+export function catHabit(c?: FinanceCategory): { rhythm: Rhythm; fixed: boolean } {
+  const d = (c && DEFAULT_HABIT[c.id]) || ['occasional', false];
+  return { rhythm: c?.rhythm ?? d[0], fixed: c?.fixedAmount ?? (c?.rhythm ? false : d[1]) };
+}
+/** Type déduit : imprévu → exceptionnelle ; revient régulièrement avec le même montant → charge fixe ; sinon → courante. */
+export function typeForCat(c?: FinanceCategory): string {
+  const h = catHabit(c);
+  return h.rhythm === 'occasional' ? 'et-exception' : h.fixed ? 'et-fixe' : 'et-courante';
+}
+export const habitText = (c?: FinanceCategory) => { const h = catHabit(c); return h.rhythm === 'occasional' ? RHYTHMS.occasional : `${RHYTHMS[h.rhythm]} · montant ${h.fixed ? 'fixe' : 'variable'}`; };
 export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export const FREQS: Record<Freq, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois', yearly: 'Chaque année' };
 export const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
