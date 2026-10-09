@@ -571,3 +571,12 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 - **Envoi** : texte **WhatsApp** au patron, **PDF A4** (impression ou « Enregistrer en PDF », en-tête société, tableaux, pied de page), **Excel**. « Envoyé le … » est noté ; **rappels** : rapport du jour à partir de 18 h, de la semaine le lundi, du mois le 1er, de l'année le 1er janvier (jusqu'à l'envoi).
 
 **Tableau de bord, dans l'ordre :** a. Ventes (période, CA, nombre de ventes, panier moyen, retours) ; b. Dépenses et bénéfice ; c. État des commandes ; d. **Meilleures ventes** de la période : articles ou pages, tri par CA, quantité ou bénéfice, ou dernières commandes ; e. Graphe du bénéfice net par jour (par mois sur une année) ; puis argent, stock, articles dormants, stock faible, mise en route.
+
+## 9 septies. Aides à la décision et affichage sur téléphone *(10/10/2026)*
+
+- **Objectifs de vente** (Paramètres → Société : objectif par jour et par mois) : barres de progression sur l'accueil ; pour le mois, un trait indique le rythme à tenir et l'écart est affiché ; objectif rappelé dans le rapport du jour / du mois.
+- **Comparaison avec le même jour de la semaine dernière** (accueil, période « Aujourd'hui »).
+- **À surveiller** (accueil) : articles **bientôt en rupture** (stock ÷ ventes moyennes des 30 derniers jours, ≤ 14 jours), **boosts pas rentables** ce mois (bénéfice de la page après boost négatif, et CA rapporté par 1 $), **anomalies** des 7 derniers jours (article vendu sous son prix de revient, remise > 20 %, écart de versement).
+- **Rapport au patron** : colonne « CA pour 1 $ de boost » par page.
+- **Rapports → Clients à suivre** : taux de transformation (transformés ÷ transformés + abandonnés) par vendeur et par page, raisons d'abandon.
+- **Téléphone** : une seule notification en haut (la plus importante, format compact), les autres dans la cloche ; dans les listes, le montant passe sous le nom (le nom garde toute la largeur) ; lignes d'articles d'une commande empilées (article, puis quantité, prix, montant) ; tableaux larges glissables avec une ombre qui l'indique. Contrôle automatique de tous les écrans et onglets à 360, 390, 768 et 1280 px, en clair et en sombre (`scripts/design-check.mjs`) : aucun débordement.

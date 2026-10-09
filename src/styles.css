@@ -904,7 +904,15 @@ tr.row-error td { background: var(--danger-soft); }
 .notif-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .notif-main strong { overflow-wrap: anywhere; }
 .notif-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-@media (max-width: 600px) { .notif { flex-wrap: wrap; } .notif-actions { width: 100%; } }
+@media (max-width: 600px) {
+  .notif { padding: 8px 10px; gap: 8px; }
+  .notif > svg { display: none; }
+  .notif-main strong { font-size: .9rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .notif-main .small { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+  .notif-actions { flex-wrap: nowrap; }
+  .notif-actions .btn { min-height: 34px; padding: 0 10px; font-size: .85rem; }
+  .notif-more { display: flex; gap: 6px; align-items: center; margin: 0; }
+}
 .bell { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; border: 0; background: rgba(255,255,255,.12); color: inherit; cursor: pointer; }
 .bell-count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: var(--gold, #d69e2e); color: #1d1238; font: 800 .72rem/20px var(--font-body); text-align: center; }
 .bell-count.is-urgent { background: #e5484d; color: #fff; }
@@ -1007,3 +1015,24 @@ tr.row-error td { background: var(--danger-soft); }
 .goal-pace { position: absolute; top: -4px; width: 3px; height: 20px; border-radius: 2px; background: var(--ink); opacity: .55; }
 .watch h2 { display: flex; gap: 8px; align-items: center; }
 .watch h2 svg { color: var(--gold); }
+
+/* Listes sur téléphone : le montant passe sous le texte, le nom garde toute la largeur */
+@media (max-width: 480px) {
+  .list-item { padding: 12px 14px; gap: 10px; flex-wrap: wrap; }
+  .list-item > .list-item-main { flex: 1 1 0; }
+  .list-item-side { flex: 1 1 100%; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 4px 10px; text-align: right; }
+  .list-item.btn-reset, a.list-item { flex-wrap: wrap; }
+  .page-head .page-actions, .page-actions { flex-wrap: wrap; }
+}
+/* Tableaux larges : on montre qu'on peut faire glisser */
+.table-wrap { position: relative; -webkit-overflow-scrolling: touch; }
+@media (max-width: 600px) { .table-wrap { background: linear-gradient(to right, var(--surface) 30%, transparent), linear-gradient(to left, var(--surface) 30%, transparent) right, radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.14), transparent); background-repeat: no-repeat; background-size: 40px 100%, 40px 100%, 14px 100%; background-position: left, right, right; background-attachment: local, local, scroll; } }
+/* Lignes d'articles d'une commande sur téléphone : l'article sur toute la largeur, puis quantité, prix, montant */
+@media (max-width: 600px) {
+  .lines-table, .lines-table tbody { display: block; width: 100%; }
+  .lines-table thead { display: none; }
+  .lines-table tr { display: grid; grid-template-columns: 74px 1fr auto 40px; gap: 6px 8px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  .lines-table td { padding: 0; border: 0; }
+  .lines-table td:first-child { grid-column: 1 / -1; }
+  .lines-table td .cell-input { width: 100%; }
+}

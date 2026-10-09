@@ -303,7 +303,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
         <div className="row-between"><h3>{exchangeOf ? 'Nouveaux articles' : 'Articles'}</h3><Button variant="ghost" icon="plus" onClick={() => setPicking(true)}>Ajouter un article</Button></div>
         {priced.length === 0 ? <Empty icon="store" title="Aucun article" /> : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table lines-table">
               <thead><tr><th>Article</th><th style={{ width: 90 }}>Qté</th><th style={{ width: 120 }}>Prix (Ar)</th><th className="t-num">Montant</th><th></th></tr></thead>
               <tbody>
                 {priced.map((l) => {

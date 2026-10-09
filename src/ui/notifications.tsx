@@ -34,11 +34,15 @@ export function NotifBar() {
   useTick();
   const list = useNotifications().filter((n) => !n.until);
   const [pay, setPay] = useState<Notif | null>(null);
+  // Sur téléphone, une seule (la plus importante) pour laisser la place à la page ; les autres sont dans la cloche.
+  const [narrow, setNarrow] = useState(() => matchMedia('(max-width: 600px)').matches);
+  useEffect(() => { const m = matchMedia('(max-width: 600px)'); const f = () => setNarrow(m.matches); m.addEventListener?.('change', f); return () => m.removeEventListener?.('change', f); }, []);
   if (!list.length) return null;
+  const max = narrow ? 1 : 3;
   return (
     <div className="notif-bar" role="status">
-      {list.slice(0, 3).map((n) => <Item key={n.id} n={n} onPay={setPay} compact />)}
-      {list.length > 3 && <p className="small muted">+ {list.length - 3} autre(s) : touchez la cloche.</p>}
+      {list.slice(0, max).map((n) => <Item key={n.id} n={n} onPay={setPay} compact />)}
+      {list.length > max && <p className="small muted notif-more"><Icon name="bell" size={14} /> + {list.length - max} autre(s) notification(s) : touchez la cloche en haut.</p>}
       {pay?.due && <PayDue d={pay.due} onClose={() => setPay(null)} />}
     </div>
   );
