@@ -56,6 +56,16 @@ export function DashboardPage() {
         </div>
       )}
 
+      {can('cashday.use') && (
+        <div className="card row-between daycash-shortcut">
+          <div><h3>Caisse du jour</h3><p className="small muted">Saisir une dépense de la caisse commune ou envoyer le récapitulatif global du jour.</p></div>
+          <div className="row" style={{ gap: 8 }}>
+            <a className="btn btn-ghost" href="#/caisse-du-jour"><Icon name="wallet" />Dépense</a>
+            <a className="btn btn-primary" href="#/caisse-du-jour"><Icon name="share" />Récap WhatsApp</a>
+          </div>
+        </div>
+      )}
+
       {can('orders.create') && (
         <div className="stat-grid">
           {([['new', 'À confirmer', 'confirmer'], ['confirmed', 'À préparer', 'preparer'], ['ready', 'Prêtes à livrer', 'pretes'], ['out', 'En livraison', 'livraison']] as const).map(([st, label, tab]) => (

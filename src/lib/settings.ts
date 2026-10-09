@@ -12,6 +12,7 @@ export interface Company extends BaseRecord {
   nif?: string;
   stat?: string;
   ticketFooter?: string;
+  managerPhone?: string; // WhatsApp du gérant (récapitulatif du jour envoyé par les vendeurs)
   bossPhone?: string;   // WhatsApp du patron (récapitulatif)
   bossEmail?: string;
   autoLockMinutes: number;

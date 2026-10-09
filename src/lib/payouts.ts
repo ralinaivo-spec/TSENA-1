@@ -1,6 +1,7 @@
 // Tableau de la semaine (comme le cahier « Recette et Dépense ») et versement de la semaine au patron.
 //
-// Semaine = lundi → samedi. Montant à verser = total des ventes de la semaine − total des dépenses de la semaine.
+// Semaine = lundi → samedi. Montant à verser = total des ventes de la semaine − total des dépenses de la caisse commune
+// (compte « Caisse espèces » : une seule caisse pour tous les vendeurs).
 // Le gérant vérifie le détail, saisit le montant réellement remis, valide : la semaine est clôturée (identifiant
 // unique par semaine : impossible de la verser deux fois, même depuis deux appareils), le versement est tracé
 // (période, montant, date, gérant, appareil) et gardé dans l'historique.
@@ -51,7 +52,7 @@ export function grid(from: string, to: string): Grid {
       prev = Math.max(prev, r.spend);
     }
   }
-  const expenseMoves = all<CashMove>('cashMoves').filter((m) => m.type === 'expense' && dayOf(m.at) >= from && dayOf(m.at) <= to).sort((a, b) => a.at.localeCompare(b.at));
+  const expenseMoves = all<CashMove>('cashMoves').filter((m) => m.type === 'expense' && m.account === 'cash' && dayOf(m.at) >= from && dayOf(m.at) <= to).sort((a, b) => a.at.localeCompare(b.at));
   const expensesByDay: Record<string, number> = Object.fromEntries(days.map((d) => [d, 0]));
   for (const m of expenseMoves) expensesByDay[dayOf(m.at)] = (expensesByDay[dayOf(m.at)] ?? 0) - m.amount;
   // Colonnes : toutes les pages (catégories principales), dans l'ordre alphabétique ; « Sans page » à la fin si besoin.
@@ -140,4 +141,31 @@ export function monthly(n: number, todayYmd: string): { rows: MonthRow[]; pages:
   }
   const pages = [...pageIds.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => (a.id === '_' ? 1 : b.id === '_' ? -1 : a.name.localeCompare(b.name, 'fr')));
   return { rows, pages };
+}
+
+/** Récapitulatif global du jour (tous les vendeurs, caisse commune) à envoyer par WhatsApp. */
+export function dayRecap(ymd: string) {
+  const g = grid(ymd, ymd);
+  let shop = 0, online = 0; const shopN = new Set<string>(), onlineN = new Set<string>();
+  for (const l of salesLedger(ymd, ymd)) { if (l.channel === 'shop') { shop += l.amount; shopN.add(l.order.id); } else { online += l.amount; onlineN.add(l.order.id); } }
+  const pages = g.pages.filter((p) => g.pageTotals[p.id]).sort((a, b) => (g.pageTotals[b.id] ?? 0) - (g.pageTotals[a.id] ?? 0));
+  return { g, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, sales: g.salesTotal, expenses: g.expensesTotal, net: g.rest };
+}
+const ar = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} Ar`;
+export function dayRecapText(ymd: string, companyName: string, sender?: string) {
+  const r = dayRecap(ymd);
+  const date = new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const L: string[] = [];
+  L.push(`*${companyName}*`, `*Récapitulatif du ${date}*`, '_Global : tous les vendeurs, caisse commune_', '');
+  L.push('*Ventes par page*');
+  if (!r.pages.length) L.push('• Aucune vente');
+  for (const p of r.pages) L.push(`• ${p.name} : ${ar(r.g.pageTotals[p.id])}`);
+  L.push(`*TOTAL DES VENTES : ${ar(r.sales)}*`, `  (sur place : ${ar(r.shop)} · ${r.shopCount} vente(s) ; livraisons : ${ar(r.online)} · ${r.onlineCount} commande(s))`, '');
+  L.push('*Dépenses de la caisse commune*');
+  if (!r.g.expenseMoves.length) L.push('• Aucune dépense');
+  for (const m of r.g.expenseMoves) L.push(`• ${m.label || catName(m.categoryId) || 'Dépense'}${m.label && catName(m.categoryId) ? ` (${catName(m.categoryId)})` : ''} : ${ar(-m.amount)}${m.userName ? ` — ${m.userName}` : ''}`);
+  L.push(`*TOTAL DES DÉPENSES : ${ar(r.expenses)}*`, '');
+  L.push(`*MONTANT NET DU JOUR : ${ar(r.net)}*`, '_(total des ventes − dépenses de la caisse commune)_');
+  if (sender) L.push('', `Envoyé par ${sender} le ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
+  return L.join('\n');
 }

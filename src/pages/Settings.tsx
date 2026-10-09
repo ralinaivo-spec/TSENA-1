@@ -82,6 +82,7 @@ function CompanyTab() {
         <TextField label="NIF" value={form.nif ?? ''} onChange={set('nif')} />
         <TextField label="STAT" value={form.stat ?? ''} onChange={set('stat')} />
         <TextField label="WhatsApp du patron (récapitulatif)" value={form.bossPhone ?? ''} onChange={set('bossPhone')} type="tel" placeholder="034 00 000 00" />
+        <TextField label="WhatsApp du gérant (récapitulatif du jour)" value={form.managerPhone ?? ''} onChange={set('managerPhone')} type="tel" placeholder="034 00 000 00" />
         <TextField label="E-mail du patron (facultatif)" value={form.bossEmail ?? ''} onChange={set('bossEmail')} type="email" />
       </div>
       <TextField label="Message en bas du ticket de caisse" value={form.ticketFooter ?? ''} onChange={set('ticketFooter')} />

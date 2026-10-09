@@ -92,7 +92,7 @@ export function PayoutCard({ monday }: { monday: string }) {
       <div className="row-between">
         <div>
           <h2>Versement de la semaine {p?.status === 'paid' ? <Badge tone="ok">Versée · semaine clôturée</Badge> : finished ? <Badge tone="warn">À verser</Badge> : <Badge>Semaine en cours</Badge>}</h2>
-          <p className="small muted">Du lundi {fmtDate(w.start)} au samedi {fmtDate(w.end)} · Montant à verser = total des ventes − total des dépenses.</p>
+          <p className="small muted">Du lundi {fmtDate(w.start)} au samedi {fmtDate(w.end)} · Montant à verser = total des ventes − dépenses de la caisse commune.</p>
         </div>
         {p?.status !== 'paid' && allowed && <Button icon="wallet" disabled={!finished} onClick={() => setOpen(true)}>Versement de la semaine</Button>}
       </div>
@@ -143,7 +143,7 @@ function PayoutModal({ monday, g, onClose }: { monday: string; g: Grid; onClose:
           </tbody></table>
         </div>
         <div className="card-sub">
-          <h3>2. Dépenses déduites</h3>
+          <h3>2. Dépenses de la caisse commune déduites</h3>
           {g.expenseMoves.length === 0 ? <p className="small muted">Aucune dépense cette semaine.</p> : (
             <div className="table-wrap"><table className="table">
               <thead><tr><th>Jour</th><th>Dépense</th><th>Compte</th><th className="t-num">Montant</th></tr></thead>

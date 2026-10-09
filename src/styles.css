@@ -840,3 +840,9 @@ table.table { border-collapse: separate; border-spacing: 0 8px; padding: 0 12px;
 .payout-card .kv-table td:last-child { white-space: normal; overflow-wrap: anywhere; }
 .payout-card h2 .badge { white-space: normal; }
 .payout-card .row-between { flex-wrap: wrap; } .payout-card .row-between > div { min-width: 0; flex: 1 1 240px; } .payout-card h2 { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Caisse du jour */
+.btn-wa { background: #1FA855; border-color: #1FA855; }
+.btn-wa:hover { background: #178a45; }
+.daycash-shortcut { flex-wrap: wrap; gap: 10px; }
+.daycash-shortcut > div:first-child { min-width: 0; flex: 1 1 220px; }
+.daycash-send .row .btn { flex: 0 1 auto; white-space: normal; text-align: center; }

@@ -30,6 +30,7 @@ import { DeliveriesPage } from './pages/Deliveries';
 import { CustomersPage } from './pages/Customers';
 import { PosPage } from './pages/Pos';
 import { BoostsPage } from './pages/Boosts';
+import { DayCashPage } from './pages/DayCash';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
@@ -38,6 +39,7 @@ const NAV: NavItem[] = [
   { path: '/vente', label: 'Vente sur place', icon: 'store', perm: 'pos.sell', group: 'Ventes', page: () => <PosPage />, mobile: true },
   { path: '/commandes', label: 'Commandes clients', icon: 'list', perm: 'orders.create', group: 'Ventes', page: () => <OrdersPage />, mobile: true },
   { path: '/livraisons', label: 'Livraisons', icon: 'truck', perm: 'deliveries.manage', group: 'Ventes', page: () => <DeliveriesPage />, mobile: true },
+  { path: '/caisse-du-jour', label: 'Caisse du jour', icon: 'wallet', perm: 'cashday.use', group: 'Ventes', page: () => <DayCashPage /> },
   { path: '/boosts', label: 'Boosts pub', icon: 'megaphone', perm: 'boosts.view', group: 'Ventes', page: () => <BoostsPage /> },
   { path: '/clients', label: 'Clients', icon: 'users', perm: 'orders.create', group: 'Ventes', page: () => <CustomersPage /> },
   { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Stock', page: () => <ProductsPage /> },
