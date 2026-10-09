@@ -8,6 +8,7 @@ import { today } from '../lib/money';
 import { PKIND, bossReport, periodOf, reportText, shiftAnchor, type PKind, type PageRow, type Report, type StockRow } from '../lib/report';
 import { a4Table, arA4, h, printA4 } from '../lib/a4';
 import { useCompany } from '../lib/settings';
+import { usdRate } from '../lib/payouts';
 import { Button, Choice, TextField, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { SortTable, exportTables, type Col } from '../ui/table';
@@ -40,8 +41,9 @@ export function BossReport() {
   const phone = normPhone(company.bossPhone || '');
   const intl = phone ? '261' + phone.replace(/^0/, '') : '';
 
+  const goal = kind === 'day' ? company.targetDay : kind === 'month' ? company.targetMonth : undefined;
   const tiles: { label: string; cur: number; prev: number; invert?: boolean; strong?: boolean; hint?: string }[] = [
-    { label: "Chiffre d'affaires", cur: r.revenue, prev: p.revenue, hint: `${r.orders} vente(s) · ${r.pieces} pièce(s)` },
+    { label: "Chiffre d'affaires", cur: r.revenue, prev: p.revenue, hint: `${r.orders} vente(s) · ${r.pieces} pièce(s)${goal ? ` · objectif ${fmtAr(goal)} (${Math.round((r.revenue / goal) * 100)} %)` : ''}` },
     { label: 'Dépenses', cur: r.expenses, prev: p.expenses, invert: true },
     { label: 'Reste (CA − dépenses)', cur: r.rest, prev: p.rest },
     ...(isDay ? [] : [{ label: 'Boost Facebook', cur: r.boost, prev: p.boost, invert: true, hint: r.boostUsd ? `${r.boostUsd.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} $` : undefined }]),
@@ -53,7 +55,8 @@ export function BossReport() {
     { key: 's', label: 'Part', value: (x) => x.share, render: (x) => pctTxt(x.share), num: true, width: 8 },
     { key: 'q', label: 'Pièces', value: (x) => x.qty, num: true, total: true, width: 8 },
     { key: 'c', label: 'Coût articles', value: (x) => x.cost, money: true, total: true, width: 14 },
-    ...(isDay ? [] : [{ key: 'b', label: 'Boost', value: (x: PageRow) => x.boost, money: true, total: true, width: 12 } as Col<PageRow>]),
+    ...(isDay ? [] : [{ key: 'b', label: 'Boost', value: (x: PageRow) => x.boost, money: true, total: true, width: 12 } as Col<PageRow>,
+      { key: 'roi', label: 'CA pour 1 $ de boost', value: (x: PageRow) => (x.boost ? x.revenue / (x.boost / usdRate()) : 0), render: (x: PageRow) => (x.boost ? fmtAr(x.revenue / (x.boost / usdRate())) : '—'), num: true, width: 14 } as Col<PageRow>]),
     { key: 'p', label: isDay ? 'Marge' : 'Bénéfice page', value: (x) => (isDay ? x.revenue - x.cost : x.profit), money: true, total: true, width: 14 },
   ];
   const stockCols: Col<StockRow>[] = [

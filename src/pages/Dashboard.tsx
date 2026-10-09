@@ -7,6 +7,8 @@ import { rootOf } from '../lib/scope';
 import { get } from '../lib/db';
 import type { Category } from '../lib/catalog';
 import { OrderRow } from './Orders';
+import { anomalies, boostRoi, coverage, sameDayLastWeek, targets } from '../lib/insights';
+import { addDays } from '../lib/money';
 import { ACCOUNTS, balances, courierBalance, today as todayYmd, type AccountId } from '../lib/money';
 import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabel, salesLedger, series, stockValue, dormant } from '../lib/analytics';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
@@ -73,7 +75,7 @@ function Board() {
         </div>
       )}
 
-      {(can('reports.view') || can('treasury.view')) ? <><ManagerSales /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
+      {(can('reports.view') || can('treasury.view')) ? <><ManagerSales /><SalesExtras /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
       {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
         <div className="card row-between daycash-shortcut">
@@ -86,7 +88,7 @@ function Board() {
       )}
 
       {(can('orders.create') || can('pos.sell')) && <BestSellers />}
-      {(can('reports.view') || can('treasury.view')) && <><ManagerChart /><h2 className="dash-title">Argent, stock et alertes</h2><ManagerMore /></>}
+      {(can('reports.view') || can('treasury.view')) && <><ManagerChart /><h2 className="dash-title">Argent, stock et alertes</h2><Watchlist /><ManagerMore /></>}
       {can('catalog.view') && <LowStock />}
       {steps.length > 0 && doneCount < steps.length && (
         <div className="card stack">
@@ -379,5 +381,51 @@ function BestSellers() {
           )}
       </div>
     </>
+  );
+}
+
+/** Objectifs de vente (jour, mois) et comparaison avec le même jour de la semaine dernière. */
+function SalesExtras() {
+  useTable('orders');
+  const [period] = usePeriod();
+  const goals = targets();
+  const isToday = period.key === 'today';
+  const last = isToday ? sameDayLastWeek() : null;
+  const todayRev = isToday ? kpis(salesLedger(todayYmd(), todayYmd())).revenue : 0;
+  const dayName = new Date().toLocaleDateString('fr-FR', { weekday: 'long' });
+  if (!goals.length && !last) return null;
+  return (
+    <div className="card stack-s">
+      {last && <p className="small">Comparé à {dayName} dernier ({fmtAr(last.revenue)}) : <Delta cur={todayRev} prev={last.revenue} /></p>}
+      {goals.map((g) => (
+        <div key={g.label} className="goal">
+          <div className="row-between"><strong>{g.label}</strong><span className="num small">{fmtAr(g.done)} / {fmtAr(g.target)} · <strong>{Math.round(g.ratio * 100)} %</strong></span></div>
+          <div className="goal-track"><span className={`goal-fill ${g.ratio >= 1 ? 'is-done' : g.behind ? 'is-behind' : ''}`} style={{ width: `${Math.min(100, g.ratio * 100)}%` }} />{g.expected != null && <span className="goal-pace" style={{ left: `${Math.min(100, (g.expected / g.target) * 100)}%` }} title="Rythme à tenir aujourd’hui" />}</div>
+          {g.behind ? <p className="small muted">En retard de {fmtAr(g.behind)} sur le rythme du mois (trait vertical = où il faudrait être aujourd’hui).</p> : g.ratio >= 1 ? <p className="small ok-text">Objectif atteint ✓</p> : null}
+        </div>
+      ))}
+      {!goals.length && <p className="small muted">Fixez des objectifs de vente (jour, mois) dans <a href="#/parametres/societe">Paramètres → Société</a> pour suivre votre progression ici.</p>}
+    </div>
+  );
+}
+
+/** À surveiller : anomalies (7 derniers jours), fin de stock prévue, boosts pas rentables (mois en cours). */
+function Watchlist() {
+  useTable('orders'); useTable('stockMoves'); useTable('payouts'); useTable('boostReadings');
+  const t = todayYmd();
+  const an = anomalies(addDays(t, -6), t);
+  const cov = coverage(14).slice(0, 6);
+  const roi = boostRoi(t.slice(0, 8) + '01', t).filter((r) => r.profit < 0);
+  if (!an.length && !cov.length && !roi.length) return null;
+  return (
+    <div className="card stack-s watch">
+      <h2><Icon name="alert" /> À surveiller</h2>
+      {cov.length > 0 && <div><strong className="small">Bientôt en rupture (au rythme des 30 derniers jours)</strong>
+        <table className="kv-table"><tbody>{cov.map((c) => <tr key={c.product.id}><td>{c.product.name} <span className="muted small">· {c.product.code} · {c.stock} pcs, ~{c.perDay.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}/jour</span></td><td className={c.days <= 3 ? 'neg' : ''}>{c.days < 1 ? 'moins d’1 jour' : `~${Math.round(c.days)} jour(s)`}</td></tr>)}</tbody></table></div>}
+      {roi.length > 0 && <div><strong className="small">Boosts pas rentables ce mois</strong>
+        <table className="kv-table"><tbody>{roi.map((r) => <tr key={r.pageId}><td>{r.name} <span className="muted small">· 1 $ rapporte {fmtAr(r.perUsd)} de CA</span></td><td className="neg">{fmtAr(r.profit)}</td></tr>)}</tbody></table></div>}
+      {an.length > 0 && <div><strong className="small">À vérifier (7 derniers jours)</strong>
+        <ul className="plain-list small">{an.slice(0, 8).map((a, i) => <li key={i}><a href={a.href}>{a.text}</a></li>)}</ul></div>}
+    </div>
   );
 }

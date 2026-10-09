@@ -1000,3 +1000,10 @@ tr.row-error td { background: var(--danger-soft); }
 .boss-report .stat-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .rank { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: .72rem; font-weight: 800; margin-right: 4px; }
 .stock-flow { max-width: 560px; }
+.goal-track { position: relative; height: 12px; border-radius: 999px; background: var(--surface-2); overflow: visible; margin: 6px 0 2px; }
+.goal-fill { display: block; height: 100%; border-radius: 999px; background: var(--brand); }
+.goal-fill.is-done { background: var(--ok); }
+.goal-fill.is-behind { background: var(--gold); }
+.goal-pace { position: absolute; top: -4px; width: 3px; height: 20px; border-radius: 2px; background: var(--ink); opacity: .55; }
+.watch h2 { display: flex; gap: 8px; align-items: center; }
+.watch h2 svg { color: var(--gold); }

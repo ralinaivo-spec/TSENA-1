@@ -16,6 +16,7 @@ import { SortTable, exportTables, type Col } from '../ui/table';
 import { today } from '../lib/money';
 import { MonthlyRecap } from './WeekBoard';
 import { BossReport } from './BossReport';
+import { abandonReasons, conversion, type ConvRow } from '../lib/insights';
 
 const TABS = [
   { key: 'patron', label: 'Rapport au patron' },
@@ -28,6 +29,7 @@ const TABS = [
   { key: 'vendeurs', label: 'Vendeurs' },
   { key: 'stock', label: 'Stock' },
   { key: 'achats', label: 'Achats' },
+  { key: 'suivis', label: 'Clients à suivre' },
 ];
 const pct = (n: number) => (n * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
 const range = (p: Period) => ({ from: p.from ?? '2000-01-01', to: p.to ?? today() });
@@ -56,6 +58,7 @@ export function ReportsPage() {
       {cur.key === 'vendeurs' && <Sellers from={from} to={to} />}
       {cur.key === 'stock' && <StockReport />}
       {cur.key === 'achats' && <Purchases from={from} to={to} />}
+      {cur.key === 'suivis' && <FollowConversion from={from} to={to} />}
     </>
   );
 }
@@ -405,3 +408,29 @@ function Purchases({ from, to }: { from: string; to: string }) {
 
 export { pct };
 export type { Kpis };
+
+// ---------- Clients à suivre : taux de transformation ----------
+function FollowConversion({ from, to }: { from: string; to: string }) {
+  useTable('prospects');
+  const cols: Col<ConvRow>[] = [
+    { key: 'l', label: 'Nom', value: (r) => r.label, render: (r) => <strong>{r.label}</strong>, width: 22 },
+    { key: 't', label: 'Suivis', value: (r) => r.total, num: true, total: true, width: 9 },
+    { key: 'c', label: 'Transformés', value: (r) => r.converted, num: true, total: true, width: 11 },
+    { key: 'a', label: 'Abandonnés', value: (r) => r.abandoned, num: true, total: true, width: 11 },
+    { key: 'o', label: 'En cours', value: (r) => r.open, num: true, total: true, width: 9 },
+    { key: 'r', label: 'Taux de transformation', value: (r) => r.rate, render: (r) => <strong className={r.rate >= 0.5 ? 'pos' : r.rate < 0.25 && r.converted + r.abandoned ? 'neg' : ''}>{pct(r.rate)}</strong>, num: true, width: 14 },
+  ];
+  const bySeller = conversion(from, to, 'owner'), byPage = conversion(from, to, 'page'), reasons = abandonReasons(from, to);
+  const tot = bySeller.reduce((a, r) => ({ c: a.c + r.converted, d: a.d + r.converted + r.abandoned, t: a.t + r.total }), { c: 0, d: 0, t: 0 });
+  return (
+    <>
+      <div className="stat-grid">
+        <div className="card stat"><span className="small muted">Clients suivis (créés sur la période)</span><strong className="stat-value num">{tot.t}</strong></div>
+        <div className="card stat stat-strong"><span className="small muted">Taux de transformation</span><strong className="stat-value num">{tot.d ? pct(tot.c / tot.d) : '—'}</strong><span className="small muted">transformés / (transformés + abandonnés)</span></div>
+      </div>
+      <div className="card card-flush"><div className="card-pad"><h2>Par vendeur</h2></div><SortTable rowKey={(r) => r.key} rows={bySeller} cols={cols} initialSort={{ key: 'r', desc: true }} empty="Aucun client suivi sur la période." /></div>
+      <div className="card card-flush"><div className="card-pad"><h2>Par page</h2></div><SortTable rowKey={(r) => r.key} rows={byPage} cols={cols} initialSort={{ key: 't', desc: true }} empty="Aucun client suivi sur la période." /></div>
+      {reasons.length > 0 && <div className="card stack-s"><h2>Raisons d’abandon</h2><div className="bars">{reasons.map(([n, v]) => <div key={n} className="bar-row"><span className="bar-label">{n}</span><span className="bar-track"><span className="bar-fill" style={{ width: `${(v / reasons[0][1]) * 100}%` }} /></span><strong className="num">{v}</strong></div>)}</div></div>}
+    </>
+  );
+}

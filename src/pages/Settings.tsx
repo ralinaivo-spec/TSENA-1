@@ -110,6 +110,10 @@ function CompanyTab() {
           );
         })}
       </div>
+      <div className="grid-2">
+        <TextField label="Objectif de chiffre d’affaires par jour (Ar)" value={form.targetDay ? String(form.targetDay) : ''} onChange={(v) => setForm({ ...form, targetDay: Number(v.replace(/\D/g, '')) || undefined })} inputMode="numeric" hint="Facultatif : une barre de progression s’affiche sur l’accueil et dans le rapport du jour." />
+        <TextField label="Objectif de chiffre d’affaires par mois (Ar)" value={form.targetMonth ? String(form.targetMonth) : ''} onChange={(v) => setForm({ ...form, targetMonth: Number(v.replace(/\D/g, '')) || undefined })} inputMode="numeric" hint="Facultatif : progression du mois, avec le rythme à tenir." />
+      </div>
       <TextField label="Taux du dollar pour les boosts (Ar)" value={String(form.usdRate ?? 4700)} onChange={(v) => setForm({ ...form, usdRate: Number(v.replace(/\D/g, '')) || 0 })} inputMode="numeric" hint="Sert à convertir la dépense des boosts ($) en ariary dans le tableau de la semaine et le récapitulatif mensuel." />
       <SelectField label="Vente interne (employés) : prix de revient arrondi" value={String(form.internalRounding ?? 1)} onChange={(v) => setForm({ ...form, internalRounding: Number(v) || 1 })}
         options={[1, 50, 100, 500, 1000].map((n) => ({ value: String(n), label: n === 1 ? 'à l’ariary supérieur (ex. 2 562,5 → 2 563 Ar)' : `aux ${n.toLocaleString('fr-FR')} Ar supérieurs (ex. 2 563 → ${(Math.ceil(2563 / n) * n).toLocaleString('fr-FR')} Ar)` }))} />

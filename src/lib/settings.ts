@@ -18,6 +18,8 @@ export interface Company extends BaseRecord {
   autoLockMinutes: number;
   wholesaleMinQty?: number;
   usdRate?: number;          // taux du dollar (Ar) pour convertir la dépense des boosts
+  targetDay?: number;        // objectif de chiffre d'affaires par jour (Ar)
+  targetMonth?: number;      // objectif de chiffre d'affaires par mois (Ar)
   internalRounding?: number; // vente interne : prix de revient arrondi au palier supérieur (1, 100, 500… Ar)
   hours?: Record<string, { open: string; close: string } | null>; // clé 0 = dimanche … 6 = samedi
 }
