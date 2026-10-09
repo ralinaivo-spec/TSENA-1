@@ -10,7 +10,7 @@ import {
   makeAttr, saveArticles, shortId, suggestCatCode, suggestCode, usageOf, type Selection,
 } from '../lib/attrs';
 import { downloadBlob } from '../lib/xlsx';
-import { Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, navigate, toast } from '../ui/kit';
+import { Button, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, navigate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const fileName = (c: Category) => `Tresor-en-ligne-${(c.code || suggestCatCode(c.name)).toLowerCase()}-articles.xlsx`;
@@ -115,7 +115,7 @@ function CategoryEditor({ cat, onClose }: { cat?: Category; onClose: () => void 
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={submit}>{cat ? 'Enregistrer' : 'Créer la page'}</Button></>}>
       <div className="stack">
         <div className="grid-2">
-          <TextField label="Nom de la page (catégorie)" value={name} onChange={setName} placeholder="Ex. Lampe rechargeable" />
+          <TextField label="Nom de la page (catégorie)" required value={name} onChange={setName} placeholder="Ex. Lampe rechargeable" />
           <TextField label="Code court de la page" value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder={autoCode} hint={`Début du code des articles (ex. ${code || autoCode}-LP1-B22-7W).`} />
         </div>
         {cat && products.length > 0 && <div className="notice"><Icon name="alert" /><span>Cette page a déjà <strong>{products.length} article(s)</strong>. Changer un <strong>libellé</strong> change ce qui s’affiche pour ces articles ; changer un <strong>code court</strong> ne renomme pas les articles déjà créés. Une variante ou une valeur utilisée ne peut pas être supprimée : elle se désactive.</span></div>}
@@ -259,13 +259,13 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
         } catch (e: any) { toast(e.message, 'error'); setBusy(false); }
       }}>Créer {chosen.length || ''} article(s)</Button></>}>
       <div className="stack">
-        {!initial && <SelectField label="Page (catégorie)" value={catId} onChange={(v) => { setCatId(v); setPicked({}); setEdits({}); }} options={[{ value: '', label: 'Choisir la page…' }, ...cats.map((c) => ({ value: c.id, label: categoryPath(c.id) + (activeAttrs(c).length ? '' : ' (sans variantes)') }))]} />}
+        {!initial && <SelectField label="Page (catégorie)" required value={catId} onChange={(v) => { setCatId(v); setPicked({}); setEdits({}); }} options={[{ value: '', label: 'Choisir la page…' }, ...cats.map((c) => ({ value: c.id, label: categoryPath(c.id) + (activeAttrs(c).length ? '' : ' (sans variantes)') }))]} />}
         {cat && !attrs.length && <div className="notice"><Icon name="alert" /><span>Cette page n’a pas encore de variantes. Définissez-les d’abord dans <a href="#/pages">Pages et variantes</a>.</span></div>}
         {cat && attrs.length > 0 && <>
           <p className="small muted">1. Cochez une ou plusieurs valeurs par variante : un article est proposé pour chaque combinaison. 2. Décochez celles qui n’existent pas, saisissez les prix et le stock.</p>
           {attrs.map((a) => (
             <div key={a.id} className="stack-s">
-              <strong className="small">{a.name}{a.required === false ? ' (facultatif)' : ''}</strong>
+              <strong className="small">{a.name}{a.required === false ? ' (facultatif)' : <Req />}</strong>
               <div className="row" style={{ gap: 6 }}>
                 {activeValues(a).map((v) => <button key={v.id} type="button" className="chip" aria-pressed={(picked[a.id] ?? []).includes(v.id)} title={v.label} onClick={() => toggle(a.id, v.id)}>{normText(v.label).replace(/\s/g, '').startsWith(normText(v.code)) ? v.label : <>{v.code}<span className="chip-sub"> · {v.label}</span></>}</button>)}
                 {activeValues(a).length > 1 && <button type="button" className="chip chip-quiet" onClick={() => setPicked({ ...picked, [a.id]: (picked[a.id] ?? []).length === activeValues(a).length ? [] : activeValues(a).map((v) => v.id) })}>{(picked[a.id] ?? []).length === activeValues(a).length ? 'Aucune' : 'Toutes'}</button>}

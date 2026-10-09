@@ -164,7 +164,7 @@ export function ProspectForm({ p, onClose, onSaved }: { p?: Prospect; onClose: (
       }}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="grid-2">
-          <TextField label="Nom Facebook du client (obligatoire)" value={fbName} onChange={setFbName} autoFocus={!p} placeholder="Ex. Soa Rakoto" />
+          <TextField label="Nom Facebook du client" required value={fbName} onChange={setFbName} autoFocus={!p} placeholder="Ex. Soa Rakoto" />
           <TextField label="Téléphone (si connu)" value={phone} onChange={setPhone} type="tel" inputMode="tel" placeholder="034 00 000 00" />
           {pages.length > 0 && <SelectField label="Page" value={pageId} onChange={setPageId} options={[{ value: '', label: '— Aucune —' }, ...pages.map((c) => ({ value: c.id, label: c.name }))]} />}
           <div className="field"><label>Priorité</label><Choice label="Priorité" value={priority} onChange={(v) => setPriority(v as Priority)} options={Object.entries(PRIORITY).map(([value, label]) => ({ value, label }))} /></div>
@@ -287,7 +287,7 @@ function RelanceModal({ p, onClose }: { p: Prospect; onClose: () => void }) {
         toast('Relance notée'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Ce qui s’est passé" value={text} onChange={setText} autoFocus placeholder="Ex. veut la taille 6A, envoie l’acompte demain" />
+        <TextField label="Ce qui s’est passé" required value={text} onChange={setText} autoFocus placeholder="Ex. veut la taille 6A, envoie l’acompte demain" />
         <div className="row" style={{ gap: 6 }}>{RESULTS.map((r) => <button key={r} type="button" className="chip" onClick={() => setText(r)}>{r}</button>)}</div>
         <SelectField label="Il attend maintenant…" value={waitFor} onChange={(v) => setWaitFor(v as WaitFor)} options={Object.entries(WAIT).map(([value, label]) => ({ value, label }))} />
         <FollowAtField label="Prochaine relance" value={next} onChange={setNext} />
@@ -309,7 +309,7 @@ function PaidModal({ p, onClose }: { p: Prospect; onClose: () => void }) {
       <div className="stack">
         <p className="small muted">Le paiement est enregistré en caisse au moment où la commande est créée (rien n’est compté deux fois).</p>
         <div className="grid-2">
-          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
+          <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
           <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
           {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
         </div>

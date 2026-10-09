@@ -176,8 +176,8 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
     <Modal title={user ? 'Modifier l’utilisateur' : 'Nouvel utilisateur'} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={submit}>{user ? 'Enregistrer' : 'Créer le compte'}</Button></>}>
       <div className="stack">
-        <TextField label="Nom complet" value={fullName} onChange={setFullName} autoFocus />
-        <TextField label="Nom d'utilisateur (identifiant)" value={username} onChange={setUsername} autoCapitalize="none" disabled={isSuper} hint="Sert à se connecter. Exemple : hery, vendeuse.tiana" />
+        <TextField label="Nom complet" required value={fullName} onChange={setFullName} autoFocus />
+        <TextField label="Nom d'utilisateur (identifiant)" required value={username} onChange={setUsername} autoCapitalize="none" disabled={isSuper} hint="Sert à se connecter. Exemple : hery, vendeuse.tiana" />
         <SelectField label="Rôle" value={roleId} onChange={setRoleId} options={roleOptions} hint={roles.find((r) => r.id === roleId)?.description} />
         <TextField label="Téléphone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
         <TextField label="E-mail (facultatif)" value={email} onChange={setEmail} type="email" autoCapitalize="none" />
@@ -198,7 +198,7 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>
             <div className="row" style={{ alignItems: 'flex-end' }}>
               <div style={{ flex: '1 1 200px' }}>
-                <PasswordField label={user ? 'Nouveau mot de passe' : 'Mot de passe'} value={pwd} onChange={setPwd} autoComplete="new-password"
+                <PasswordField label={user ? 'Nouveau mot de passe' : 'Mot de passe'} required={!user} value={pwd} onChange={setPwd} autoComplete="new-password"
                   hint={user ? 'Laissez vide pour ne pas le changer.' : 'Proposé automatiquement, vous pouvez le remplacer.'} />
               </div>
               <Button variant="ghost" type="button" icon="refresh" onClick={() => setPwd(tempPassword())}>Générer</Button>

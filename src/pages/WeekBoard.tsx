@@ -161,7 +161,7 @@ function PayoutModal({ monday, g, onClose }: { monday: string; g: Grid; onClose:
         </div>
         <TextField label="Montant réellement remis au patron (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={gap ? <span className={gap < 0 ? 'neg' : 'pos'}>Écart : {gap > 0 ? '+' : ''}{fmtAr(gap)} — expliquez-le dans la remarque.</span> : 'Identique au montant à verser.'} />
         <SelectField label="Argent sorti de" value={account} onChange={(v) => setAccount(v as AccountId)} options={Object.entries(ACCOUNTS).map(([value, label]) => ({ value, label }))} />
-        <TextField label={gap ? 'Remarque (obligatoire en cas d’écart)' : 'Remarque (facultatif)'} value={note} onChange={setNote} />
+        <TextField label={gap ? 'Remarque (en cas d’écart)' : 'Remarque (facultatif)'} required={!!gap} value={note} onChange={setNote} />
         <label className="row small" style={{ gap: 8, alignItems: 'flex-start' }}><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> Je confirme avoir vérifié le détail et remis {fmtAr(n)} au patron. Après validation, la semaine est clôturée : plus aucune vente, livraison ou dépense ne peut y être ajoutée ou supprimée.</label>
       </div>
     </Modal>
@@ -179,7 +179,7 @@ function CancelModal({ p, onClose }: { p: Payout; onClose: () => void }) {
       <div className="stack">
         <p>Semaine du {fmtDate(p.weekStart)} au {fmtDate(p.weekEnd)} : {fmtAr(p.amount)} remis le {fmtDateTime(p.at)} par {p.byName}.</p>
         <p className="small muted">À utiliser seulement en cas d’erreur. La semaine sera rouverte ; l’annulation reste dans l’historique et le journal d’activité.</p>
-        <TextField label="Raison de l’annulation" value={reason} onChange={setReason} autoFocus />
+        <TextField label="Raison de l’annulation" required value={reason} onChange={setReason} autoFocus />
       </div>
     </Modal>
   );

@@ -304,7 +304,7 @@ function CourierForm({ courier, onClose }: { courier?: Courier; onClose: () => v
         toast('Livreur enregistré'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom" value={name} onChange={setName} autoFocus />
+        <TextField label="Nom" required value={name} onChange={setName} autoFocus />
         <TextField label="Téléphone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
         <div className="stack-s"><strong className="small">Axes habituels</strong>
           <MultiPick label="Axes habituels" values={zoneIds} onChange={setZoneIds} empty="Aucun axe" options={zones.map((z) => ({ value: z.id, label: z.name }))} />
@@ -376,8 +376,8 @@ function ZoneForm({ zone, count, onClose }: { zone?: Zone; count: number; onClos
         setBusy(false); onClose();
       }}>{zone ? 'Enregistrer' : 'Ajouter la zone'}</Button></>}>
       <div className="stack">
-        <TextField label="Nom de la zone / de l’axe" value={name} onChange={setName} placeholder="Ex. Ivandry – Ambatobe" autoFocus />
-        {!pickup && <TextField label="Frais de livraison (Ar)" value={fee} onChange={setFee} inputMode="numeric" placeholder="Ex. 4000" />}
+        <TextField label="Nom de la zone / de l’axe" required value={name} onChange={setName} placeholder="Ex. Ivandry – Ambatobe" autoFocus />
+        {!pickup && <TextField label="Frais de livraison (Ar)" required value={fee} onChange={setFee} inputMode="numeric" placeholder="Ex. 4000" />}
         <Toggle checked={pickup} onChange={setPickup} disabled={fixedPickup} label="Sur boutique (le client vient chercher : 0 Ar, sans livreur)" />
         {zone && <Toggle checked={active} onChange={setActive} label="Zone active (décochez pour la masquer dans les commandes)" />}
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}

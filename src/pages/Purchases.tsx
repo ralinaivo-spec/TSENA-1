@@ -275,7 +275,7 @@ function PaymentModal({ purchase, onClose }: { purchase: Purchase; onClose: () =
       }}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="grid-2">
-          <TextField label="Montant" value={amount} onChange={setAmount} inputMode="decimal" />
+          <TextField label="Montant" required value={amount} onChange={setAmount} inputMode="decimal" />
           <SelectField label="Devise" value={currency} onChange={(v) => setCurrency(v as any)} options={[{ value: 'RMB', label: 'RMB (¥)' }, { value: 'MGA', label: 'Ariary' }]} />
           <TextField label="Date" type="date" value={date} onChange={setDate} />
           <SelectField label="Moyen" value={method} onChange={setMethod} options={['Alipay / agent', 'Virement bancaire', 'Espèces', 'MVola', 'Orange Money', 'Airtel Money', 'Autre'].map((m) => ({ value: m, label: m }))} />
@@ -352,7 +352,7 @@ export function PurchaseForm({ purchase, onClose, onSaved }: { purchase?: Purcha
       <div className="stack">
         <div className="grid-2">
           <SelectField label="Fournisseur" value={supplierId} onChange={setSupplierId} options={[{ value: '', label: 'Non indiqué' }, ...suppliers.map((s) => ({ value: s.id, label: s.name })), { value: '__new', label: '+ Nouveau fournisseur…' }]} />
-          {supplierId === '__new' ? <TextField label="Nom du fournisseur" value={newSupplier} onChange={setNewSupplier} placeholder="Ex. shop566869krq2495 (1688)" /> : <TextField label="Date de commande" type="date" value={date} onChange={setDate} />}
+          {supplierId === '__new' ? <TextField label="Nom du fournisseur" required value={newSupplier} onChange={setNewSupplier} placeholder="Ex. shop566869krq2495 (1688)" /> : <TextField label="Date de commande" type="date" value={date} onChange={setDate} />}
           {supplierId === '__new' && <TextField label="Date de commande" type="date" value={date} onChange={setDate} />}
           <TextField label="N° de commande 1688" value={orderRef} onChange={setOrderRef} inputMode="numeric" />
           <TextField label="N° de suivi" value={trackingNo} onChange={setTrackingNo} />
@@ -362,7 +362,7 @@ export function PurchaseForm({ purchase, onClose, onSaved }: { purchase?: Purcha
         <div className="card stack" style={{ background: 'var(--surface-2)' }}>
           <div className="grid-2">
             <SelectField label="Devise des prix" value={currency} onChange={(v) => setCurrency(v as any)} options={[{ value: 'RMB', label: 'RMB (yuan ¥)' }, { value: 'MGA', label: 'Ariary' }]} />
-            {currency === 'RMB' && <TextField label="Taux : 1 ¥ = … Ar" value={rate} onChange={setRate} inputMode="decimal" hint="Modifiable à tout moment." />}
+            {currency === 'RMB' && <TextField label="Taux : 1 ¥ = … Ar" required value={rate} onChange={setRate} inputMode="decimal" hint="Modifiable à tout moment." />}
             <TextField label={`Frais de livraison en Chine (${currency === 'RMB' ? '¥' : 'Ar'})`} value={chinaFees} onChange={setChinaFees} inputMode="decimal" hint="Répartis sur chaque pièce." />
             <TextField label={`Remise (${currency === 'RMB' ? '¥' : 'Ar'})`} value={discount} onChange={setDiscount} inputMode="decimal" />
           </div>
@@ -504,7 +504,7 @@ function SupplierForm({ supplier, onClose }: { supplier?: Supplier; onClose: () 
         toast('Fournisseur enregistré'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom" value={name} onChange={setName} autoFocus />
+        <TextField label="Nom" required value={name} onChange={setName} autoFocus />
         <TextField label="Boutique / lien 1688" value={shop} onChange={setShop} autoCapitalize="none" />
         <TextField label="Contact (WeChat, téléphone)" value={contact} onChange={setContact} />
         <TextField label="Ville" value={city} onChange={setCity} />

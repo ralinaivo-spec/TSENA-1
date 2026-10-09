@@ -125,7 +125,7 @@ export function PosPage() {
           {internal && (
             <div className="notice"><Icon name="tag" /><span style={{ flex: 1 }}>Achat d’un employé : chaque article est vendu à son <strong>prix de revient arrondi</strong>{step > 1 ? ` aux ${fmtNum(step)} Ar supérieurs` : ' à l’ariary supérieur'}. Pas de remise ni de prix de gros.</span></div>
           )}
-          {internal && <SelectField label="Employé qui achète" value={employeeId} onChange={setEmployeeId} options={[{ value: '', label: 'Choisir l’employé…' }, ...users.map((u) => ({ value: u.id, label: u.fullName }))]} />}
+          {internal && <SelectField label="Employé qui achète" required value={employeeId} onChange={setEmployeeId} options={[{ value: '', label: 'Choisir l’employé…' }, ...users.map((u) => ({ value: u.id, label: u.fullName }))]} />}
           {priced.length === 0 ? <Empty icon="store" title="Touchez un article pour l’ajouter" /> : (
             <ul className="list">
               {priced.map((l) => {

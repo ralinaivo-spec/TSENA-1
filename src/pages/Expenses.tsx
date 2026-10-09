@@ -11,7 +11,7 @@ import {
   type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring, type Rhythm,
 } from '../lib/money';
 import { closedBy } from '../lib/closed';
-import { Badge, Button, FilterSelect, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, Button, FilterSelect, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { SortTable, exportTables, type Col } from '../ui/table';
@@ -85,7 +85,7 @@ export function PayDue({ d, onClose }: { d: ReturnType<typeof dueRecurring>[numb
       <div className="stack">
         <p className="small muted">Échéance du {fmtDate(d.date)} · {recurringText(d.r)}</p>
         <div className="grid-2">
-          <TextField label="Montant payé (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+          <TextField label="Montant payé (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
           <SelectField label="Payé depuis" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
         </div>
       </div>
@@ -122,7 +122,7 @@ function HabitFields({ h, set, rec }: { h: Habit; set: (h: Habit) => void; rec?:
         : <>
           <Toggle checked={h.remind} onChange={(v) => up({ remind: v })} label="Me rappeler de payer (charge fixe)" />
           {h.remind && <div className="grid-2">
-            <TextField label="Montant habituel (Ar)" value={h.amount} onChange={(v) => up({ amount: v })} inputMode="numeric" />
+            <TextField label="Montant habituel (Ar)" required value={h.amount} onChange={(v) => up({ amount: v })} inputMode="numeric" />
             <SelectField label="Payé depuis" value={h.account} onChange={(v) => up({ account: v as AccountId })} options={accountOptions} />
             {h.rhythm === 'weekly' && <SelectField label="Jour de la semaine" value={h.weekday} onChange={(v) => up({ weekday: v })} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} />}
             {(h.rhythm === 'monthly' || h.rhythm === 'yearly') && <TextField label="Jour du mois" value={h.day} onChange={(v) => up({ day: v })} inputMode="numeric" />}
@@ -148,14 +148,14 @@ async function saveExpenseCat(name: string, h: Habit, existing?: FinanceCategory
 
 // ---------- Saisie d'une dépense ----------
 /** Liste déroulante avec « + Nouveau… » : la nouvelle catégorie (ou le nouveau type) est créée tout de suite. */
-function PickOrAdd({ label, kind, value, onChange }: { label: string; kind: 'expense' | 'etype'; value: string; onChange: (v: string) => void }) {
+function PickOrAdd({ label, kind, value, onChange, required }: { label: string; kind: 'expense' | 'etype'; value: string; onChange: (v: string) => void; required?: boolean }) {
   const list = useTable<FinanceCategory>('financeCategories').filter((c) => c.kind === kind && c.active !== false).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name, 'fr'));
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [h, setH] = useState<Habit>(habitInit());
   if (adding) return (
     <div className="field add-inline" style={kind === 'expense' ? { gridColumn: '1 / -1' } : undefined}>
-      <label>{label} — nouvelle</label>
+      <label>{label} — nouvelle<Req /></label>
       <div className="stack-s">
         <input className="cell-input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'etype' ? 'Ex. Investissement' : 'Ex. Sakafo'} aria-label={`Nom de la nouvelle ${label.toLowerCase()}`} />
         {kind === 'expense' && name.trim() && <HabitFields h={h} set={setH} />}
@@ -176,7 +176,7 @@ function PickOrAdd({ label, kind, value, onChange }: { label: string; kind: 'exp
       </div>
     </div>
   );
-  return <SelectField label={label} value={value} onChange={(v) => (v === NEW ? setAdding(true) : onChange(v))} options={[...(value ? [] : [{ value: '', label: '— Choisir —' }]), ...list.map((c) => ({ value: c.id, label: c.name })), { value: NEW, label: `+ ${kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie'}…` }]} />;
+  return <SelectField label={label} required={required} value={value} onChange={(v) => (v === NEW ? setAdding(true) : onChange(v))} options={[...(value ? [] : [{ value: '', label: '— Choisir —' }]), ...list.map((c) => ({ value: c.id, label: c.name })), { value: NEW, label: `+ ${kind === 'etype' ? 'Nouveau type' : 'Nouvelle catégorie'}…` }]} />;
 }
 
 export function ExpenseForm({ onClose }: { onClose: () => void }) {
@@ -223,7 +223,7 @@ export function ExpenseForm({ onClose }: { onClose: () => void }) {
         catch (e: any) { toast(e.message, 'error'); setBusy(false); }
       }}>Enregistrer</Button></>}>
       <div className="stack">
-        <PickOrAdd label="Catégorie" kind="expense" value={cat} onChange={pick} />
+        <PickOrAdd label="Catégorie" kind="expense" required value={cat} onChange={pick} />
         {c && <div className="habit-line small">
           <span className="muted">{habitText(c)} · Type : </span>
           {typeOver === null
@@ -233,7 +233,7 @@ export function ExpenseForm({ onClose }: { onClose: () => void }) {
         {due.length > 0 && <div className="notice notice-warn"><Icon name="bell" /><span style={{ flex: 1 }}>« {due[0].r.label} » du {fmtDate(due[0].date)} ({fmtAr(due[0].r.amount)}) est à payer. Payez cette échéance pour qu’elle ne soit plus rappelée.</span><Button onClick={() => setPay(due[0])}>Payer l’échéance</Button></div>}
         {!due.length && sameDay && <div className="notice notice-warn"><Icon name="alert" /><span>Déjà payée pour cette période : {fmtAr(-last!.amount)} le {fmtDate(dayOf(last!.at))}. Vérifiez que ce n’est pas un doublon.</span></div>}
         <div className="grid-2">
-          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint={last && !rec ? <button type="button" className="link-btn" onClick={() => setAmount(String(-last.amount))}>Dernière fois : {fmtAr(-last.amount)} le {fmtDate(dayOf(last.at))}</button> : undefined} />
+          <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" hint={last && !rec ? <button type="button" className="link-btn" onClick={() => setAmount(String(-last.amount))}>Dernière fois : {fmtAr(-last.amount)} le {fmtDate(dayOf(last.at))}</button> : undefined} />
           <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} />
           <SelectField label="Payé depuis" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
           <TextField label="Description (facultatif)" value={label} onChange={setLabel} placeholder={c ? `Par défaut : ${c.name}` : 'Ex. Taxi livraison Analakely'} />
@@ -365,11 +365,11 @@ function FixedForm({ rec, onClose }: { rec?: Recurring; onClose: () => void }) {
       }}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="segmented" role="group">{(['expense', 'income'] as const).map((k) => <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCat(k === 'income' ? incomeCats[0]?.id ?? '' : 'fc-loyer'); }}>{k === 'expense' ? 'Dépense' : 'Revenu'}</button>)}</div>
-        <TextField label="Libellé (ex. Loyer boutique)" value={label} onChange={setLabel} />
+        <TextField label="Libellé (ex. Loyer boutique)" required value={label} onChange={setLabel} />
         <div className="grid-2">
-          {kind === 'expense' ? <PickOrAdd label="Catégorie" kind="expense" value={cat} onChange={setCat} /> : <SelectField label="Catégorie" value={cat} onChange={setCat} options={incomeCats.map((c) => ({ value: c.id, label: c.name }))} />}
+          {kind === 'expense' ? <PickOrAdd label="Catégorie" kind="expense" required value={cat} onChange={setCat} /> : <SelectField label="Catégorie" required value={cat} onChange={setCat} options={incomeCats.map((c) => ({ value: c.id, label: c.name }))} />}
           {kind === 'expense' && <PickOrAdd label="Type" kind="etype" value={type} onChange={setType} />}
-          <TextField label="Montant habituel (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+          <TextField label="Montant habituel (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
           <SelectField label="Compte" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
           <SelectField label="Répétition" value={freq} onChange={(v) => setFreq(v as Freq)} options={Object.entries(FREQS).map(([value, label]) => ({ value, label }))} />
           {freq === 'weekly' && <SelectField label="Jour de la semaine" value={weekday} onChange={setWeekday} options={WEEKDAYS.map((w, i) => ({ value: String(i), label: w }))} />}
@@ -425,7 +425,7 @@ function CatForm({ cat, onClose }: { cat: FinanceCategory | { kind: 'expense' | 
         toast('Enregistré'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom" value={name} onChange={setName} autoFocus placeholder={isExp ? 'Ex. Sakafo' : undefined} />
+        <TextField label="Nom" required value={name} onChange={setName} autoFocus placeholder={isExp ? 'Ex. Sakafo' : undefined} />
         {isExp && <HabitFields h={h} set={setH} rec={rec} />}
         {existing && <Toggle checked={active} onChange={setActive} label="Active (proposée dans les listes)" />}
         {isExp && existing && <p className="small muted">Changer le rythme ne modifie pas les dépenses déjà enregistrées, seulement les prochaines.</p>}

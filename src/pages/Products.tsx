@@ -366,10 +366,10 @@ export function ProductForm({ product, onClose, onSaved }: { product?: Product; 
           }} />
         </div>
         <div className="grid-2">
-          <TextField label="Code de l’article" value={code} onChange={setCode} placeholder="Ex. BXH12" autoCapitalize="characters" />
-          <TextField label="Nom" value={name} onChange={setName} placeholder="Ex. Boxer homme coton imprimé" />
+          <TextField label="Code de l’article" required value={code} onChange={setCode} placeholder="Ex. BXH12" autoCapitalize="characters" />
+          <TextField label="Nom" required value={name} onChange={setName} placeholder="Ex. Boxer homme coton imprimé" />
           <SelectField label="Catégorie" value={categoryId} onChange={setCategoryId} options={[...categoryOptions(categories), { value: '__new', label: '+ Nouvelle catégorie…' }]} />
-          {categoryId === '__new' ? <TextField label="Nom de la nouvelle catégorie" value={newCat} onChange={setNewCat} /> : <TextField label="Alerte stock bas à partir de" value={alertQty} onChange={setAlertQty} inputMode="numeric" />}
+          {categoryId === '__new' ? <TextField label="Nom de la nouvelle catégorie" required value={newCat} onChange={setNewCat} /> : <TextField label="Alerte stock bas à partir de" value={alertQty} onChange={setAlertQty} inputMode="numeric" />}
           <TextField label="Prix de vente détail (Ar)" value={priceRetail} onChange={setPriceRetail} inputMode="numeric" />
           <TextField label="Prix de gros (Ar)" value={priceWholesale} onChange={setPriceWholesale} inputMode="numeric" hint="À partir de 3 pièces (réglable)." />
         </div>
@@ -549,7 +549,7 @@ function CategoriesModal({ onClose }: { onClose: () => void }) {
           await audit('Catégorie créée', name.trim());
           setName('');
         }}>
-          <div style={{ flex: '1 1 200px' }}><TextField label="Nouvelle catégorie" value={name} onChange={setName} placeholder="Ex. Boxer homme" /></div>
+          <div style={{ flex: '1 1 200px' }}><TextField label="Nouvelle catégorie" required value={name} onChange={setName} placeholder="Ex. Boxer homme" /></div>
           <div style={{ flex: '1 1 200px' }}><SelectField label="Dans la catégorie" value={parent} onChange={setParent} options={categoryOptions(categories, 'Aucune (principale)')} /></div>
           <Button type="submit" icon="plus" disabled={!name.trim()}>Ajouter</Button>
         </form>

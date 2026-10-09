@@ -4,7 +4,23 @@ import { Icon, type IconName } from './icons';
 
 // ---- Navigation (adresse après le #, compatible GitHub Pages et hors ligne) ----
 const routeSubs = new Set<() => void>();
-window.addEventListener('hashchange', () => routeSubs.forEach((f) => f()));
+// Historique des pages visitées : sert à la flèche « Retour » quand on est passé d'un écran à un autre par un lien
+// (et pas par le menu). Un clic dans le menu repart de zéro.
+let trail: string[] = [];
+let lastRoute = location.hash.slice(1) || '/';
+let viaMenu = false;
+export const markMenuNav = () => { viaMenu = true; };
+const section = (r: string) => '/' + (r.split('?')[0].split('/')[1] || '');
+window.addEventListener('hashchange', () => {
+  const cur = location.hash.slice(1) || '/';
+  if (viaMenu) trail = [];
+  else if (trail[trail.length - 1] === cur) trail.pop();                 // retour arrière
+  else if (section(cur) !== section(lastRoute)) trail.push(lastRoute);    // changement d'écran par un lien
+  viaMenu = false; lastRoute = cur;
+  routeSubs.forEach((f) => f());
+});
+/** Écran précédent (si on est arrivé ici par un lien depuis un autre écran). */
+export function useBackTarget(): string | undefined { useRoute(); return trail[trail.length - 1]; }
 export function useRoute(): string {
   return useSyncExternalStore((cb) => { routeSubs.add(cb); return () => routeSubs.delete(cb); }, () => location.hash.slice(1) || '/');
 }
@@ -53,23 +69,25 @@ export function IconButton({ icon, label, ...rest }: React.ButtonHTMLAttributes<
 }
 
 // ---- Champs ----
-export function Field({ label, hint, error, children }: { label: string; hint?: ReactNode; error?: string | null; children: (id: string) => ReactNode }) {
+/** Champ obligatoire : petite étoile rouge après le libellé (règle commune à toute l'application). */
+export const Req = () => <span className="req" aria-hidden />; // l’étoile vient du CSS : le libellé reste « propre » (lecteurs d’écran, tests)
+export function Field({ label, hint, error, children, required }: { label: string; hint?: ReactNode; error?: string | null; children: (id: string) => ReactNode; required?: boolean }) {
   const id = useId();
   return (
     <div className={`field ${error ? 'has-error' : ''}`}>
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>{label}{required && <Req />}</label>
       {children(id)}
       {error ? <p className="field-error">{error}</p> : hint ? <p className="field-hint">{hint}</p> : null}
     </div>
   );
 }
-export function TextField({ label, hint, error, value, onChange, ...rest }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & { label: string; hint?: ReactNode; error?: string | null; value: string; onChange: (v: string) => void }) {
-  return <Field label={label} hint={hint} error={error}>{(id) => <input id={id} value={value} onChange={(e) => onChange(e.target.value)} {...rest} />}</Field>;
+export function TextField({ label, hint, error, value, onChange, required, ...rest }: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> & { label: string; hint?: ReactNode; error?: string | null; value: string; onChange: (v: string) => void }) {
+  return <Field label={label} hint={hint} error={error} required={required}>{(id) => <input id={id} value={value} onChange={(e) => onChange(e.target.value)} aria-required={required || undefined} {...rest} />}</Field>;
 }
-export function PasswordField({ label, hint, error, value, onChange, autoComplete = 'current-password', autoFocus }: { label: string; hint?: ReactNode; error?: string | null; value: string; onChange: (v: string) => void; autoComplete?: string; autoFocus?: boolean }) {
+export function PasswordField({ label, hint, error, value, onChange, autoComplete = 'current-password', autoFocus, required }: { label: string; hint?: ReactNode; error?: string | null; value: string; onChange: (v: string) => void; autoComplete?: string; autoFocus?: boolean; required?: boolean }) {
   const [show, setShow] = useState(false);
   return (
-    <Field label={label} hint={hint} error={error}>
+    <Field label={label} hint={hint} error={error} required={required}>
       {(id) => (
         <div className="input-with-btn">
           <input id={id} type={show ? 'text' : 'password'} value={value} onChange={(e) => onChange(e.target.value)} autoComplete={autoComplete} autoFocus={autoFocus} />
@@ -115,10 +133,10 @@ export function FilterSelect({ label, value, onChange, options }: { label: strin
   if (options.length > SEARCH_AT) return <SearchSelect label={label} value={value} onChange={onChange} options={options} />;
   return <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
 }
-export function SelectField({ label, hint, value, onChange, options }: { label: string; hint?: ReactNode; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  if (options.length > SEARCH_AT) return <Field label={label} hint={hint}>{(id) => <SearchSelect id={id} label={label} value={value} onChange={onChange} options={options} />}</Field>;
+export function SelectField({ label, hint, value, onChange, options, required }: { label: string; hint?: ReactNode; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; required?: boolean }) {
+  if (options.length > SEARCH_AT) return <Field label={label} hint={hint} required={required}>{(id) => <SearchSelect id={id} label={label} value={value} onChange={onChange} options={options} />}</Field>;
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label} hint={hint} required={required}>
       {(id) => (
         <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
           {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

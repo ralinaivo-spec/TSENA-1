@@ -84,10 +84,10 @@ function Expenses({ date, moves, total }: { date: string; moves: CashMove[]; tot
       {isToday && !closed && (
         <div className="card-pad stack-s daycash-form">
           <div className="grid-2">
-            <TextField label="Montant de la dépense (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+            <TextField label="Montant de la dépense (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
             <SelectField label="Catégorie" value={catId} onChange={setCat} options={cats.map((c) => ({ value: c.id, label: c.name }))} />
           </div>
-          <TextField label="Description (ex. taxi livraison Analakely)" value={label} onChange={setLabel} />
+          <TextField label="Description (ex. taxi livraison Analakely)" required value={label} onChange={setLabel} />
           <div className="row" style={{ alignItems: 'center' }}>
             <Button variant="ghost" icon="upload" onClick={() => file.current?.click()}>{photo ? 'Changer la photo du reçu' : 'Photo du reçu (facultatif)'}</Button>
             {photo && <><img src={photo} alt="Reçu" style={{ height: 44, borderRadius: 8 }} /><Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer</Button></>}

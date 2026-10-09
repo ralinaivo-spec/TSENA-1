@@ -155,7 +155,7 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
         {(!direct || p.ref) && <Button variant="ghost" onClick={async () => { try { await printOn(p, testDoc(company, p.name || 'Imprimante')); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } }}>Page de test</Button>}
         <Button onClick={submit}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom de l’imprimante" hint="Le nom que vous choisirez au moment d’imprimer, ex. « Ticket caisse »." value={p.name} onChange={(v) => set({ name: v })} />
+        <TextField label="Nom de l’imprimante" required hint="Le nom que vous choisirez au moment d’imprimer, ex. « Ticket caisse »." value={p.name} onChange={(v) => set({ name: v })} />
         <div className="stack-s">
           <strong>Branchement</strong>
           <div className="choice-list">
@@ -200,7 +200,7 @@ function StationForm({ current, printers, onClose }: { current?: PrintStation; p
     <Modal title="Poste d’impression" onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!name.trim()} onClick={async () => { await makeStation(name.trim(), pid); toast('Cet appareil est maintenant un poste d’impression'); onClose(); }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom du poste (vu par les autres appareils)" value={name} onChange={setName} />
+        <TextField label="Nom du poste (vu par les autres appareils)" required value={name} onChange={setName} />
         <SelectField label="Imprimante utilisée par ce poste" value={pid} onChange={setPid} options={choices.map((c) => ({ value: c.id, label: c.name }))} />
         {chosen?.kind === 'system' && <div className="notice"><Icon name="alert" /><span>Avec la fenêtre d’impression, quelqu’un devra cliquer « Imprimer » sur ce poste à chaque ticket. Préférez une imprimante en Bluetooth ou USB direct.</span></div>}
         {printers.length === 0 && <p className="small muted">Ajoutez d’abord l’imprimante à tickets de cet appareil (Bluetooth ou USB) pour qu’il imprime tout seul.</p>}

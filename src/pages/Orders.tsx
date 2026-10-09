@@ -20,6 +20,7 @@ import { siblingsOf } from '../lib/attrs';
 import { deliveryNoteDoc, parcelLabelDoc, ticketDoc } from '../lib/print';
 import { PrintButton, type DocChoice } from '../ui/print';
 import { ProspectForm, ProspectList } from './Prospects';
+import { Zones } from './Deliveries';
 import { bucketOf, type Prospect } from '../lib/prospects';
 
 const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
@@ -179,6 +180,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [prepayMethod, setPrepayMethod] = useState<PayMethod>(pre?.prepay?.method ?? 'mvola');
   const [prepayRef, setPrepayRef] = useState(pre?.prepay?.ref ?? '');
   const [picking, setPicking] = useState(false);
+  const [zonesOpen, setZonesOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const known = useMemo(() => findCustomer(phone), [phone]);
@@ -271,18 +273,18 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
           <SelectField label="Commande reçue par" value={channel} onChange={onChannel} options={Object.entries(CHANNELS).filter(([k]) => k !== 'shop').map(([value, label]) => ({ value, label }))} />
           <div />
           <div className="stack-s">
-            <TextField label={walkIn ? 'Contact du client (facultatif)' : 'Contact du client (obligatoire)'} value={phone} onChange={onPhone} type="tel" inputMode="tel" autoFocus={!order} placeholder="034 00 000 00" />
+            <TextField label={walkIn ? 'Contact du client (facultatif)' : 'Contact du client'} required={!walkIn} value={phone} onChange={onPhone} type="tel" inputMode="tel" autoFocus={!order} placeholder="034 00 000 00" />
             {known && !order && <p className="small"><Icon name="check" size={14} /> Client connu : <strong>{known.name || fmtPhone(known.phone)}</strong>{known.place ? ` · ${known.place}` : ''}</p>}
           </div>
           <TextField label="Nom du client (facultatif)" value={name} onChange={setName} />
           <TextField label="Nom Facebook (facultatif)" value={facebook} onChange={setFacebook} placeholder="Tel qu’il apparaît dans Messenger" />
-          <SelectField label="Zone de livraison" value={zoneId} onChange={onZone} options={[{ value: '', label: '— Choisir —' }, ...zones.map((z) => ({ value: z.id, label: `${z.name} (${fmtAr(z.fee)})` }))]} />
-          <TextField label={pickup ? 'Lieu (facultatif)' : 'Lieu précis (obligatoire)'} value={place} onChange={setPlace} placeholder={pickup ? 'Boutique' : 'Ex. Analakely, devant la pharmacie'} />
-          <TextField label="Frais de livraison (Ar)" value={pickup ? '0' : fee} onChange={setFee} inputMode="numeric" disabled={pickup} hint={pickup ? 'Retrait en boutique : pas de frais.' : 'Obligatoire. Rempli selon la zone, modifiable.'} />
-          {!pickup && <SelectField label="Livreur (obligatoire)" value={courierId} onChange={setCourierId} options={[{ value: '', label: '— Choisir —' }, ...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />}
-          {!pickup && courierId === '__new' && <TextField label="Nom du nouveau livreur" value={newCourier} onChange={setNewCourier} />}
+          <SelectField label="Zone de livraison" required value={zoneId} onChange={onZone} options={[{ value: '', label: '— Choisir —' }, ...zones.map((z) => ({ value: z.id, label: `${z.name} (${fmtAr(z.fee)})` }))]} />
+          <TextField label={pickup ? 'Lieu (facultatif)' : 'Lieu précis'} required={!pickup} value={place} onChange={setPlace} placeholder={pickup ? 'Boutique' : 'Ex. Analakely, devant la pharmacie'} />
+          <TextField label="Frais de livraison (Ar)" required={!pickup} value={pickup ? '0' : fee} onChange={setFee} inputMode="numeric" disabled={pickup} hint={pickup ? 'Retrait en boutique : pas de frais.' : 'Obligatoire. Rempli selon la zone, modifiable.'} />
+          {!pickup && <SelectField label="Livreur" required value={courierId} onChange={setCourierId} options={[{ value: '', label: '— Choisir —' }, ...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />}
+          {!pickup && courierId === '__new' && <TextField label="Nom du nouveau livreur" required value={newCourier} onChange={setNewCourier} />}
         </div>
-        <p className="small muted">Zone manquante ou frais à changer ? <a href="#/parametres/zones" onClick={onClose}>Gérer les zones de livraison</a></p>
+        <p className="small muted">Zone manquante ou frais à changer ? <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setZonesOpen(true)}>Gérer les zones de livraison</button> (la commande en cours est gardée)</p>
 
         {exchangeOf && (
           <div className="notice"><Icon name="refresh" /><span>Articles repris au client : {exchangeOf.returnLines.map((r) => `${r.qty} × ${variantLabel(get<Variant>('variants', r.variantId))}`).join(', ')} — valeur {fmtAr(draft.credit)} déduite.</span></div>
@@ -356,6 +358,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
         </div>
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
+      {zonesOpen && <Modal title="Zones de livraison" wide onClose={() => setZonesOpen(false)} footer={<Button onClick={() => setZonesOpen(false)}><Icon name="chevronLeft" size={16} /> Revenir à la commande</Button>}><Zones /></Modal>}
       {picking && <ItemPicker excludeOrderId={order?.id} onClose={() => setPicking(false)} onAdd={(add) => {
         const merged = [...lines];
         for (const a of add) {
@@ -601,8 +604,8 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
         toast(`${orders.length} commande(s) remise(s) au livreur`); setBusy(false); onClose();
       }}>Remettre</Button></>}>
       <div className="stack">
-        <SelectField label="Livreur" value={courierId} onChange={setCourierId} options={[...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />
-        {courierId === '__new' && <TextField label="Nom du livreur" value={newName} onChange={setNewName} autoFocus />}
+        <SelectField label="Livreur" required value={courierId} onChange={setCourierId} options={[...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />
+        {courierId === '__new' && <TextField label="Nom du livreur" required value={newName} onChange={setNewName} autoFocus />}
         <p className="small muted">Les articles (y compris ceux en choix) sortent du stock de la boutique. Ce qui revient sera remis en stock au retour du livreur.</p>
         <ul className="small">{orders.map((o) => <li key={o.id}>{o.number} — {orderLabel(o)} — à encaisser {fmtAr(Math.max(0, remaining(o)))}</li>)}</ul>
       </div>
@@ -684,7 +687,7 @@ function EditPaymentModal({ order: o, payment: p, onClose }: { order: Order; pay
       <div className="stack">
         <p className="small">Montant actuel : <strong>{fmtAr(p.amount)}</strong> ({PAY_METHODS[p.method]}, {p.receivedBy === 'shop' ? 'reçu par la boutique' : 'encaissé par le livreur'}) le {fmtDateTime(p.at)}.</p>
         <div className="grid-2">
-          <TextField label="Nouveau montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" hint="0 pour annuler ce paiement" />
+          <TextField label="Nouveau montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" hint="0 pour annuler ce paiement" />
           <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         </div>
         <TextField label="Motif" value={reason} onChange={setReason} />
@@ -708,7 +711,7 @@ function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) 
       }}>Enregistrer</Button></>}>
       <div className="stack">
         {refund && <p className="small">Le client a trop payé (ex. échange contre un article moins cher) : ce montant sort de la caisse ou du compte choisi.</p>}
-        <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+        <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
         <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
         {o.courierId && <SelectField label="Reçu par" value={by} onChange={(v) => setBy(v as any)} options={[{ value: 'shop', label: 'La boutique' }, { value: 'courier', label: 'Le livreur' }]} />}
@@ -821,7 +824,7 @@ export function ReassignModal({ order: o, onClose }: { order: Order; onClose: ()
       <div className="stack">
         <p>Livreur actuel : <strong>{current?.name ?? '—'}</strong></p>
         <SelectField label="Nouveau livreur" value={courierId} onChange={setCourierId} options={[...couriers.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '+ Nouveau livreur…' }]} />
-        {courierId === '__new' && <TextField label="Nom du nouveau livreur" value={newName} onChange={setNewName} autoFocus />}
+        {courierId === '__new' && <TextField label="Nom du nouveau livreur" required value={newName} onChange={setNewName} autoFocus />}
         <SelectField label="Motif" value={reason} onChange={setReason} options={['Zone d’un autre livreur', 'Livreur indisponible', 'Erreur d’attribution', 'Autre'].map((r) => ({ value: r, label: r }))} />
         <div className="notice"><Icon name="refresh" /><span>La commande est retirée du compte de {current?.name ?? 'l’ancien livreur'} et passe au nouveau{['delivered', 'partial', 'refused'].includes(o.status) ? `, avec ses frais (${fmtAr(o.feeCharged ?? 0)})` : ''}{collected ? ` et l’argent encaissé (${fmtAr(collected)})` : ''}. Le changement est noté dans l’historique.</span></div>
       </div>

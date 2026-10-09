@@ -969,3 +969,6 @@ tr.row-error td { background: var(--danger-soft); }
 .install-steps li { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: var(--surface-2); }
 .install-n { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: var(--brand-ink); font-weight: 800; }
 .install .login-badge { position: static; transform: none; margin: 0; }
+.req::after { content: " *"; color: var(--danger); font-weight: 800; }
+.back-bar { display: flex; margin: 0 0 10px; }
+.back-bar .btn { min-height: 36px; padding: 0 12px; }

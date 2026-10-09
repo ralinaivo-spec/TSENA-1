@@ -121,7 +121,7 @@ function RoleForm({ role, roles, onClose }: { role: Role | null; roles: Role[]; 
           onClose();
         }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom du rôle" value={name} onChange={setName} autoFocus placeholder="Exemple : Caissière" />
+        <TextField label="Nom du rôle" required value={name} onChange={setName} autoFocus placeholder="Exemple : Caissière" />
         <TextField label="Description" value={description} onChange={setDescription} />
         {!role && <SelectField label="Partir des droits de" value={copyFrom} onChange={setCopyFrom}
           options={[{ value: '', label: 'Aucun droit' }, ...roles.filter((r) => r.id !== 'role-superadmin').map((r) => ({ value: r.id, label: r.name }))]} />}

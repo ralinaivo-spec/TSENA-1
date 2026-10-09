@@ -6,7 +6,7 @@ import { checkPin, hasPin, maskEmail, resetByEmail, sendResetLink } from '../lib
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import { connectCloud } from '../lib/sync';
-import { Button, PasswordField, SelectField, TextField, toast } from '../ui/kit';
+import { Button, PasswordField, Req, SelectField, TextField, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 export function BrandLogo({ size }: { size?: number }) {
@@ -73,8 +73,8 @@ function LoginForm({ onForgot, onCloud }: { onForgot: () => void; onCloud: () =>
         setBusy(true); setError(null);
         try { await login(username, password); } catch (err: any) { setError(err.message); } finally { setBusy(false); }
       }}>
-        <TextField label="Nom d'utilisateur" value={username} onChange={setUsername} autoComplete="username" autoCapitalize="none" autoCorrect="off" autoFocus />
-        <PasswordField label="Mot de passe" value={password} onChange={setPwd} />
+        <TextField label="Nom d'utilisateur" required value={username} onChange={setUsername} autoComplete="username" autoCapitalize="none" autoCorrect="off" autoFocus />
+        <PasswordField label="Mot de passe" required value={password} onChange={setPwd} />
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
         <Button type="submit" busy={busy} block disabled={!username || !password}>Se connecter</Button>
       </form>
@@ -117,7 +117,7 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
           setError(null); setUser(u);
           setMethod(!getCloud() ? 'question' : !u.secretAnswerHash ? 'email' : '');
         }}>
-          <TextField label="Nom d'utilisateur" value={username} onChange={setUsername} autoCapitalize="none" autoFocus />
+          <TextField label="Nom d'utilisateur" required value={username} onChange={setUsername} autoCapitalize="none" autoFocus />
           {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
           <Button type="submit" block disabled={!username}>Continuer</Button>
         </form>
@@ -152,7 +152,7 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
           setBusy(false);
         }}>
           <div className="card"><p className="small muted">Votre question</p><p><strong>{user.secretQuestion}</strong></p></div>
-          <TextField label="Votre réponse" value={answer} onChange={setAnswer} autoFocus autoComplete="off" />
+          <TextField label="Votre réponse" required value={answer} onChange={setAnswer} autoFocus autoComplete="off" />
           {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
           <Button type="submit" block busy={busy} disabled={!answer}>Vérifier</Button>
         </form>
@@ -168,8 +168,8 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
           toast('Mot de passe changé. Connectez-vous.');
           onBack();
         }}>
-          <PasswordField label="Nouveau mot de passe" value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
-          <PasswordField label="Retapez le mot de passe" value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
+          <PasswordField label="Nouveau mot de passe" required value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
+          <PasswordField label="Retapez le mot de passe" required value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
           <Button type="submit" block busy={busy} disabled={!pwd || !pwd2}>Enregistrer le mot de passe</Button>
         </form>
       )}
@@ -210,10 +210,10 @@ function CloudScreen({ onBack }: { onBack: () => void }) {
 export function CloudFields({ url, setUrl, k, setK, email, setEmail, pwd, setPwd }: { url: string; setUrl: (v: string) => void; k: string; setK: (v: string) => void; email: string; setEmail: (v: string) => void; pwd: string; setPwd: (v: string) => void }) {
   return (
     <>
-      <TextField label="Adresse du projet (Project URL)" value={url} onChange={setUrl} placeholder="https://xxxx.supabase.co" autoCapitalize="none" inputMode="url" />
-      <TextField label="Clé publique (anon / publishable key)" value={k} onChange={setK} autoCapitalize="none" autoComplete="off" />
-      <TextField label="E-mail du compte cloud de la société" value={email} onChange={setEmail} type="email" autoCapitalize="none" />
-      <PasswordField label="Mot de passe du compte cloud" value={pwd} onChange={setPwd} autoComplete="off" />
+      <TextField label="Adresse du projet (Project URL)" required value={url} onChange={setUrl} placeholder="https://xxxx.supabase.co" autoCapitalize="none" inputMode="url" />
+      <TextField label="Clé publique (anon / publishable key)" required value={k} onChange={setK} autoCapitalize="none" autoComplete="off" />
+      <TextField label="E-mail du compte cloud de la société" required value={email} onChange={setEmail} type="email" autoCapitalize="none" />
+      <PasswordField label="Mot de passe du compte cloud" required value={pwd} onChange={setPwd} autoComplete="off" />
     </>
   );
 }
@@ -261,14 +261,14 @@ export function FirstSetupScreen({ user }: { user: User }) {
       }}>
         {needPwd && (
           <>
-            <PasswordField label="Nouveau mot de passe" value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
-            <PasswordField label="Retapez le mot de passe" value={pwd2} onChange={setPwd2} autoComplete="new-password" />
+            <PasswordField label="Nouveau mot de passe" required value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
+            <PasswordField label="Retapez le mot de passe" required value={pwd2} onChange={setPwd2} autoComplete="new-password" />
           </>
         )}
         <SelectField label="Question secrète" value={question} onChange={setQuestion} hint="Choisissez une question dont vous seul connaissez la réponse."
           options={[...SECRET_QUESTIONS.map((q) => ({ value: q, label: q })), { value: '__custom', label: 'Écrire ma propre question…' }]} />
-        {question === '__custom' && <TextField label="Votre question" value={custom} onChange={setCustom} />}
-        <TextField label="Réponse" value={answer} onChange={setAnswer} autoComplete="off" hint="Les majuscules et les accents ne comptent pas." />
+        {question === '__custom' && <TextField label="Votre question" required value={custom} onChange={setCustom} />}
+        <TextField label="Réponse" required value={answer} onChange={setAnswer} autoComplete="off" hint="Les majuscules et les accents ne comptent pas." />
         <TextField label="E-mail (facultatif)" type="email" value={email} onChange={setEmail} autoCapitalize="none" />
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
         <Button type="submit" busy={busy} block>Terminer</Button>
@@ -310,7 +310,7 @@ export function LockScreen({ user, onUnlock }: { user: User; onUnlock: () => voi
           else { const t = tries + 1; setTries(t); setPin(''); if (t >= 5) { setUsePwd(true); setError('Trop d’essais : entrez votre mot de passe.'); } else setError(`Code incorrect (${5 - t} essai(s) restant(s)).`); }
           setBusy(false);
         }}>
-          <div className="field"><label htmlFor="pin">Code PIN</label>
+          <div className="field"><label htmlFor="pin">Code PIN<Req /></label>
             <input id="pin" className="pin-input" type="password" inputMode="numeric" autoComplete="off" maxLength={6} value={pin} autoFocus onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} /></div>
           {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
           <Button type="submit" busy={busy} block icon="lock" disabled={pin.length < 4}>Déverrouiller</Button>
@@ -324,7 +324,7 @@ export function LockScreen({ user, onUnlock }: { user: User; onUnlock: () => voi
           catch (err: any) { setError(err.message); }
           finally { setBusy(false); }
         }}>
-          <PasswordField label="Mot de passe" value={pwd} onChange={setPwd} autoFocus />
+          <PasswordField label="Mot de passe" required value={pwd} onChange={setPwd} autoFocus />
           {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
           <Button type="submit" busy={busy} block icon="lock" disabled={!pwd}>Déverrouiller</Button>
         </form>
@@ -361,9 +361,9 @@ export function EmailResetScreen() {
         setBusy(true);
         try { await resetByEmail(userId, pwd); toast('Mot de passe changé. Connectez-vous.'); } catch (err: any) { setError(err.message); } finally { setBusy(false); }
       }}>
-        <SelectField label="Compte" value={userId} onChange={setUserId} options={accounts.map((u) => ({ value: u.id, label: `${u.fullName} (${u.username})` }))} />
-        <PasswordField label="Nouveau mot de passe" value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
-        <PasswordField label="Retapez le mot de passe" value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
+        <SelectField label="Compte" required value={userId} onChange={setUserId} options={accounts.map((u) => ({ value: u.id, label: `${u.fullName} (${u.username})` }))} />
+        <PasswordField label="Nouveau mot de passe" required value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} hint="Au moins 6 caractères, lettres et chiffres." autoFocus />
+        <PasswordField label="Retapez le mot de passe" required value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
         <Button type="submit" block busy={busy} disabled={!pwd || !pwd2 || !userId}>Enregistrer le mot de passe</Button>
       </form>
       <Button variant="quiet" onClick={() => setMeta('resetGranted', null)}>Annuler</Button>

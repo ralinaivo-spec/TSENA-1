@@ -151,7 +151,7 @@ function DayForm({ pageId, date }: { pageId: string; date: string }) {
 
       <div className="card stack">
         <div className="grid-2" style={{ alignItems: 'end' }}>
-          <TextField label={`Messages réellement reçus sur la page le ${dd(date)}`} value={real} onChange={setReal} inputMode="numeric" error={tried && (realN == null || realN < 0 || !Number.isInteger(realN)) ? 'À saisir (0 si aucun message)' : null}
+          <TextField label={`Messages réellement reçus sur la page le ${dd(date)}`} required value={real} onChange={setReal} inputMode="numeric" error={tried && (realN == null || realN < 0 || !Number.isInteger(realN)) ? 'À saisir (0 si aucun message)' : null}
             hint="Les nouvelles conversations comptées vous-même dans Messenger / Meta Business Suite (messages physiques)." />
           <div className="small muted">Commandes en ligne saisies ce jour pour cette page : <strong>{orders}</strong></div>
         </div>
@@ -219,8 +219,8 @@ function BoostForm({ pageId, boost, date, onClose }: { pageId: string; boost?: B
       <div className="stack">
         <p className="small">Seuls les boosts <strong>actifs</strong> sont enregistrés. Le numéro est la position du boost dans la liste de l’Espace Pubs (1 = le premier en haut), pour le retrouver facilement.</p>
         <div className="grid-2">
-          <TextField label="N° du boost" value={slot} onChange={setSlot} inputMode="numeric" hint={other ? `Le n° ${n} est déjà pris par « ${boostName(other)} » : les deux numéros seront échangés.` : undefined} />
-          <TextField label="Date de lancement" type="date" value={start} onChange={setStart} max={todayYmd()} />
+          <TextField label="N° du boost" required value={slot} onChange={setSlot} inputMode="numeric" hint={other ? `Le n° ${n} est déjà pris par « ${boostName(other)} » : les deux numéros seront échangés.` : undefined} />
+          <TextField label="Date de lancement" type="date" required value={start} onChange={setStart} max={todayYmd()} />
         </div>
         <TextField label="Texte de la publicité (pour la reconnaître)" value={label} onChange={setLabel} placeholder="Ex. SUPER PROMOTION pyjamas" />
         <TextField label="Budget par jour ($)" value={budget} onChange={setBudget} inputMode="decimal" />

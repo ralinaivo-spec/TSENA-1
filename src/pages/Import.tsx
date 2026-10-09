@@ -170,7 +170,7 @@ export function ImportPage() {
       <div className="card stack">
         <div><h2>Articles d’une page (recommandé)</h2><p className="small muted">1. Créez la page et ses variantes dans <a href="#/pages">Pages et variantes</a>. 2. Téléchargez le fichier de la page : une colonne par variante avec liste déroulante, puis prix et stock (les articles existants sont déjà remplis). 3. Remplissez-le et importez-le ci-dessus : chaque ligne est contrôlée avant d’enregistrer.</p></div>
         <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div style={{ flex: '1 1 240px' }}><SelectField label="Page" value={tplCat} onChange={setTplCat} options={[{ value: '', label: 'Choisir la page…' }, ...cats.filter((c) => activeAttrs(c).length).map((c) => ({ value: c.id, label: c.name }))]} /></div>
+          <div style={{ flex: '1 1 240px' }}><SelectField label="Page" required value={tplCat} onChange={setTplCat} options={[{ value: '', label: 'Choisir la page…' }, ...cats.filter((c) => activeAttrs(c).length).map((c) => ({ value: c.id, label: c.name }))]} /></div>
           <Button icon="download" disabled={!tplCat} onClick={async () => { const c = get<Category>('categories', tplCat)!; downloadBlob(await categoryTemplate(c), `Tresor-en-ligne-${(c.code || 'page').toLowerCase()}-articles.xlsx`); }}>Télécharger le fichier de la page</Button>
         </div>
         {!cats.some((c) => activeAttrs(c).length) && <p className="small muted">Aucune page n’a encore de variantes.</p>}
@@ -551,7 +551,7 @@ function OrderImport({ sheets, fileName, onDone }: { sheets: Sheet[]; fileName: 
         <TextField label="Nom des articles" value={family} onChange={setFamily} hint={`Les articles s’appelleront « ${family} ${refs[0]} », etc.`} />
         <SelectField label="Catégorie" value={catId} onChange={setCatId} options={[...categoryOptions(categories), { value: '__new', label: '+ Nouvelle catégorie…' }]} />
         {catId === '__new' && <TextField label="Nouvelle catégorie" value={newCat} onChange={setNewCat} />}
-        <TextField label="Taux : 1 ¥ = … Ar" value={rate} onChange={setRate} inputMode="decimal" hint={detectedRate ? `Trouvé dans le fichier : ${detectedRate}` : 'Le taux utilisé pour cette commande.'} />
+        <TextField label="Taux : 1 ¥ = … Ar" required value={rate} onChange={setRate} inputMode="decimal" hint={detectedRate ? `Trouvé dans le fichier : ${detectedRate}` : 'Le taux utilisé pour cette commande.'} />
         <TextField label="Date de commande" type="date" value={date} onChange={setDate} />
         <SelectField label="Fournisseur" value={supplierId} onChange={setSupplierId} options={[{ value: '', label: 'Non indiqué' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} />
       </div>

@@ -71,9 +71,9 @@ function PasswordCard() {
       toast('Mot de passe changé');
     }}>
       <h3>Changer mon mot de passe</h3>
-      <PasswordField label="Mot de passe actuel" value={old} onChange={setOld} />
-      <PasswordField label="Nouveau mot de passe" value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} />
-      <PasswordField label="Retapez le nouveau mot de passe" value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
+      <PasswordField label="Mot de passe actuel" required value={old} onChange={setOld} />
+      <PasswordField label="Nouveau mot de passe" required value={pwd} onChange={setPwd} autoComplete="new-password" error={strength} />
+      <PasswordField label="Retapez le nouveau mot de passe" required value={pwd2} onChange={setPwd2} autoComplete="new-password" error={error} />
       <div><Button type="submit" busy={busy} disabled={!old || !pwd || !pwd2}>Changer le mot de passe</Button></div>
     </form>
   );
@@ -100,8 +100,8 @@ function SecretCard() {
       <h3>Question secrète</h3>
       <SelectField label="Question" value={question} onChange={setQuestion}
         options={[...SECRET_QUESTIONS.map((q) => ({ value: q, label: q })), { value: '__custom', label: 'Écrire ma propre question…' }]} />
-      {question === '__custom' && <TextField label="Votre question" value={custom} onChange={setCustom} />}
-      <TextField label="Nouvelle réponse" value={answer} onChange={setAnswer} autoComplete="off" hint="Les majuscules et les accents ne comptent pas." />
+      {question === '__custom' && <TextField label="Votre question" required value={custom} onChange={setCustom} />}
+      <TextField label="Nouvelle réponse" required value={answer} onChange={setAnswer} autoComplete="off" hint="Les majuscules et les accents ne comptent pas." />
       <div><Button type="submit" busy={busy} disabled={!final || answer.trim().length < 2}>Enregistrer</Button></div>
     </form>
   );
@@ -123,8 +123,8 @@ function PinCard() {
       {edit ? (
         <form className="stack-s" onSubmit={async (e) => { e.preventDefault(); if (!ok) return; await setPin(me.id, pin); setEdit(false); setPinV(''); setPin2(''); toast('Code PIN enregistré sur cet appareil'); }}>
           <div className="grid-2">
-            <TextField label="Nouveau code (4 à 6 chiffres)" type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(v) => setPinV(v.replace(/\D/g, ''))} autoFocus />
-            <TextField label="Retapez le code" type="password" inputMode="numeric" maxLength={6} value={pin2} onChange={(v) => setPin2(v.replace(/\D/g, ''))} />
+            <TextField label="Nouveau code (4 à 6 chiffres)" type="password" inputMode="numeric" maxLength={6} required value={pin} onChange={(v) => setPinV(v.replace(/\D/g, ''))} autoFocus />
+            <TextField label="Retapez le code" type="password" inputMode="numeric" maxLength={6} required value={pin2} onChange={(v) => setPin2(v.replace(/\D/g, ''))} />
           </div>
           {pin.length >= 4 && /^(\d)\1+$|^1234(56)?$/.test(pin) && <p className="small neg">Code trop simple : choisissez-en un autre.</p>}
           <div className="row"><Button type="submit" disabled={!ok}>Enregistrer</Button><Button variant="ghost" type="button" onClick={() => setEdit(false)}>Annuler</Button></div>

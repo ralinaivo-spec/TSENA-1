@@ -12,7 +12,7 @@ import { syncNow, useSyncStatus } from './lib/sync';
 import { autoBackups } from './lib/maintenance';
 import { EmailResetScreen } from './pages/Auth';
 import { Icon, type IconName } from './ui/icons';
-import { Button, IconButton, Toasts, navigate, useRoute } from './ui/kit';
+import { Button, IconButton, Toasts, markMenuNav, navigate, useBackTarget, useRoute } from './ui/kit';
 import { BrandLogo, FirstSetupScreen, LockScreen, LoginScreen } from './pages/Auth';
 import { DashboardPage } from './pages/Dashboard';
 import { InstallScreen, wantsInstallPage } from './pages/Install';
@@ -66,6 +66,16 @@ const NAV: NavItem[] = [
   { path: '/parametres', label: 'Paramètres', icon: 'settings', group: 'Administration', page: () => <SettingsPage /> },
   { path: '/compte', label: 'Mon compte', icon: 'user', group: 'hidden', page: () => <AccountPage /> },
 ];
+/** Flèche « Retour » vers l'écran d'où l'on vient (quand on y est arrivé par un lien, pas par le menu). */
+function BackBar({ items }: { items: NavItem[] }) {
+  const back = useBackTarget();
+  if (!back) return null;
+  const path = back.split('?')[0];
+  const it = [...items].sort((a, b) => b.path.length - a.path.length).find((n) => (n.path === '/' ? path === '/' : path.startsWith(n.path)));
+  const name = it ? (it.path === '/receptions' ? 'Achats et réceptions' : it.path === '/import' ? 'Import / Export' : it.label) : 'l’écran précédent';
+  return <div className="back-bar"><Button variant="ghost" icon="chevronLeft" onClick={() => history.back()}>Retour : {name}</Button></div>;
+}
+
 /** Achats et réceptions : un seul menu ; le magasinier (réception seulement) arrive directement sur les réceptions. */
 function PurchasingHub() { const can = useCan(); return can('purchases.manage') ? <PurchasesPage /> : <ReceptionsPage />; }
 
@@ -157,7 +167,7 @@ function Shell() {
             <div key={g || 'main'} className="nav">
               {g && <div className="nav-group">{g}</div>}
               {items.filter((i) => i.group === g).map((i) => (
-                <a key={i.path} href={'#' + i.path} aria-current={current.path === i.path || (i.path === '/achats' && current.path === '/receptions') || (i.path === '/import-export' && current.path === '/import') ? 'page' : undefined}>
+                <a key={i.path} href={'#' + i.path} onClick={markMenuNav} aria-current={current.path === i.path || (i.path === '/achats' && current.path === '/receptions') || (i.path === '/import-export' && current.path === '/import') ? 'page' : undefined}>
                   <Icon name={i.icon} />{i.label}
                 </a>
               ))}
@@ -186,11 +196,11 @@ function Shell() {
           <SyncPill />
         </header>
         <main className="main">
-          <div className="content"><WorkDateBanner /><NotifBar />{current.page()}</div>
+          <div className="content"><WorkDateBanner /><NotifBar /><BackBar items={items} />{current.page()}</div>
         </main>
         <nav className="bottom-nav" aria-label="Raccourcis">
           {mobileItems.map((i) => (
-            <a key={i.path} href={'#' + i.path} aria-current={current.path === i.path ? 'page' : undefined}>
+            <a key={i.path} href={'#' + i.path} onClick={markMenuNav} aria-current={current.path === i.path ? 'page' : undefined}>
               <Icon name={i.icon} size={22} />{i.short ?? i.label}
             </a>
           ))}

@@ -143,7 +143,7 @@ function NewReception({ preselect }: { preselect?: string }) {
               <TextField label={inv.mode === 'sea' ? 'Volume facturé (m³)' : 'Poids facturé (kg)'} value={billed} onChange={setBilled} inputMode="decimal" />
               <TextField label={`Tarif par ${UNIT_LABEL[inv.mode]}`} value={tariff} onChange={setTariff} inputMode="decimal" />
               <SelectField label="Devise du tarif" value={inv.tariffCurrency} onChange={(v) => setInv({ ...inv, tariffCurrency: v as any })} options={[{ value: 'USD', label: 'Dollar (USD)' }, { value: 'RMB', label: 'Yuan (RMB)' }, { value: 'MGA', label: 'Ariary' }]} />
-              {inv.tariffCurrency !== 'MGA' && <TextField label={`Taux de la facture : 1 ${inv.tariffCurrency} = … Ar`} value={fx} onChange={setFx} inputMode="decimal" error={missingFx ? 'Indiquez le taux de la facture.' : null} />}
+              {inv.tariffCurrency !== 'MGA' && <TextField label={`Taux de la facture : 1 ${inv.tariffCurrency} = … Ar`} required value={fx} onChange={setFx} inputMode="decimal" error={missingFx ? 'Indiquez le taux de la facture.' : null} />}
               <TextField label="N° de facture (facultatif)" value={inv.invoiceRef ?? ''} onChange={(v) => setInv({ ...inv, invoiceRef: v })} />
               <TextField label="Transitaire (facultatif)" value={inv.forwarder ?? ''} onChange={(v) => setInv({ ...inv, forwarder: v })} />
               <TextField label="Date de réception" type="date" value={date} onChange={setDate} />

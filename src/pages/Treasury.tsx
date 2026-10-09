@@ -146,9 +146,9 @@ function MoveForm({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || dayLocked || !!weekClosed || (withCat && !cat)} onClick={submit}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="grid-2">
-          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
+          <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" autoFocus />
           <SelectField label={kind === 'expense' || kind === 'owner_out' ? 'Payé depuis' : kind === 'opening' ? 'Compte' : 'Reçu sur'} value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
-          {withCat && <SelectField label="Catégorie" value={cat} onChange={setCat} options={cats.map((c) => ({ value: c.id, label: c.name }))} />}
+          {withCat && <SelectField label="Catégorie" required value={cat} onChange={setCat} options={cats.map((c) => ({ value: c.id, label: c.name }))} />}
           <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} />
         </div>
         {kind === 'opening' && <p className="small muted">L’argent déjà présent sur ce compte au moment où vous commencez avec Trésor en ligne (peut être négatif pour corriger).</p>}
@@ -185,7 +185,7 @@ function TransferForm({ onClose }: { onClose: () => void }) {
         <div className="grid-2">
           <SelectField label="Depuis" value={from} onChange={(v) => setFrom(v as AccountId)} options={accountOptions} />
           <SelectField label="Vers" value={to} onChange={(v) => setTo(v as AccountId)} options={accountOptions} />
-          <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+          <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
           <TextField label="Frais de retrait (Ar, facultatif)" value={fee} onChange={setFee} inputMode="numeric" />
           <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} />
           <TextField label="Note (facultatif)" value={note} onChange={setNote} />
@@ -267,7 +267,7 @@ function ConfirmRecurring({ d, onClose }: { d: ReturnType<typeof dueRecurring>[n
     <Modal title={`${d.r.label} — ${fmtDate(d.date)}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!parseNum(amount)} onClick={async () => { await confirmRecurring(d, parseNum(amount)!, account); toast('Opération enregistrée'); onClose(); }}>Confirmer le paiement</Button></>}>
       <div className="grid-2">
-        <TextField label="Montant (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+        <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
         <SelectField label={d.r.kind === 'expense' ? 'Payé depuis' : 'Reçu sur'} value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
       </div>
     </Modal>
@@ -315,7 +315,7 @@ function CategoryForm({ cat, onClose }: { cat: FinanceCategory | { kind: 'expens
     <Modal title={existing ? 'Modifier la catégorie' : 'Nouvelle catégorie'} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!name.trim()} onClick={async () => { await save('financeCategories', { ...(existing ? { id: existing.id } : { order: 50 }), kind: cat.kind, name: name.trim(), active }); toast('Catégorie enregistrée'); onClose(); }}>Enregistrer</Button></>}>
       <div className="stack">
-        <TextField label="Nom" value={name} onChange={setName} autoFocus />
+        <TextField label="Nom" required value={name} onChange={setName} autoFocus />
         {existing && <Toggle checked={active} onChange={setActive} label="Active (proposée dans les listes)" />}
       </div>
     </Modal>
@@ -342,10 +342,10 @@ function RecurringForm({ rec, onClose }: { rec?: Recurring; onClose: () => void 
       }}>Enregistrer</Button></>}>
       <div className="stack">
         <div className="segmented" role="group">{(['expense', 'income'] as const).map((k) => <button key={k} type="button" aria-pressed={kind === k} onClick={() => { setKind(k); setCat(cats.find((c) => c.kind === k)?.id ?? ''); }}>{k === 'expense' ? 'Dépense' : 'Revenu'}</button>)}</div>
-        <TextField label="Libellé (ex. Loyer boutique)" value={label} onChange={setLabel} />
+        <TextField label="Libellé (ex. Loyer boutique)" required value={label} onChange={setLabel} />
         <div className="grid-2">
-          <SelectField label="Catégorie" value={cat} onChange={setCat} options={list.map((c) => ({ value: c.id, label: c.name }))} />
-          <TextField label="Montant habituel (Ar)" value={amount} onChange={setAmount} inputMode="numeric" />
+          <SelectField label="Catégorie" required value={cat} onChange={setCat} options={list.map((c) => ({ value: c.id, label: c.name }))} />
+          <TextField label="Montant habituel (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
           <SelectField label="Compte" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
           <TextField label="Jour du mois" value={day} onChange={setDay} inputMode="numeric" />
           <TextField label="À partir du mois" type="month" value={start} onChange={setStart} />

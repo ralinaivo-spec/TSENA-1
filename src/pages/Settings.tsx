@@ -5,7 +5,7 @@ import { getMeta, requeueAll, save, setMeta, useMeta, useTable, type BaseRecord 
 import { BRAND_SWATCHES, DEFAULT_COMPANY, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
 import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus, type SyncLogLine } from '../lib/sync';
 import { backupFolderName, backupKey, canPickFolder, canShareFile, pickBackupFolder, saveBackupFile, setBackupPassword, unlockBackupPassword, type SavedBackup, cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
-import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
+import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, Req, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CloudFields } from './Auth';
 import { Zones } from './Deliveries';
@@ -83,7 +83,7 @@ function CompanyTab() {
         }} />
       </div>
       <div className="grid-2">
-        <TextField label="Nom de la société" value={form.name} onChange={set('name')} />
+        <TextField label="Nom de la société" required value={form.name} onChange={set('name')} />
         <TextField label="Slogan (facultatif)" value={form.slogan ?? ''} onChange={set('slogan')} />
         <TextField label="Téléphone" value={form.phone ?? ''} onChange={set('phone')} type="tel" />
         <TextField label="Adresse" value={form.address ?? ''} onChange={set('address')} />
@@ -296,8 +296,8 @@ function DoBackupModal({ onClose, onDone }: { onClose: () => void; onDone: (r: S
       <div className="stack">
         {key ? <>
           <p className="small muted">Le fichier est protégé par le mot de passe des sauvegardes. Confirmez simplement avec <strong>votre mot de passe de connexion</strong>.</p>
-          <PasswordField label="Votre mot de passe de connexion" value={login} onChange={setLogin} autoFocus />
-          {need && <PasswordField label="Mot de passe des sauvegardes (une seule fois sur ce compte)" value={bpwd} onChange={setBpwd} autoComplete="off" hint="Donné par l’admin. Ensuite, votre mot de passe de connexion suffira." />}
+          <PasswordField label="Votre mot de passe de connexion" required value={login} onChange={setLogin} autoFocus />
+          {need && <PasswordField label="Mot de passe des sauvegardes (une seule fois sur ce compte)" required value={bpwd} onChange={setBpwd} autoComplete="off" hint="Donné par l’admin. Ensuite, votre mot de passe de connexion suffira." />}
         </> : <div className="notice"><Icon name="alert" /><span>Aucun mot de passe des sauvegardes n’est défini : le fichier ne sera <strong>pas protégé</strong>. Un admin peut le définir une fois pour toutes (bouton « Définir le mot de passe des sauvegardes »).</span></div>}
         {err && <div className="notice notice-danger"><Icon name="alert" /><span>{err}</span></div>}
       </div>
@@ -313,9 +313,9 @@ function SetBackupPwdModal({ onClose }: { onClose: () => void }) {
       onConfirm={async () => { if (a !== b) throw new Error('Les deux mots de passe ne sont pas identiques.'); try { await setBackupPassword(a, login); toast('Mot de passe des sauvegardes enregistré'); } catch (e: any) { setErr(e.message); throw e; } }}
       message={<div className="stack-s">
         <p className="small">Défini <strong>une seule fois</strong>. Il sera demandé pour <strong>restaurer</strong> un fichier : notez-le en lieu sûr, il est impossible de le retrouver. Les autres personnes autorisées le saisiront une fois, puis leur mot de passe de connexion suffira.</p>
-        <PasswordField label="Nouveau mot de passe des sauvegardes" value={a} onChange={setA} autoComplete="new-password" />
-        <PasswordField label="Le même, une deuxième fois" value={b} onChange={setB} autoComplete="new-password" />
-        <PasswordField label="Votre mot de passe de connexion" value={login} onChange={setLogin} />
+        <PasswordField label="Nouveau mot de passe des sauvegardes" required value={a} onChange={setA} autoComplete="new-password" />
+        <PasswordField label="Le même, une deuxième fois" required value={b} onChange={setB} autoComplete="new-password" />
+        <PasswordField label="Votre mot de passe de connexion" required value={login} onChange={setLogin} />
         {err && <p className="small neg">{err}</p>}
       </div>} />
   );
@@ -421,8 +421,8 @@ function RestoreFileModal({ onClose, onReady }: { onClose: () => void; onReady: 
           catch (e: any) { setError(e.message); }
         }}>Continuer</Button></>}>
       <div className="stack">
-        <div className="field"><label htmlFor="bk-file">Fichier .tsena</label><input id="bk-file" type="file" accept=".tsena,application/json" onChange={(e) => { setError(null); setFile(e.target.files?.[0] ?? null); }} /></div>
-        {needPwd && <PasswordField label="Mot de passe des sauvegardes (ou votre mot de passe de connexion)" value={pwd} onChange={setPwd} />}
+        <div className="field"><label htmlFor="bk-file">Fichier .tsena<Req /></label><input id="bk-file" type="file" accept=".tsena,application/json" onChange={(e) => { setError(null); setFile(e.target.files?.[0] ?? null); }} /></div>
+        {needPwd && <PasswordField label="Mot de passe des sauvegardes (ou votre mot de passe de connexion)" required value={pwd} onChange={setPwd} />}
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
     </Modal>
