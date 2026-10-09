@@ -83,12 +83,12 @@ L'étape « À confirmer » actuelle disparaît.
 - **montant à encaisser**, avec le prix des articles et les frais de livraison séparés : « déjà payé : 20 000 Ar par MVola » ou « RIEN À ENCAISSER — déjà payé » ;
 - livreur prévu et observations.
 
-On peut imprimer plusieurs étiquettes d'un coup : toutes les commandes en attente d'un livreur, en A4 avec 4 ou 8 étiquettes par page, ou une par une sur une imprimante d'étiquettes.
+**Format : ticket de caisse 58 mm** (même imprimante que les tickets). Un bouton « Imprimer toutes les étiquettes » imprime à la suite, une étiquette par commande, toutes celles en attente d'un livreur.
 
 **Le client vient finalement chercher sa commande 🆕.** Quand une commande est **en attente de livraison** ou **déjà en livraison** et que le client décide de venir la récupérer en boutique, un bouton **« Retrait en boutique »** :
 - **si le colis est encore à la boutique** : la commande devient une **vente sur place**. On encaisse, la commande est terminée, il n'y a pas de frais de livraison et pas de livreur ;
 - **si le colis est déjà chez le livreur** : le livreur le rapporte. Au retour, on choisit « Le client récupère en boutique » au lieu de « Livré » ou « Refusé ». Le colis revient en stock réservé pour ce client ; quand le client passe, on encaisse et la commande devient une **vente sur place** ;
-- **frais de livraison** : retirés pour le client. Le livreur peut quand même recevoir un **dédommagement de course** si vous le décidez (montant saisi, 0 par défaut) ;
+- **frais de livraison** : la livraison est simplement **annulée**. Il n'y a pas de frais de livraison pour le client et **pas de dédommagement pour le livreur** ;
 - la commande garde son historique (« Prévue en livraison → retirée en boutique le … ») et elle est comptée dans les **ventes sur place** du jour où le client paie.
 
 **Paiement avant le retour du livreur.** Aux étapes 2 et 3, on peut enregistrer un paiement déjà reçu (MVola, espèces en boutique). Au retour, ce montant est affiché comme « déjà payé » et n'est pas demandé au livreur.
@@ -246,9 +246,7 @@ Chaque phase est mise en ligne et testée avec vous avant de passer à la suivan
 | Livreurs | Ce sont des **utilisateurs avec le rôle « Livreur »** |
 | Achats | Surtout en Chine : **Achats et réceptions réunis** dans un seul menu. Import et export réunis dans un menu à part. Les réglages restent dans Paramètres. |
 | Imprimante et tiroir-caisse | Pas encore achetés : impression **générale** depuis le PC ou le téléphone (A4/A5, étiquettes, ticket 58/80 mm). Le tiroir-caisse viendra avec l'appareil. |
-| Étiquette colis | **Ajoutée** (point 3.2) |
-| Le client récupère sa commande lui-même | **« Retrait en boutique »**, la commande devient une vente sur place (point 3.2) |
+| Étiquette colis | **Ajoutée**, au format **ticket de caisse 58 mm** (point 3.2) |
+| Le client récupère sa commande lui-même | **« Retrait en boutique »** : la livraison est annulée (sans frais ni dédommagement livreur) et la commande devient une vente sur place (point 3.2) |
 
-## Il reste à préciser plus tard (sans bloquer la phase 1)
-- Le format préféré de l'étiquette colis, à décider en essayant : A4 avec 4 ou 8 étiquettes par page, A6, ou étiquette 100 × 150 mm.
-- Le dédommagement du livreur quand le client vient finalement chercher lui-même : 0 par défaut ?
+**Proposition validée de votre côté : plus aucun point en attente.**
