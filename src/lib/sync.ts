@@ -89,6 +89,12 @@ export async function syncNow(): Promise<void> {
     // 1. Réception des modifications des autres appareils, fusionnées champ par champ avec celles d'ici.
     const pull = async () => {
       let lastRev = getMeta<number>('lastRev', 0);
+      // Cloud vidé ou recréé (la numérotation repart de 1) : cet appareil ne recevrait plus rien. On le détecte
+      // en comparant avec le dernier numéro du cloud, et on reprend tout depuis le début (la fusion évite les doublons).
+      if (lastRev > 0) {
+        const top = await fetch(`${cfg.url}/rest/v1/records?select=rev&order=rev.desc&limit=1`, { headers: headers(cfg) });
+        if (top.ok) { const [t] = await top.json(); if (!t || t.rev < lastRev) { lastRev = 0; await setMeta('lastRev', 0); } }
+      }
       for (;;) {
         const from = Math.max(0, lastRev - 50); // petite marge de sécurité : une fusion déjà faite ne change rien
         const res = await fetch(`${cfg.url}/rest/v1/records?select=tbl,id,data,rev&rev=gt.${from}&order=rev.asc&limit=1000`, { headers: headers(cfg) });
