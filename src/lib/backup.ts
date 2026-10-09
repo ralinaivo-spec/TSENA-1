@@ -1,7 +1,7 @@
 // Sauvegardes : fichier téléchargeable (chiffré ou non), copies dans le cloud, restauration, remise à zéro.
 import { DEFAULT_ROLES, PERMISSIONS } from './permissions';
-import { all, getRaw, dumpAll, getMeta, restoreAll, save, setMeta, TABLES, type BaseRecord } from './db';
-import { decryptText, encryptText, hashSecret } from './crypto';
+import { all, get, getRaw, dumpAll, getMeta, restoreAll, save, setMeta, TABLES, type BaseRecord } from './db';
+import { decryptText, encryptText, hashSecret, verifySecret } from './crypto';
 import { audit, currentUser, SUPERADMIN_ID, type User } from './auth';
 import { getCloud, syncNow } from './sync';
 import { restoreDefaultZones } from './orders';
@@ -54,6 +54,70 @@ export async function downloadBackup(password?: string) {
   await setMeta('lastFileBackup', file.createdAt);
   await audit('Sauvegarde', `Fichier de sauvegarde téléchargé${password ? ' (chiffré)' : ''}`);
 }
+
+// ---------- Mot de passe des sauvegardes : défini une fois, puis confirmé par le mot de passe de connexion ----------
+// Le mot de passe des sauvegardes est gardé (synchronisé) uniquement sous forme chiffrée : une copie par personne,
+// chiffrée avec SON mot de passe de connexion. Chacun le débloque donc avec son propre mot de passe ; une personne
+// qui n'a pas encore sa copie (ou qui a changé de mot de passe de connexion) le saisit une fois.
+export interface BackupKey extends BaseRecord { hash: string; wraps: Record<string, { salt: string; iv: string; data: string }>; setByName?: string; setAt?: string }
+export const backupKey = () => { const k = get<BackupKey>('settings', 'backupkey'); return k && !k.deleted && k.hash ? k : undefined; };
+async function checkLogin(loginPwd: string) {
+  const me = currentUser();
+  if (!me || !(await verifySecret(loginPwd, (me as any).passwordHash))) throw new Error('Mot de passe de connexion incorrect.');
+  return me;
+}
+export async function setBackupPassword(newPwd: string, loginPwd: string) {
+  if (newPwd.length < 6) throw new Error('Mot de passe des sauvegardes : 6 caractères au minimum.');
+  const me = await checkLogin(loginPwd);
+  await save('settings', { id: 'backupkey', hash: await hashSecret(newPwd), wraps: { [me.id]: await encryptText(newPwd, loginPwd) }, setByName: me.fullName, setAt: new Date().toISOString(), deleted: false });
+  await audit('Sauvegarde', 'Mot de passe des sauvegardes défini');
+}
+/** Donne le mot de passe des sauvegardes après confirmation du mot de passe de connexion. 'NEED' = à saisir une fois. */
+export async function unlockBackupPassword(loginPwd: string, backupPwd?: string): Promise<string> {
+  const me = await checkLogin(loginPwd);
+  const k = backupKey();
+  if (!k) throw new Error("Aucun mot de passe des sauvegardes n'est encore défini.");
+  const w = k.wraps?.[me.id];
+  if (w) { try { return await decryptText(w, loginPwd); } catch { /* mot de passe de connexion changé depuis */ } }
+  if (!backupPwd) throw Object.assign(new Error('Saisissez une fois le mot de passe des sauvegardes (donné par l’admin).'), { code: 'NEED' });
+  if (!(await verifySecret(backupPwd, k.hash))) throw new Error('Mot de passe des sauvegardes incorrect.');
+  await save('settings', { id: 'backupkey', wraps: { ...(k.wraps || {}), [me.id]: await encryptText(backupPwd, loginPwd) } });
+  return backupPwd;
+}
+
+// ---------- Où va le fichier : dossier choisi (ordinateur), Téléchargements + Partager (téléphone) ----------
+export const canPickFolder = () => typeof (window as any).showDirectoryPicker === 'function';
+export async function pickBackupFolder() {
+  const h = await (window as any).showDirectoryPicker({ id: 'tresor-sauvegardes', mode: 'readwrite' });
+  await setMeta('backupDir', h);
+  return h.name as string;
+}
+export const backupFolderName = () => (getMeta<any>('backupDir', null)?.name as string | undefined);
+export interface SavedBackup { name: string; where: 'folder' | 'download'; folder?: string; file: File }
+/** Fabrique la sauvegarde et l'enregistre : dans le dossier choisi s'il y en a un, sinon dans Téléchargements. */
+export async function saveBackupFile(password?: string): Promise<SavedBackup> {
+  const b = await buildBackup(password);
+  const name = backupFilename();
+  const file = new File([JSON.stringify(b)], name, { type: 'application/octet-stream' });
+  const dir = getMeta<any>('backupDir', null);
+  let res: SavedBackup = { name, where: 'download', file };
+  if (dir) {
+    try {
+      let perm = await dir.queryPermission?.({ mode: 'readwrite' });
+      if (perm !== 'granted') perm = await dir.requestPermission?.({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        const fh = await dir.getFileHandle(name, { create: true });
+        const w = await fh.createWritable(); await w.write(file); await w.close();
+        res = { name, where: 'folder', folder: dir.name, file };
+      }
+    } catch { /* dossier inaccessible : on télécharge */ }
+  }
+  if (res.where === 'download') downloadJson(b, name);
+  await setMeta('lastFileBackup', b.createdAt);
+  await audit('Sauvegarde', `Fichier de sauvegarde ${res.where === 'folder' ? `enregistré dans le dossier « ${res.folder} »` : 'téléchargé'}${password ? ' (protégé)' : ' (non protégé)'}`);
+  return res;
+}
+export const canShareFile = (f: File) => { try { return !!(navigator as any).canShare?.({ files: [f] }); } catch { return false; } };
 
 export async function readBackup(file: File, password?: string): Promise<{ meta: BackupFile; data: Record<string, BaseRecord[]> }> {
   const meta = JSON.parse(await file.text()) as BackupFile;

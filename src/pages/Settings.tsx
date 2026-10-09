@@ -1,10 +1,10 @@
 // Paramètres : société, apparence, cloud, sauvegardes, système.
 import { useEffect, useRef, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
-import { getMeta, requeueAll, save, setMeta, useMeta, type BaseRecord } from '../lib/db';
+import { getMeta, requeueAll, save, setMeta, useMeta, useTable, type BaseRecord } from '../lib/db';
 import { BRAND_SWATCHES, DEFAULT_COMPANY, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
-import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus } from '../lib/sync';
-import { cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
+import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus, type SyncLogLine } from '../lib/sync';
+import { backupFolderName, backupKey, canPickFolder, canShareFile, pickBackupFolder, saveBackupFile, setBackupPassword, unlockBackupPassword, type SavedBackup, cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
 import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CloudFields } from './Auth';
@@ -227,6 +227,7 @@ function CloudTab() {
       </div>
       {cloud && <ConflictsCard />}
       {cloud && <DevicesCard />}
+      {cloud && <SyncHistoryCard />}
       <VersionAndResync />
       <div className="card stack-s small">
         <h3>Travailler sans Internet</h3>
@@ -240,11 +241,90 @@ function CloudTab() {
   );
 }
 
+/** Sauvegarde en fichier : mot de passe défini une fois, dossier choisi sur ordinateur, Partager sur téléphone. */
+function FileBackupCard() {
+  const can = useCan();
+  const lastFile = useMeta<string | null>('lastFileBackup', null);
+  useMeta('backupDir', null);
+  useTable('settings');
+  const key = backupKey();
+  const folder = backupFolderName();
+  const [setting, setSetting] = useState(false);
+  const [doing, setDoing] = useState(false);
+  const [saved, setSaved] = useState<SavedBackup | null>(null);
+  return (
+    <div className="card stack">
+      <div className="row-between">
+        <div><h3>Fichier de sauvegarde</h3><p className="muted small">Un fichier avec toutes les données, à garder ailleurs (clé USB, Google Drive, e-mail).</p></div>
+        <Badge tone={lastFile ? 'ok' : 'warn'}>Dernière : {lastFile ? fmtDateTime(lastFile) : 'jamais'}</Badge>
+      </div>
+      <div className="kv-row">
+        <div><span className="small muted">Mot de passe des sauvegardes</span><strong>{key ? `Défini${key.setByName ? ` par ${key.setByName}` : ''}${key.setAt ? ` le ${fmtDateTime(key.setAt)}` : ''}` : 'Pas encore défini'}</strong></div>
+        {canPickFolder() && <div><span className="small muted">Dossier des sauvegardes (cet ordinateur)</span><strong>{folder ?? 'Téléchargements'}</strong></div>}
+      </div>
+      <div className="row">
+        <Button icon="download" onClick={() => { setSaved(null); setDoing(true); }}>Faire une sauvegarde</Button>
+        {canPickFolder() && <Button variant="ghost" icon="inbox" onClick={async () => { try { const n = await pickBackupFolder(); toast(`Les sauvegardes iront dans « ${n} »`); } catch (e: any) { if (e?.name !== 'AbortError') toast(e?.message ?? 'Dossier non choisi', 'error'); } }}>{folder ? 'Changer de dossier' : 'Choisir le dossier'}</Button>}
+        {can('backup.manage') && <Button variant="ghost" icon="key" onClick={() => setSetting(true)}>{key ? 'Changer le mot de passe des sauvegardes' : 'Définir le mot de passe des sauvegardes'}</Button>}
+      </div>
+      {!canPickFolder() && <p className="small muted">Sur téléphone, le fichier va dans « Téléchargements » ; le bouton « Partager » permet ensuite de l’envoyer sur Google Drive, WhatsApp ou par e-mail.</p>}
+      {saved && <div className="notice notice-ok" style={{ flexWrap: 'wrap', alignItems: 'center' }}><Icon name="check" /><span style={{ flex: '1 1 220px' }}>{saved.where === 'folder' ? <>Enregistré dans le dossier <strong>{saved.folder}</strong> : {saved.name}</> : <>Enregistré dans <strong>Téléchargements</strong> : {saved.name}</>}</span>
+        {canShareFile(saved.file) && <Button variant="ghost" icon="share" onClick={() => (navigator as any).share({ files: [saved.file], title: saved.name }).catch(() => {})}>Partager</Button>}</div>}
+      {doing && <DoBackupModal onClose={() => setDoing(false)} onDone={(r) => { setDoing(false); setSaved(r); }} />}
+      {setting && <SetBackupPwdModal onClose={() => setSetting(false)} />}
+    </div>
+  );
+}
+
+function DoBackupModal({ onClose, onDone }: { onClose: () => void; onDone: (r: SavedBackup) => void }) {
+  const key = backupKey();
+  const [login, setLogin] = useState('');
+  const [bpwd, setBpwd] = useState('');
+  const [need, setNeed] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const go = async (protect: boolean) => {
+    setBusy(true); setErr(null);
+    try {
+      const pwd = protect ? await unlockBackupPassword(login, bpwd || undefined) : undefined;
+      onDone(await saveBackupFile(pwd));
+    } catch (e: any) { if (e?.code === 'NEED') setNeed(true); setErr(e?.message ?? String(e)); setBusy(false); }
+  };
+  return (
+    <Modal title="Faire une sauvegarde" onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button>{key ? <Button busy={busy} disabled={!login} onClick={() => go(true)}>Sauvegarder</Button> : <Button busy={busy} onClick={() => go(false)}>Sauvegarder sans protection</Button>}</>}>
+      <div className="stack">
+        {key ? <>
+          <p className="small muted">Le fichier est protégé par le mot de passe des sauvegardes. Confirmez simplement avec <strong>votre mot de passe de connexion</strong>.</p>
+          <PasswordField label="Votre mot de passe de connexion" value={login} onChange={setLogin} autoFocus />
+          {need && <PasswordField label="Mot de passe des sauvegardes (une seule fois sur ce compte)" value={bpwd} onChange={setBpwd} autoComplete="off" hint="Donné par l’admin. Ensuite, votre mot de passe de connexion suffira." />}
+        </> : <div className="notice"><Icon name="alert" /><span>Aucun mot de passe des sauvegardes n’est défini : le fichier ne sera <strong>pas protégé</strong>. Un admin peut le définir une fois pour toutes (bouton « Définir le mot de passe des sauvegardes »).</span></div>}
+        {err && <div className="notice notice-danger"><Icon name="alert" /><span>{err}</span></div>}
+      </div>
+    </Modal>
+  );
+}
+
+function SetBackupPwdModal({ onClose }: { onClose: () => void }) {
+  const [a, setA] = useState(''); const [b, setB] = useState(''); const [login, setLogin] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Confirm title="Mot de passe des sauvegardes" confirmLabel="Enregistrer" onClose={onClose}
+      onConfirm={async () => { if (a !== b) throw new Error('Les deux mots de passe ne sont pas identiques.'); try { await setBackupPassword(a, login); toast('Mot de passe des sauvegardes enregistré'); } catch (e: any) { setErr(e.message); throw e; } }}
+      message={<div className="stack-s">
+        <p className="small">Défini <strong>une seule fois</strong>. Il sera demandé pour <strong>restaurer</strong> un fichier : notez-le en lieu sûr, il est impossible de le retrouver. Les autres personnes autorisées le saisiront une fois, puis leur mot de passe de connexion suffira.</p>
+        <PasswordField label="Nouveau mot de passe des sauvegardes" value={a} onChange={setA} autoComplete="new-password" />
+        <PasswordField label="Le même, une deuxième fois" value={b} onChange={setB} autoComplete="new-password" />
+        <PasswordField label="Votre mot de passe de connexion" value={login} onChange={setLogin} />
+        {err && <p className="small neg">{err}</p>}
+      </div>} />
+  );
+}
+
 function BackupTab() {
   const can = useCan();
   const lastFile = useMeta<string | null>('lastFileBackup', null);
   const lastCloud = useMeta<string | null>('lastCloudBackup', null);
-  const [pwd, setPwd] = useState('');
   const [busy, setBusy] = useState('');
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [cloudList, setCloudList] = useState<any[] | null>(null);
@@ -253,17 +333,7 @@ function BackupTab() {
 
   return (
     <div className="stack">
-      <div className="card stack">
-        <div className="row-between">
-          <div><h3>Fichier de sauvegarde</h3><p className="muted small">Téléchargé sur cet appareil. Gardez-en une copie ailleurs (clé USB, Google Drive, e-mail).</p></div>
-          <Badge tone={lastFile ? 'ok' : 'warn'}>Dernière : {timeAgo(lastFile ?? undefined)}</Badge>
-        </div>
-        <PasswordField label="Mot de passe de protection (facultatif)" value={pwd} onChange={setPwd} autoComplete="new-password"
-          hint="Si vous en mettez un, il sera demandé pour restaurer. Ne l'oubliez pas : il est impossible de le retrouver." />
-        <div className="row">
-          <Button icon="download" busy={busy === 'file'} onClick={async () => { setBusy('file'); await downloadBackup(pwd || undefined); setBusy(''); toast('Sauvegarde téléchargée'); }}>Télécharger une sauvegarde</Button>
-        </div>
-      </div>
+      <FileBackupCard />
 
       <div className="card stack">
         <div className="row-between">
@@ -336,12 +406,23 @@ function RestoreFileModal({ onClose, onReady }: { onClose: () => void; onReady: 
     <Modal title="Restaurer depuis un fichier" onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button>
         <Button disabled={!file || (needPwd && !pwd)} onClick={async () => {
-          try { const r = await readBackup(file!, pwd || undefined); onReady({ label: `la sauvegarde du ${fmtDateTime(r.meta.createdAt)} (${r.meta.company})`, data: r.data }); }
+          try {
+            let r;
+            try { r = await readBackup(file!, pwd || undefined); }
+            catch (e1) {
+              // Le mot de passe de connexion peut aussi servir : il débloque le mot de passe des sauvegardes.
+              if (!needPwd || !backupKey()) throw e1;
+              let unlocked: string;
+              try { unlocked = await unlockBackupPassword(pwd); } catch { throw e1; }
+              r = await readBackup(file!, unlocked);
+            }
+            onReady({ label: `la sauvegarde du ${fmtDateTime(r.meta.createdAt)} (${r.meta.company})`, data: r.data });
+          }
           catch (e: any) { setError(e.message); }
         }}>Continuer</Button></>}>
       <div className="stack">
         <div className="field"><label htmlFor="bk-file">Fichier .tsena</label><input id="bk-file" type="file" accept=".tsena,application/json" onChange={(e) => { setError(null); setFile(e.target.files?.[0] ?? null); }} /></div>
-        {needPwd && <PasswordField label="Mot de passe de la sauvegarde" value={pwd} onChange={setPwd} />}
+        {needPwd && <PasswordField label="Mot de passe des sauvegardes (ou votre mot de passe de connexion)" value={pwd} onChange={setPwd} />}
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
     </Modal>
@@ -365,6 +446,27 @@ function RestoreConfirm({ pick, onClose }: { pick: { label: string; data: Record
           <p className="small">La restauration est envoyée à tous les appareils reliés au cloud.</p>
         </div>
       } />
+  );
+}
+
+/** Historique de synchronisation de cet appareil : envois, réceptions, conflits, erreurs. */
+function SyncHistoryCard() {
+  const log = useMeta<SyncLogLine[]>('syncLog', []);
+  const [all, setAll] = useState(false);
+  const shown = all ? log : log.slice(0, 8);
+  return (
+    <div className="card stack-s">
+      <div><h3>Historique de synchronisation</h3><p className="small muted">Ce que cet appareil a envoyé et reçu (seulement quand il y avait quelque chose).</p></div>
+      {log.length === 0 ? <p className="small muted">Rien pour l’instant.</p> : (
+        <ul className="list">{shown.map((l, i) => (
+          <li key={i} className="list-item" style={{ padding: '8px 4px' }}>
+            <span className="small num" style={{ minWidth: 120 }}>{fmtDateTime(l.at)}</span>
+            <span className="list-item-main small">{l.error ? <span className="neg">Échec : {l.error}</span> : <>{l.sent} envoyé(s), {l.received} reçu(s){l.conflicts ? <>, <strong className="neg">{l.conflicts} conflit(s)</strong></> : ', 0 conflit'}</>}</span>
+          </li>
+        ))}</ul>
+      )}
+      {log.length > 8 && <button type="button" className="link-btn" style={{ paddingLeft: 0 }} onClick={() => setAll(!all)}>{all ? 'Voir moins' : `Voir tout (${log.length})`}</button>}
+    </div>
   );
 }
 

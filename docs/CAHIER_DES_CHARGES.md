@@ -529,3 +529,25 @@ Chaque étape est mise en ligne et testée avec vous avant de passer à la suiva
 ## 9 quater. Listes longues *(règle commune, 09/10/2026)*
 
 Une liste de choix ne doit pas prendre toute la place : peu d'options → boutons côte à côte ; beaucoup d'options → **liste déroulante** (choix unique) ou **liste déroulante à cases** avec recherche (choix multiple). Appliqué : période des tableaux et rapports, pages de la vente sur place, choix du livreur au retour, pages attribuées à un vendeur, axes d'un livreur ; dans Dépenses, les catégories du graphique sont limitées aux 5 premières (« Voir les autres »).
+
+## 9 quinquies. Phases 4, 5 et 6 de la refonte v4 *(09/10/2026)*
+
+**Clients (phase 4).** Une seule information suffit pour une fiche : téléphone, nom Facebook ou lieu (bouton « Nouveau client » dans Clients). Champ **Nom Facebook** sur la fiche et sur la commande. Dans « Nouvelle commande », la case **« Client déjà connu ? »** cherche un client (téléphone, Facebook, nom, lieu) et remplit ses informations ; la commande rejoint son historique (pas de doublon : la fiche Facebook reçoit le téléphone). La fiche client montre aussi ses suivis « À suivre ».
+
+**Recherche partout.** Chaque recherche porte sur tout le contenu (commandes : numéro, client, Facebook, téléphone, lieu, zone, livreur, articles, codes, montant, observations ; clients : nom, Facebook, téléphones, lieu, notes), sans accents ni majuscules ; un numéro se trouve avec ou sans espaces (« 034 12 » = « 03412 », « +261 34… »).
+
+**Listes longues.** Au-delà de 12 choix, une liste déroulante devient une liste **avec recherche** (zones, catégories, pages…), partout dans l'application.
+
+**Menu (phase 5), du plus important au moins important :** Accueil · Ventes (Vente sur place, Commandes clients, Livraisons et livreurs, Clients) · Argent (Dépenses, Caisse du jour, Récapitulatifs, Trésorerie) · Articles et stock (Pages et variantes, Articles, Stock, **Achats et réceptions** réunis avec deux onglets) · Analyse (Boosts pub, Rapports) · Administration (Utilisateurs, Rôles, Journal, **Import / Export**, Paramètres).
+
+**Import / Export.** Onglet Importer (modèles par page, fichiers habituels) et onglet **Exporter** : un classeur Excel par sujet (ventes et commandes avec les articles vendus, clients, clients à suivre, dépenses, stock, versements au patron) ou **tout dans un seul classeur**. Le coût n'apparaît qu'avec le droit de le voir.
+
+**Tableau de bord, dans l'ordre :** 1. Ventes (période au choix, chiffre d'affaires, nombre de ventes, panier moyen, retours) ; 2. Commandes (clients à relancer, enregistrées, en attente, en livraison, à rendre par les livreurs) ; 3. Dernières ventes et commandes ; 4. Dépenses et bénéfice, évolution **par jour au minimum** (plus de détail par heure), trésorerie, stock, meilleurs articles ; 5. Stock faible ; puis mise en route et état de l'appareil.
+
+**Page d'installation.** En ouvrant le lien dans le navigateur (avant connexion) : bouton « Installer Trésor en ligne » (Android, ordinateur) ou tutoriel en 3 étapes (iPhone : Partager → Sur l'écran d'accueil → Ajouter) ; « Continuer dans le navigateur » ; ne s'affiche plus une fois installée.
+
+**Compatibilité.** Code produit en ES2019 avec petits compléments : Android 8 et plus (Chrome 64+), iPhone iOS 12.2 et plus, ordinateur Chrome/Edge. Un navigateur trop ancien affiche un message clair au lieu d'une page blanche. (Sur iOS 12 à 14.4, quelques espacements peuvent être plus serrés.)
+
+**Sauvegardes (phase 6).** **Mot de passe des sauvegardes défini une seule fois** par un admin ; il n'est jamais stocké en clair (une copie chiffrée par personne, avec son mot de passe de connexion). Pour sauvegarder, chacun confirme seulement **son mot de passe de connexion** (la première fois, ou après un changement de mot de passe de connexion, il saisit une fois le mot de passe des sauvegardes). Sur ordinateur (Chrome/Edge) : **dossier choisi une fois**, chaque sauvegarde y va directement. Sur téléphone : message « Enregistré dans Téléchargements : nom du fichier » et bouton **Partager** (Drive, WhatsApp, e-mail). Restauration : mot de passe des sauvegardes ou mot de passe de connexion.
+
+**Historique de synchronisation** (Paramètres → Cloud) : « date — N envoyé(s), N reçu(s), N conflit(s) », ou l'erreur rencontrée ; 100 dernières lignes, propres à l'appareil.

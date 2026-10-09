@@ -85,6 +85,7 @@ export async function syncNow(): Promise<void> {
     if (!cfg) return;
     const device = getMeta('deviceId', '');
     const conflicts: SyncConflictLog[] = [];
+    let sent = 0, received = 0;
 
     // 1. Réception des modifications des autres appareils, fusionnées champ par champ avec celles d'ici.
     const pull = async () => {
@@ -101,6 +102,7 @@ export async function syncNow(): Promise<void> {
         if (!res.ok) throw new Error(`Réception refusée (${res.status})`);
         const rows: { tbl: string; id: string; data: any; rev: number }[] = await res.json();
         const r = await applyRemote(rows, 'sync');
+        received += r.applied;
         conflicts.push(...r.conflicts);
         const maxRev = rows.reduce((m, x) => Math.max(m, x.rev), lastRev);
         const progressed = maxRev > lastRev;
@@ -127,6 +129,7 @@ export async function syncNow(): Promise<void> {
             body: JSON.stringify(rows),
           });
           if (!res.ok) throw new Error(`Envoi refusé (${res.status}) ${await res.text()}`);
+          sent += rows.length;
         }
         await outboxClear(chunk); // seulement les entrées qui n'ont pas changé pendant l'envoi
       }
@@ -147,13 +150,24 @@ export async function syncNow(): Promise<void> {
     }
     await ensureDeviceCode();
 
+    if (sent || received || conflicts.length) await logSync({ sent, received, conflicts: conflicts.length });
     setStatus({ state: 'ok', pending: await outboxCount(), lastSync: new Date().toISOString(), error: undefined });
   } catch (e: any) {
+    if (navigator.onLine) await logSync({ sent: 0, received: 0, conflicts: 0, error: e?.message ?? String(e) }).catch(() => {});
     setStatus({ state: navigator.onLine ? 'error' : 'offline', error: e?.message ?? String(e), pending: await outboxCount() });
   } finally {
     running = false;
     if (again) { again = false; setTimeout(syncNow, 500); }
   }
+}
+
+// ---------- Historique de synchronisation (propre à cet appareil, 100 dernières lignes) ----------
+export interface SyncLogLine { at: string; sent: number; received: number; conflicts: number; error?: string }
+async function logSync(l: Omit<SyncLogLine, 'at'>) {
+  const cur = getMeta<SyncLogLine[]>('syncLog', []);
+  const last = cur[0];
+  if (l.error && last?.error === l.error) return; // même erreur répétée : une seule ligne
+  await setMeta('syncLog', [{ at: new Date().toISOString(), ...l }, ...cur].slice(0, 100));
 }
 
 let debounce: ReturnType<typeof setTimeout> | undefined;
