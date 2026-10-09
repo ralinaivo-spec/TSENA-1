@@ -153,6 +153,9 @@ export interface OutSheet {
   rows: Cell[][];
   /** Lignes de texte libre (feuille d'explication). */
   notes?: string[];
+  /** Listes déroulantes : colonne (0 = A), lignes concernées (1 = 1re ligne de données), formule (ex. Listes!$A$2:$A$9). */
+  lists?: { col: number; rows: number; formula: string }[];
+  hidden?: boolean;
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -179,7 +182,13 @@ function sheetXml(s: OutSheet) {
     }
   }
   for (const n of s.notes ?? []) { out.push(`<row r="${r + 1}">${cell(r, 0, n.replace(/^#/, ''), n.startsWith('#') ? 4 : 0)}</row>`); r++; }
-  out.push('</sheetData></worksheet>');
+  out.push('</sheetData>');
+  if (s.lists?.length) {
+    out.push(`<dataValidations count="${s.lists.length}">`);
+    for (const l of s.lists) out.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Valeur inconnue" error="Choisissez une valeur dans la liste (ou ajoutez-la d'abord dans TSENA)." sqref="${colLetter(l.col)}2:${colLetter(l.col)}${l.rows + 1}"><formula1>${esc(l.formula)}</formula1></dataValidation>`);
+    out.push('</dataValidations>');
+  }
+  out.push('</worksheet>');
   return out.join('');
 }
 
@@ -195,7 +204,7 @@ export async function writeXlsx(sheets: OutSheet[]): Promise<Blob> {
   const zip = new JSZip();
   zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`);
   zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
-  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${esc(s.name.slice(0, 31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
+  zip.file('xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${esc(s.name.slice(0, 31))}" sheetId="${i + 1}"${s.hidden ? ' state="hidden"' : ''} r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
   zip.file('xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
   zip.file('xl/styles.xml', STYLES);
   sheets.forEach((s, i) => zip.file(`xl/worksheets/sheet${i + 1}.xml`, sheetXml(s)));

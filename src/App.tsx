@@ -31,6 +31,7 @@ import { CustomersPage } from './pages/Customers';
 import { PosPage } from './pages/Pos';
 import { BoostsPage } from './pages/Boosts';
 import { DayCashPage } from './pages/DayCash';
+import { CategoriesPage } from './pages/Categories';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
@@ -42,6 +43,7 @@ const NAV: NavItem[] = [
   { path: '/caisse-du-jour', label: 'Caisse du jour', icon: 'wallet', perm: 'cashday.use', group: 'Ventes', page: () => <DayCashPage /> },
   { path: '/boosts', label: 'Boosts pub', icon: 'megaphone', perm: 'boosts.view', group: 'Ventes', page: () => <BoostsPage /> },
   { path: '/clients', label: 'Clients', icon: 'users', perm: 'orders.create', group: 'Ventes', page: () => <CustomersPage /> },
+  { path: '/pages', label: 'Pages et variantes', icon: 'list', perm: 'catalog.view', group: 'Stock', page: () => <CategoriesPage /> },
   { path: '/articles', label: 'Articles', icon: 'tag', perm: 'catalog.view', group: 'Stock', page: () => <ProductsPage /> },
   { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage /> },
   { path: '/achats', label: 'Achats Chine', icon: 'inbox', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage /> },

@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, productText} from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -336,7 +336,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
   const [choice, setChoice] = useState<Record<string, string>>({});
   const scope = useMyScope();
   const n = q.trim().toLowerCase();
-  const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || `${p.code} ${p.name}`.toLowerCase().includes(n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
+  const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
   const variants = prod ? productVariants(prod.id).filter((v) => v.active !== false) : [];
   const picked = variants.flatMap((v) => [
     ...(parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(qty[v.id])! }] : []),

@@ -6,7 +6,7 @@ import { audit, useCan, type User } from '../lib/auth';
 import { get, useTable } from '../lib/db';
 import {
   addMoves, categoryPath, fmtAr, fmtNum, incomingOf, MOVE_LABELS, parseNum, stockOf, useCatalog, variantLabel,
-  type Category, type MoveType, type Product, type StockMove, type Variant, photoOf,
+  type Category, type MoveType, type Product, type StockMove, type Variant, photoOf, matchQuery, productText,
 } from '../lib/catalog';
 import { Button, Confirm, Empty, PageHead, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
@@ -62,7 +62,7 @@ function StockState() {
       .filter((r) => r.p && r.p.active !== false && r.v.active !== false)
       .filter((r) => scope.product(r.p!.id))
       .filter((r) => inCategory(r.p, cat))
-      .filter((r) => !n || `${r.v.sku} ${r.p!.name} ${r.p!.code}`.toLowerCase().includes(n))
+      .filter((r) => !n || matchQuery(`${r.v.sku} ${productText(r.p!)}`, n))
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
       .map((r) => ({ ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0) }))
       .sort((a, b) => sort === 'stock' ? b.stock - a.stock : sort === 'value' ? b.value - a.value : a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true }));

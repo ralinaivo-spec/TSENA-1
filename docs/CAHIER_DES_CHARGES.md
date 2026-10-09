@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 3.6, mise à jour le 09/10/2026)
+# TSENA — Cahier des charges (version 4.0, mise à jour le 09/10/2026 — refonte v4, phase 1)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -54,6 +54,20 @@
 - **Catégories et sous-catégories** illimitées (ajout, renommage, archivage).
 - **Article** : nom, code/SKU, code-barres (scan par la caméra du téléphone), photo(s), catégorie, unité, prix d'achat moyen (coût de revient), prix de vente détail, prix de gros *(optionnel)*, seuil d'alerte stock, statut (actif / archivé).
 - **Variantes** *(ajout important)* : taille, couleur, pointure… Chaque variante a son propre stock. Indispensable pour les « choix » de taille envoyés aux clients.
+
+### 3.1 Pages et variantes *(refonte v4 — phase 1, 09/10/2026)*
+Menu **Stock → Pages et variantes**.
+- **Une page Facebook = une catégorie**, avec un **code court** (ex. « Lampe rechargeable » → LAMR, modifiable).
+- Chaque page porte **autant de variantes que nécessaire** (Modèle, Type, Puissance, Taille, Couleur, Âge, Pointure, Matière…), dans l’ordre voulu, obligatoires ou facultatives. Chaque variante a ses **valeurs** : **libellé complet** (« B22 (baïonnette) ») et **code court** (« B22 »), proposé automatiquement avec un sens (« 7 watts » → 7W, « 2 ans » → 2A, « Bleu marine » → BLM) et modifiable.
+- Rien n’est figé : ajout, renommage, réordonnancement à tout moment ; une variante ou une valeur déjà utilisée par des articles est **désactivée** (plus proposée) au lieu d’être supprimée. Ajout de plusieurs valeurs d’un coup (une par ligne).
+- **Modèles proposés** à la création d’une page : Vêtements, Vêtements enfant, Chaussures, Électrique / lampes, Accessoires / bijoux, Vide ; plus des variantes courantes en un clic.
+- **Article = une valeur par variante.** Nom automatique avec les codes courts (« LP1 B22 7W », modifiable), code article = code de la page + codes (« LAMR-LP1-B22-7W »), libellé complet affiché sur la fiche. Identifiant tiré de la combinaison : le même article créé sur deux appareils hors ligne ne fait qu’un.
+- **Créer des articles** : on coche une ou plusieurs valeurs par variante → une ligne par combinaison (celles qui existent déjà sont signalées), on décoche ce qui n’existe pas, on saisit prix de revient, PV détail, PV gros (= détail si vide) et stock de départ, avec « Remplir toutes les lignes ».
+- **Recherche** des articles (liste, stock, caisse, commandes, achats) dans le code, le nom, la page et les libellés et codes des valeurs, sans tenir compte des accents ni des majuscules, tous les mots tapés.
+- Les anciens articles « couleur / taille » restent utilisables (bouton « créer un article simple »).
+
+### 3.2 Import Excel par page *(phase 1)*
+1. Créer la page et ses variantes (à la main). 2. Télécharger **le fichier de la page** (depuis la page ou Import Excel) : une colonne par variante avec **liste déroulante** des valeurs, puis Nom (facultatif), Prix de revient, PV détail, PV gros, Stock, Alerte stock bas ; les articles existants sont pré-remplis ; onglets « Listes » et « Mode d’emploi ». 3. Importer : **chaque ligne est contrôlée avant d’enregistrer** (valeur inconnue avec la liste des codes permis, variante obligatoire manquante, nombre invalide, doublon dans le fichier, PV détail manquant pour un nouvel article). Aperçu : nouveaux, mises à jour (avec le changement de stock), erreurs en rouge. L’import est bloqué tant qu’il y a des erreurs, sauf si l’on choisit d’importer seulement les lignes correctes. Valeurs acceptées par libellé ou par code, sans tenir compte des majuscules. Article existant : prix et coût mis à jour, stock remis à la quantité du fichier (mouvement « inventaire » tracé).
 
 ---
 

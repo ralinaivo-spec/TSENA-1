@@ -106,7 +106,7 @@ function itemName(variantId: string) {
   const v = get<Variant>('variants', variantId);
   const p = v && get<Product>('products', v.productId);
   const vl = variantLabel(v);
-  return [p?.name || 'Article', vl && vl !== 'Unique' ? vl : ''].filter(Boolean).join(' - ');
+  return [p?.name || 'Article', vl && vl !== 'Unique' && !p?.attrs ? vl : ''].filter(Boolean).join(' - ');
 }
 function itemLines(variantId: string, qty: number, price: number, note = ''): Block[] {
   return [T(itemName(variantId) + note), P(`  ${fmtNum(qty)} x ${fmtNum(price)}`, ar(qty * price))];

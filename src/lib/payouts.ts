@@ -183,7 +183,7 @@ export function dayReview(ymd: string) {
     const v = get<Variant>('variants', l.variantId); const prod = v && get<Product>('products', v.productId);
     const page = get<Category>('categories', rootOf(l.categoryId) || '')?.name ?? 'Sans page';
     if (!r.pages.includes(page)) r.pages.push(page);
-    r.items.push(`${Math.abs(l.qty)} × ${prod?.name ?? 'article ?'}${v && variantLabel(v) !== 'Unique' ? ` ${variantLabel(v)}` : ''}`.trim());
+    r.items.push(`${Math.abs(l.qty)} × ${prod?.name ?? 'article ?'}${v && !prod?.attrs && variantLabel(v) !== 'Unique' ? ` ${variantLabel(v)}` : ''}`.trim());
     r.qty += l.qty; r.amount += l.amount;
   }
   const list = [...rows.values()].sort((a, b) => a.at.localeCompare(b.at));

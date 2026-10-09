@@ -1,7 +1,7 @@
 // Import Excel : modèles à télécharger, reprise du stock, fichiers de commande Chine, fournisseurs, catégories.
 import { useState } from 'react';
 import { audit, useCan } from '../lib/auth';
-import { all, get, newId, save } from '../lib/db';
+import { all, get, newId, save, useTable } from '../lib/db';
 import {
   addMoves, ensureCategory, findProductByCode, fmtAr, fmtNum, makeSku, nextNumber, normSize, parseNum, productVariants, todayYmd, useCatalog,
   type Product, type Purchase, type PurchaseLine, type StockMove, type Variant,
@@ -11,6 +11,50 @@ import { blobToThumb, downloadBlob, excelDate, fillMerged, normHeader, readXlsx,
 import { Badge, Button, Empty, PageHead, SelectField, TextField, navigate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { categoryOptions, Thumb } from './Products';
+import { activeAttrs, categoryTemplate, parseCategoryFile, saveArticles, templateCategory, type ImportRow } from '../lib/attrs';
+import type { Category } from '../lib/catalog';
+
+/** Import du fichier d'une page : contrôle de chaque ligne, puis création / mise à jour des articles. */
+function PageImport({ cat, sheets, onDone }: { cat: Category; sheets: Sheet[]; onDone: () => void }) {
+  const rows: ImportRow[] = parseCategoryFile(cat, sheets);
+  const [skip, setSkip] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const bad = rows.filter((r) => r.errors.length);
+  const ok = rows.filter((r) => !r.errors.length);
+  const canGo = ok.length > 0 && (!bad.length || skip);
+  return (
+    <div className="card card-flush">
+      <div className="card-pad stack-s">
+        <h2>Page « {cat.name} » : {rows.length} ligne(s) lue(s)</h2>
+        <div className="row" style={{ gap: 6 }}>
+          <Badge tone="ok">{ok.filter((r) => !r.exists).length} nouveau(x)</Badge>
+          <Badge tone="brand">{ok.filter((r) => r.exists).length} mise(s) à jour</Badge>
+          {bad.length > 0 && <Badge tone="danger">{bad.length} ligne(s) en erreur</Badge>}
+        </div>
+        {bad.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Corrigez les lignes en rouge dans le fichier puis importez-le de nouveau. Vous pouvez aussi importer seulement les lignes correctes.</span></div>}
+      </div>
+      <div className="table-wrap"><table className="table">
+        <thead><tr><th>Ligne</th><th>Article</th><th>État</th><th className="t-num">Revient</th><th className="t-num">PV détail</th><th className="t-num">PV gros</th><th className="t-num">Stock</th></tr></thead>
+        <tbody>{[...bad, ...ok].map((r) => (
+          <tr key={r.line} className={r.errors.length ? 'row-error' : ''}>
+            <td className="num">{r.line}</td>
+            <td><strong>{r.name || '—'}</strong><div className="small muted">{r.label}</div></td>
+            <td className="small">{r.errors.length ? <span className="neg">{r.errors.join(' · ')}</span> : r.exists ? <>Mise à jour{r.input?.stock != null && r.current !== r.input.stock ? ` (stock ${r.current} → ${r.input.stock})` : ''}</> : 'Nouvel article'}</td>
+            <td className="t-num">{fmtAr(r.input?.cost)}</td><td className="t-num">{fmtAr(r.input?.retail)}</td><td className="t-num">{fmtAr(r.input?.wholesale ?? r.input?.retail)}</td><td className="t-num">{r.input?.stock ?? '—'}</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+      <div className="card-pad row">
+        {bad.length > 0 && <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} /> Importer seulement les {ok.length} ligne(s) correcte(s)</label>}
+        <Button busy={busy} disabled={!canGo} onClick={async () => {
+          setBusy(true);
+          try { const r = await saveArticles(cat, ok.map((x) => x.input!), 'Import Excel'); toast(`${r.created} article(s) créé(s), ${r.updated} mis à jour`); onDone(); }
+          catch (e: any) { toast(e.message, 'error'); setBusy(false); }
+        }}>Importer {ok.length} article(s)</Button>
+      </div>
+    </div>
+  );
+}
 
 // ---------- Modèles ----------
 const TEMPLATES = [
@@ -70,7 +114,7 @@ const TEMPLATES = [
   },
 ];
 
-type Kind = 'articles' | 'commande' | 'fournisseurs' | 'categories';
+type Kind = 'articles' | 'commande' | 'fournisseurs' | 'categories' | 'page';
 
 export function ImportPage() {
   const can = useCan();
@@ -79,12 +123,18 @@ export function ImportPage() {
   const [kind, setKind] = useState<Kind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pageId, setPageId] = useState('');
+  const cats = useTable<Category>('categories');
+  const [tplCat, setTplCat] = useState('');
 
   async function open(f: File) {
     setError(null); setBusy(true); setSheets(null); setKind(null); setFile(f);
     try {
       const sh = await readXlsx(f, { images: true });
       sh.forEach(fillMerged);
+      const pageCat = templateCategory(sh);
+      if (pageCat) { setSheets(sh); setKind('page'); setPageId(pageCat.id); return; }
+      if (sh.some((x) => x.name === 'tsena')) throw new Error('Ce fichier a été fait pour une page qui n’existe plus dans TSENA (supprimée ?). Téléchargez de nouveau le fichier de la page.');
       const k = detectKind(sh);
       if (!k) throw new Error("Je ne reconnais pas les colonnes de ce fichier. Utilisez un des modèles ci-dessous, ou vérifiez la ligne des titres.");
       setSheets(sh); setKind(k);
@@ -105,13 +155,23 @@ export function ImportPage() {
         {busy && <p className="small muted">Lecture du fichier…</p>}
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
+      {sheets && kind === 'page' && get<Category>('categories', pageId) && <PageImport cat={get<Category>('categories', pageId)!} sheets={sheets} onDone={() => { setSheets(null); navigate(`/articles?cat=${pageId}`); }} />}
       {sheets && kind === 'articles' && file && <ArticlesImport sheets={sheets} fileName={file.name} onDone={() => { setSheets(null); navigate('/articles'); }} />}
       {sheets && kind === 'commande' && file && <OrderImport sheets={sheets} fileName={file.name} onDone={(id) => { setSheets(null); navigate('/achats/' + id); }} />}
       {sheets && kind === 'fournisseurs' && <SimpleImport kind="fournisseurs" sheets={sheets} onDone={() => setSheets(null)} />}
       {sheets && kind === 'categories' && <SimpleImport kind="categories" sheets={sheets} onDone={() => setSheets(null)} />}
 
       <div className="card stack">
-        <div><h2>Modèles à remplir</h2><p className="small muted">Colonnes jaunes à remplir, une ligne d’exemple et un onglet « Mode d’emploi » dans chaque fichier.</p></div>
+        <div><h2>Articles d’une page (recommandé)</h2><p className="small muted">1. Créez la page et ses variantes dans <a href="#/pages">Pages et variantes</a>. 2. Téléchargez le fichier de la page : une colonne par variante avec liste déroulante, puis prix et stock (les articles existants sont déjà remplis). 3. Remplissez-le et importez-le ci-dessus : chaque ligne est contrôlée avant d’enregistrer.</p></div>
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <div style={{ flex: '1 1 240px' }}><SelectField label="Page" value={tplCat} onChange={setTplCat} options={[{ value: '', label: 'Choisir la page…' }, ...cats.filter((c) => activeAttrs(c).length).map((c) => ({ value: c.id, label: c.name }))]} /></div>
+          <Button icon="download" disabled={!tplCat} onClick={async () => { const c = get<Category>('categories', tplCat)!; downloadBlob(await categoryTemplate(c), `TSENA-${(c.code || 'page').toLowerCase()}-articles.xlsx`); }}>Télécharger le fichier de la page</Button>
+        </div>
+        {!cats.some((c) => activeAttrs(c).length) && <p className="small muted">Aucune page n’a encore de variantes.</p>}
+      </div>
+
+      <div className="card stack">
+        <div><h2>Autres modèles à remplir</h2><p className="small muted">Colonnes jaunes à remplir, une ligne d’exemple et un onglet « Mode d’emploi » dans chaque fichier.</p></div>
         <ul className="list">
           {TEMPLATES.map((t) => (
             <li key={t.key} className="list-item" style={{ padding: '12px 0' }}>

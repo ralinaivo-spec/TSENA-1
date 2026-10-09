@@ -3,7 +3,12 @@ import { useMemo } from 'react';
 import { all, get, getMeta, newId, nowIso, save, useTable, type BaseRecord , bizNow, workDate } from './db';
 import { audit, currentUser } from './auth';
 
-export interface Category extends BaseRecord { name: string; parentId?: string; order?: number }
+/** Valeur d'une variante de catégorie (ex. « B22 (baïonnette) », code court « B22 »). */
+export interface AttrValue { id: string; label: string; code: string; active?: boolean }
+/** Variante définie au niveau de la catégorie (ex. Modèle, Type, Puissance, Taille…). */
+export interface CatAttr { id: string; name: string; required?: boolean; active?: boolean; values: AttrValue[] }
+/** Catégorie = page Facebook. Elle porte ses variantes (sans limite) et un code court (ex. LAMP). */
+export interface Category extends BaseRecord { name: string; parentId?: string; order?: number; code?: string; attrs?: CatAttr[] }
 export interface Product extends BaseRecord {
   code: string;
   name: string;
@@ -15,6 +20,8 @@ export interface Product extends BaseRecord {
   link?: string;
   notes?: string;
   active: boolean;
+  /** Valeurs choisies pour les variantes de la catégorie : id de la variante → id de la valeur. */
+  attrs?: Record<string, string>;
 }
 export interface Variant extends BaseRecord {
   productId: string;
@@ -75,7 +82,10 @@ export function normSize(s?: string) {
 }
 export function variantLabel(v?: Variant) {
   if (!v) return '';
-  return [v.color, v.size].filter(Boolean).join(' · ') || 'Unique';
+  const cs = [v.color, v.size].filter(Boolean).join(' · ');
+  if (cs) return cs;
+  const p = get<Product>('products', v.productId);
+  return (p?.attrs && attrSummary(p)) || 'Unique';
 }
 
 // ---------- Index calculés (mis en cache tant que les données ne changent pas) ----------
@@ -261,3 +271,39 @@ export const todayYmd = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 export { newId };
+
+// ---------- Recherche (sans accents, tous les mots) ----------
+export const normText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** Vrai si tous les mots de la recherche se trouvent dans le texte (accents et majuscules ignorés). */
+export function matchQuery(text: string, q: string) {
+  const words = normText(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const t = normText(text);
+  return words.every((w) => t.includes(w));
+}
+/** Texte de recherche d'un article : code, nom, valeurs des variantes (libellés et codes), codes des variantes. */
+export function productText(p: Product) {
+  const parts = [p.code, p.name];
+  const cats: Category[] = [];
+  let c = p.categoryId ? get<Category>('categories', p.categoryId) : undefined;
+  while (c) { cats.push(c); c = c.parentId ? get<Category>('categories', c.parentId) : undefined; }
+  parts.push(...cats.map((x) => x.name));
+  for (const [aid, vid] of Object.entries(p.attrs ?? {})) {
+    for (const k of cats) { const v = k.attrs?.find((a) => a.id === aid)?.values.find((x) => x.id === vid); if (v) { parts.push(v.label, v.code); break; } }
+  }
+  for (const v of productVariants(p.id)) parts.push(v.sku, v.color || '', v.size || '');
+  return parts.join(' ');
+}
+
+/** Catégorie (ou catégorie parente) qui porte les variantes d'un article. */
+export function attrCategory(categoryId?: string): Category | undefined {
+  let c = categoryId ? get<Category>('categories', categoryId) : undefined;
+  while (c) { if (c.attrs?.length) return c; c = c.parentId ? get<Category>('categories', c.parentId) : undefined; }
+  return undefined;
+}
+/** Libellés complets des valeurs d'un article : « LP1 (simple batterie) · B22 (baïonnette) · 7 W ». */
+export function attrSummary(p: Product, sep = ' · ') {
+  const c = attrCategory(p.categoryId);
+  if (!c || !p.attrs) return '';
+  return (c.attrs ?? []).map((a) => a.values.find((x) => x.id === p.attrs![a.id])?.label).filter(Boolean).join(sep);
+}

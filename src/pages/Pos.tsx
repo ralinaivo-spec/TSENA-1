@@ -4,7 +4,7 @@ import { useCan, useMe, type User } from '../lib/auth';
 import { useMyScope } from '../lib/scope';
 import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
-import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant } from '../lib/catalog';
+import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, productText} from '../lib/catalog';
 import {
   availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
   type Order, type OrderLine, type PayMethod,
@@ -53,7 +53,7 @@ export function PosPage() {
 
   const n = q.trim().toLowerCase();
   const found = useMemo(() => products
-    .filter((p) => p.active !== false && scope.product(p.id) && (!n || `${p.code} ${p.name} ${productVariants(p.id).map((v) => v.sku).join(' ')}`.toLowerCase().includes(n)))
+    .filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n)))
     .map((p) => ({ p, avail: productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
     .sort((a, b) => Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
     .slice(0, 48), [products, n, reserved, scope.on]);

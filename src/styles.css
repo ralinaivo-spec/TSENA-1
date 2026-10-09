@@ -849,3 +849,34 @@ table.table { border-collapse: separate; border-spacing: 0 8px; padding: 0 12px;
 .review-check { align-items: flex-start; gap: 8px; flex-wrap: nowrap; }
 .review-check input { margin-top: 3px; flex: none; }
 .review-table td.small { white-space: normal; min-width: 90px; }
+
+/* Pages et variantes */
+.cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; }
+.cat-card h3 { font-size: 1.05rem; overflow-wrap: anywhere; }
+.attr-sum { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.attr-sum li { overflow-wrap: anywhere; }
+.cat-actions { gap: 6px; margin-top: auto; }
+.attr-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 10px; background: var(--surface); }
+.attr-card.is-off { opacity: .6; }
+.attr-head { gap: 6px; align-items: center; flex-wrap: wrap; }
+.attr-name { flex: 1 1 180px; font-weight: 700; }
+.attr-values td { padding-top: 4px; padding-bottom: 4px; }
+.code-input { max-width: 110px; font-family: ui-monospace, monospace; text-transform: uppercase; }
+.chip-sub { font-weight: 500; opacity: .75; }
+.chip-quiet { border-style: dashed; }
+.builder-all { gap: 6px; }
+.builder-all .cell-input { flex: 1 1 110px; min-width: 90px; }
+.builder-table .cell-input { min-width: 90px; }
+.num-input { text-align: right; max-width: 120px; }
+.attr-pill { display: inline-flex; gap: 6px; padding: 3px 10px; border-radius: 99px; background: var(--surface-2); font-size: .85rem; }
+tr.row-error td { background: var(--danger-soft); }
+.attr-values { display: grid; gap: 6px; }
+.attr-val { display: grid; grid-template-columns: minmax(0, 1fr) 96px auto; gap: 6px; align-items: center; }
+.attr-val .cell-input { min-width: 0; width: 100%; }
+.attr-val-actions { display: inline-flex; align-items: center; gap: 2px; justify-content: flex-end; }
+@media (max-width: 520px) {
+  .attr-head .slot-badge { display: none; }
+  .attr-val { grid-template-columns: minmax(0, 1fr) 80px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .attr-val-head { display: none; }
+  .attr-val-actions { grid-column: 1 / -1; }
+}

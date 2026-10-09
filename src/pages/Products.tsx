@@ -6,12 +6,13 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import {
   ADJUST_REASONS, addMoves, categoryPath, createProduct, fmtAr, fmtNum, incomingOf, makeSku, MOVE_LABELS, normSize, parseNum,
-  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel,
+  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel, matchQuery, productText, attrSummary,
   type Category, type Product, type StockMove, type Variant,
 } from '../lib/catalog';
 import { blobToThumb } from '../lib/xlsx';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { ArticleBuilder, AttrBadges } from './Categories';
 
 /** Photo d'article. Avec `zoom`, un toucher l'affiche en grand. */
 export function Thumb({ src, size = 56, alt = '', zoom }: { src?: string; size?: number; alt?: string; zoom?: boolean }) {
@@ -51,11 +52,12 @@ function ProductList() {
   const can = useCan();
   const { products, categories } = useCatalog();
   const [q, setQ] = useState('');
-  const [cat, setCat] = useState('');
+  const [cat, setCat] = useState(() => /[?&]cat=([^&]+)/.exec(location.hash)?.[1] ?? '');
   const [sf, setSf] = useState<StockFilter>('');
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
+  const [simple, setSimple] = useState(false);
   const [limit, setLimit] = useState(60);
   const scope = useMyScope();
 
@@ -71,7 +73,7 @@ function ProductList() {
       .filter((p) => showArchived || p.active !== false)
       .filter((p) => scope.product(p.id))
       .filter(inCat)
-      .filter((p) => !n || `${p.code} ${p.name} ${productVariants(p.id).map((v) => v.sku).join(' ')}`.toLowerCase().includes(n))
+      .filter((p) => !n || matchQuery(productText(p), n))
       .map((p) => ({ p, stock: productStock(p.id), incoming: productIncoming(p.id) }))
       .filter(({ p, stock, incoming }) => {
         if (sf === 'in') return stock > 0;
@@ -87,7 +89,7 @@ function ProductList() {
     <>
       <PageHead title="Articles" subtitle={`${products.filter((p) => p.active !== false).length} articles`}
         actions={<>
-          {can('catalog.edit') && <Button variant="ghost" icon="list" onClick={() => setCatsOpen(true)}>Catégories</Button>}
+          {can('catalog.edit') && <Button variant="ghost" icon="list" onClick={() => navigate('/pages')}>Pages et variantes</Button>}
           {can('catalog.edit') && <Button variant="ghost" icon="upload" onClick={() => navigate('/import')}>Importer</Button>}
           {can('catalog.edit') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvel article</Button>}
         </>} />
@@ -132,7 +134,7 @@ function ProductList() {
                       <span className="list-item-title">{p.name}</span>
                       {p.active === false && <Badge>Archivé</Badge>}
                     </div>
-                    <p className="small muted">{p.code} · {categoryPath(p.categoryId)} · {productVariants(p.id).length} variante(s)</p>
+                    <p className="small muted">{p.code} · {categoryPath(p.categoryId)}{p.attrs ? (attrSummary(p) ? ` · ${attrSummary(p)}` : '') : ` · ${productVariants(p.id).length} variante(s)`}</p>
                   </div>
                   <div className="list-item-side">
                     <span className={`stock-pill ${stock <= 0 ? 'is-out' : stock <= (p.alertQty ?? 3) ? 'is-low' : ''}`}>{fmtNum(stock)}</span>
@@ -146,7 +148,9 @@ function ProductList() {
         )}
       </div>
       {list.length > limit && <Button variant="ghost" onClick={() => setLimit(limit + 100)}>Afficher plus ({list.length - limit})</Button>}
-      {creating && <ProductForm onClose={() => setCreating(false)} onSaved={(p) => navigate('/articles/' + p.id)} />}
+      {creating && <ArticleBuilder cat={cat ? get<Category>('categories', cat) : undefined} onClose={() => setCreating(false)} />}
+      {can('catalog.edit') && <p className="small muted">Article sans variantes (ancien mode) : <button type="button" className="link-btn" onClick={() => setSimple(true)}>créer un article simple</button></p>}
+      {simple && <ProductForm onClose={() => setSimple(false)} onSaved={(p) => navigate('/articles/' + p.id)} />}
       {catsOpen && <CategoriesModal onClose={() => setCatsOpen(false)} />}
     </>
   );
@@ -183,6 +187,7 @@ function ProductDetail({ id }: { id: string }) {
             {p.active === false && <Badge>Archivé</Badge>}
           </div>
           <p className="muted">{p.code} · {categoryPath(p.categoryId)}</p>
+          <AttrBadges p={p} />
           <div className="kv-row">
             <div><span className="small muted">Stock</span><strong className="num">{fmtNum(stock)}</strong></div>
             <div><span className="small muted">En arrivage</span><strong className="num">{fmtNum(productIncoming(p.id))}</strong></div>
@@ -203,8 +208,8 @@ function ProductDetail({ id }: { id: string }) {
 
       <div className="card card-flush">
         <div className="row-between card-pad">
-          <h2>Variantes</h2>
-          {can('catalog.edit') && <Button variant="ghost" icon="plus" onClick={() => setAdding(true)}>Ajouter des tailles / couleurs</Button>}
+          <h2>{p.attrs ? 'Stock et coût' : 'Variantes'}</h2>
+          {can('catalog.edit') && !p.attrs && <Button variant="ghost" icon="plus" onClick={() => setAdding(true)}>Ajouter des tailles / couleurs</Button>}
         </div>
         <div className="table-wrap">
           <table className="table">
