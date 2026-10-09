@@ -4,7 +4,7 @@ import { audit, useCan } from '../lib/auth';
 import { get, newId, remove, save, useTable } from '../lib/db';
 import {
   categoryPath, fmtAr, fmtNum, nextNumber, parseNum, productVariants, PURCHASE_STATUS, todayYmd, useCatalog, variantLabel,
-  type Product, type Purchase, type PurchaseLine, type PurchaseStatus, type Variant, matchQuery, productText} from '../lib/catalog';
+  type Product, type Purchase, type PurchaseLine, type PurchaseStatus, type Variant, matchQuery, productText, stockOf } from '../lib/catalog';
 import { lastRate, lineTotal, purchaseGoods, purchasePaid, purchaseQty, purchaseReceivedQty, purchaseTotal, purchaseTotalAr, toAr, type Supplier } from '../lib/purchases';
 import { PurchasingTabs } from './ImportExport';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, navigate, toast, useRoute } from '../ui/kit';
@@ -378,7 +378,7 @@ export function PurchaseForm({ purchase, onClose, onSaved }: { purchase?: Purcha
                   const prod = get<Product>('products', pid); const v = get<Variant>('variants', l.variantId);
                   return (
                     <tr key={l.id}>
-                      <td>{i === 0 && <strong>{prod?.code} — {prod?.name}<br /></strong>}<span className="small">{variantLabel(v)}</span></td>
+                      <td>{i === 0 && <strong>{prod?.code} — {prod?.name}<br /></strong>}<span className="small">{variantLabel(v)} · <span className="muted">en stock : {stockOf(l.variantId)}</span></span></td>
                       <td><input className="cell-input" inputMode="numeric" aria-label="Quantité" value={l.qtyOrdered || ''} onChange={(e) => setLine(l.id, { qtyOrdered: parseNum(e.target.value) || 0 })} /></td>
                       <td><input className="cell-input" inputMode="decimal" aria-label="Prix unitaire" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0 })} /></td>
                       <td className="t-num">{money(lineTotal(l), currency)}</td>
@@ -444,7 +444,7 @@ function LinePicker({ currency, onClose, onAdd }: { currency: 'RMB' | 'MGA'; onC
           <div className="variant-grid">
             {variants.map((v) => (
               <label key={v.id} className="variant-cell">
-                <span className="small"><strong>{variantLabel(v)}</strong></span>
+                <span className="small"><strong>{variantLabel(v)}</strong> · <span className="muted">en stock : {stockOf(v.id)}</span></span>
                 <input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} />
               </label>
             ))}

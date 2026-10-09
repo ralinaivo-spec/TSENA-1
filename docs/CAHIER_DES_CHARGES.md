@@ -553,3 +553,9 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 **Historique de synchronisation** (Paramètres → Cloud) : « date — N envoyé(s), N reçu(s), N conflit(s) », ou l'erreur rencontrée ; 100 dernières lignes, propres à l'appareil.
 
 **Règles d'écran communes (09/10/2026).** Tout champ obligatoire porte une **petite étoile rouge \***. Quand on passe d'un écran à un autre par un lien (pas par le menu), une flèche **« Retour : <écran précédent> »** permet de revenir où l'on était. Dans « Nouvelle commande », « Gérer les zones de livraison » s'ouvre par-dessus la commande, qui est gardée (« Revenir à la commande »).
+
+**Commandes et caisse (10/10/2026).**
+- **Stock vérifié** : impossible d'enregistrer une commande ou une vente si une quantité dépasse le stock disponible (stock − pièces promises aux autres commandes) ; message « diminuez la quantité ou choisissez un autre article ». Le stock disponible s'affiche **à côté du nom** de chaque article ajouté (vert, orange si ≤ 3, rouge si insuffisant), ainsi que « en stock » dans les commandes Chine et les réceptions.
+- **Prix détail par défaut, prix de gros article par article** : petite case discrète « Prix de gros » sur chaque ligne (à côté de « Envoyé en choix »). L'ancien choix « gros automatique dès N pièces » est supprimé.
+- **Remise en Ar ou en %** (le montant en Ar est affiché).
+- Le rappel « question secrète / mot de passe provisoire » de l'accueil se ferme (×) jusqu'à la prochaine connexion.

@@ -7,12 +7,12 @@ import { get, getMeta, newId, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, productText, attrSummary, findProductByCode, findVariantBySku, type Category} from '../lib/catalog';
 import {
   availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
-  type Order, type OrderLine, type PayMethod,
+  type Order, type OrderLine, type PayMethod, discountAr, stockShortages,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Choice, Button, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
+import { Badge, Choice, Button, DiscountField, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
-import { ItemPicker } from './Orders';
+import { ItemPicker, StockTag } from './Orders';
 import { defaultTarget, printTo, ticketDoc } from '../lib/print';
 import { PrintButton, PrintDialog } from '../ui/print';
 import { Thumb } from './Products';
@@ -26,8 +26,8 @@ export function PosPage() {
   const [cat, setCat] = useState('');
   const cats = useTable<Category>('categories');
   const [lines, setLines] = useState<OrderLine[]>([]);
-  const [wholesale, setWholesale] = useState<Order['wholesale']>('auto');
   const [discount, setDiscount] = useState('');
+  const [discUnit, setDiscUnit] = useState<'ar' | 'pct'>('ar');
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [picking, setPicking] = useState<Product | null>(null);
@@ -45,11 +45,12 @@ export function PosPage() {
   const me = useMe();
   const minQty = company.wholesaleMinQty ?? 3;
   const step = company.internalRounding ?? 1;
-  const isGros = !internal && useWholesale({ lines, wholesale }, minQty);
-  const priced = internal ? lines.map((l) => ({ ...l, priceManual: false, unitPrice: internalPrice(l.variantId, step) })) : repriceLines(lines, isGros);
+  const priced = internal ? lines.map((l) => ({ ...l, priceManual: false, wholesale: false, unitPrice: internalPrice(l.variantId, step) })) : repriceLines(lines);
   const noCost = internal ? priced.filter((l) => !l.unitPrice) : [];
   const items = priced.reduce((s, l) => s + l.qty * l.unitPrice, 0);
-  const total = Math.max(0, items - (internal ? 0 : parseNum(discount) || 0));
+  const discAr = internal ? 0 : discountAr(discount, discUnit, items);
+  const total = Math.max(0, items - discAr);
+  const short = stockShortages(priced);
   const employee = users.find((u) => u.id === employeeId);
   const count = priced.reduce((s, l) => s + l.qty, 0);
 
@@ -87,7 +88,7 @@ export function PosPage() {
     if (vs.length === 1) add([{ variantId: vs[0].id, qty: 1 }]); else setPicking(p);
   }
   const setLine = (id: string, patch: Partial<OrderLine>) => setLines(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)).filter((l) => l.qty > 0));
-  const reset = () => { setLines([]); setDiscount(''); setPhone(''); setName(''); setWholesale('auto'); setQ(''); setInternal(false); setEmployeeId(''); };
+  const reset = () => { setLines([]); setDiscount(''); setPhone(''); setName(''); setDiscUnit('ar'); setQ(''); setInternal(false); setEmployeeId(''); };
   const tilePrice = (p: Product) => internal ? Math.min(...productVariants(p.id).map((v) => internalPrice(v.id, step) || Infinity)) : p.priceRetail;
 
   if (!can('pos.sell')) return <Empty icon="lock" title="Accès réservé" />;
@@ -135,6 +136,8 @@ export function PosPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong className="cart-name">{p?.name}</strong>
                       <div className="small muted">{p?.attrs ? attrSummary(p, ', ') : `${p?.code} · ${variantLabel(v)}`}</div>
+                      <StockTag variantId={l.variantId} reserved={reserved} short={short.find((x) => x.variantId === l.variantId)} />
+                      {!internal && <div className="line-opts"><label><input type="checkbox" checked={!!l.wholesale} onChange={(e) => setLine(l.id, { wholesale: e.target.checked, priceManual: false })} /> Prix de gros</label></div>}
                       <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: internal ? 'wrap' : 'nowrap' }}>
                         <IconButton icon="x" label="Retirer un" onClick={() => setLine(l.id, { qty: l.qty - 1 })} />
                         <span className="num" style={{ minWidth: 24, textAlign: 'center', fontWeight: 700 }}>{l.qty}</span>
@@ -151,12 +154,8 @@ export function PosPage() {
             </ul>
           )}
           {!internal && <>
-          <div className="segmented" role="group" aria-label="Prix">
-            {([['auto', `Gros dès ${minQty} pcs`], ['yes', 'Prix de gros'], ['no', 'Prix détail']] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={wholesale === k} onClick={() => setWholesale(k)}>{l}</button>)}
-          </div>
-          {isGros && <Badge tone="brand">Prix de gros appliqué</Badge>}
           <div className="grid-2">
-            <TextField label="Remise (Ar)" value={discount} onChange={setDiscount} inputMode="numeric" />
+            <DiscountField value={discount} unit={discUnit} onChange={setDiscount} onUnit={setDiscUnit} amount={discAr} />
             <TextField label="Téléphone client (facultatif)" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
           </div>
           <TextField label="Nom du client (facultatif)" value={name} onChange={setName} />
@@ -167,7 +166,8 @@ export function PosPage() {
             {!internal && (parseNum(discount) || 0) > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(parseNum(discount))}</strong></div>}
             <div className="summary-total"><span>Total</span><strong className="num pos-total">{fmtAr(total)}</strong></div>
           </div>
-          <Button block icon="check" disabled={!priced.length || (internal && (!employee || noCost.length > 0))} onClick={() => setPaying(true)}>{internal ? (employee ? `Encaisser ${fmtAr(total)} — ${employee.fullName}` : 'Choisissez l’employé') : `Encaisser ${fmtAr(total)}`}</Button>
+          {short.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Stock insuffisant pour {short.length} article(s) : diminuez la quantité ou choisissez un autre article.</span></div>}
+          <Button block icon="check" disabled={!priced.length || short.length > 0 || (internal && (!employee || noCost.length > 0))} onClick={() => setPaying(true)}>{internal ? (employee ? `Encaisser ${fmtAr(total)} — ${employee.fullName}` : 'Choisissez l’employé') : `Encaisser ${fmtAr(total)}`}</Button>
         </aside>
       </div>
 
@@ -197,7 +197,7 @@ export function PosPage() {
 
       {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} />}
       {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments, cashGiven) => {
-        const o = await createWalkInSale({ lines: priced, discount: internal ? 0 : parseNum(discount) || 0, wholesale, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
+        const o = await createWalkInSale({ lines: priced, discount: discAr, wholesale: undefined, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
         setLast(o); reset(); setPaying(false); toast(`Vente ${o.number} enregistrée`);
         if (getMeta('printAutoTicket', false)) {
           printTo(defaultTarget(), ticketDoc(o, company)).then((m) => toast(m)).catch((e) => toast(`Ticket non imprimé : ${e?.message ?? e}`, 'error'));

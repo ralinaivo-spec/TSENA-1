@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useCan, currentUser } from '../lib/auth';
 import { get, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, PURCHASE_STATUS, todayYmd, useCatalog, variantLabel, type Product, type Purchase, type Variant } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, PURCHASE_STATUS, stockOf, todayYmd, useCatalog, variantLabel, type Product, type Purchase, type Variant } from '../lib/catalog';
 import { computeReception, lastRate, MODE_LABEL, purchaseQty, purchaseReceivedQty, transitTotalAr, UNIT_LABEL, validateReception, type Allocation, type Reception, type Supplier, type TransitInvoice } from '../lib/purchases';
 import { PurchasingTabs } from './ImportExport';
 import { Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, navigate, toast, useRoute } from '../ui/kit';
@@ -123,7 +123,7 @@ function NewReception({ preselect }: { preselect?: string }) {
                     const v = get<Variant>('variants', e.line.variantId); const prod = v && get<Product>('products', v.productId);
                     return (
                       <tr key={key(e.purchase, e.line.id)}>
-                        <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={prod?.photo} size={32} /><div><strong>{prod?.code}</strong> {variantLabel(v)}<div className="small muted">{e.purchase.number}</div></div></div></td>
+                        <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={prod?.photo} size={32} /><div><strong>{prod?.code}</strong> {variantLabel(v)}<div className="small muted">{e.purchase.number} · en stock : {v ? stockOf(v.id) : 0}</div></div></div></td>
                         <td className="t-num num">{e.rest}</td>
                         <td><input className="cell-input" inputMode="numeric" aria-label="Reçu" value={qty[key(e.purchase, e.line.id)] ?? String(e.rest)} onChange={(ev) => setQty({ ...qty, [key(e.purchase, e.line.id)]: ev.target.value })} /></td>
                       </tr>

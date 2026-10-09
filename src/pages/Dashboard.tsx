@@ -18,7 +18,7 @@ import { isWalkIn } from '../lib/orders';
 import { MyDeliveriesPage } from './MyDeliveries';
 import { DEFAULT_COMPANY, useCompany } from '../lib/settings';
 import { useSyncStatus } from '../lib/sync';
-import { PageHead, timeAgo } from '../ui/kit';
+import { IconButton, PageHead, timeAgo } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 export function DashboardPage() {
@@ -40,6 +40,8 @@ function Board() {
   const lastFile = useMeta<string | null>('lastFileBackup', null);
   const lastCloud = useMeta<string | null>('lastCloudBackup', null);
   const lastBackup = [lastFile, lastCloud].filter(Boolean).sort().pop() ?? undefined;
+  const session = useMeta<{ at: string } | null>('session', null);
+  const hiddenFor = useMeta<string | null>('secretNoticeHidden', null);
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -56,14 +58,15 @@ function Board() {
   return (
     <>
       <PageHead title={`${hello}, ${me.fullName.split(' ')[0]}`} subtitle={<span style={{ textTransform: 'capitalize' }}>{today}</span>} />
-      {managesOwnPassword(me) && (me.mustChangePassword || !me.secretAnswerHash) && (
+      {managesOwnPassword(me) && (me.mustChangePassword || !me.secretAnswerHash) && hiddenFor !== session?.at && (
         <div className="notice">
           <Icon name="key" />
-          <span>
+          <span style={{ flex: 1 }}>
             {me.mustChangePassword ? 'Votre compte utilise encore le mot de passe provisoire. ' : ''}
             {!me.secretAnswerHash ? 'Aucune question secrète n’est définie. ' : ''}
             <a href="#/compte">Régler maintenant dans Mon compte</a>
           </span>
+          <IconButton icon="x" label="Masquer jusqu’à la prochaine connexion" onClick={() => setMeta('secretNoticeHidden', session?.at ?? 'x')} />
         </div>
       )}
 

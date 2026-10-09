@@ -8,11 +8,11 @@ import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, varia
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
-  repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
+  repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { DiscountField, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
@@ -129,6 +129,12 @@ export function OrderRow({ o }: { o: Order }) {
   );
 }
 
+// ---------- Stock affiché à côté de chaque article ----------
+export function StockTag({ variantId, reserved, short }: { variantId: string; reserved: Map<string, number>; short?: { qty: number; available: number } }) {
+  const a = Math.max(0, availableOf(variantId, reserved));
+  return <span className={`stock-tag ${short ? 'is-short' : a <= 3 ? 'is-low' : ''}`}>{short ? `Stock insuffisant : ${short.available} disponible(s)` : `Stock : ${a} disponible(s)`}</span>;
+}
+
 // ---------- Client existant ----------
 /** Recherche d'un client déjà connu (téléphone, nom Facebook, nom, lieu) : ses informations se remplissent toutes seules. */
 export function CustomerSearch({ onPick }: { onPick: (c: Customer) => void }) {
@@ -172,9 +178,9 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [newCourier, setNewCourier] = useState('');
   const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : pre?.zoneId ? (isPickupZone(pre.zoneId) ? 0 : get<Zone>('zones', pre.zoneId)?.fee ?? '') : '')));
   const [wantedDate, setWantedDate] = useState(order?.wantedDate ?? '');
-  const [lines, setLines] = useState<OrderLine[]>(order?.lines ?? (pre?.lines ?? []).map((l) => ({ id: newId(), variantId: l.variantId, qty: l.qty, unitPrice: linePrice(l.variantId, false) })));
-  const [wholesale, setWholesale] = useState<Order['wholesale']>(order?.wholesale ?? 'auto');
-  const [discount, setDiscount] = useState(order?.discount ? String(order.discount) : '');
+  const [lines, setLines] = useState<OrderLine[]>(order?.lines ? withLineWholesale(order.lines) : (pre?.lines ?? []).map((l) => ({ id: newId(), variantId: l.variantId, qty: l.qty, unitPrice: linePrice(l.variantId, false) })));
+  const [discount, setDiscount] = useState(order?.discountPct ? String(order.discountPct) : order?.discount ? String(order.discount) : '');
+  const [discUnit, setDiscUnit] = useState<'ar' | 'pct'>(order?.discountPct ? 'pct' : 'ar');
   const [notes, setNotes] = useState(order?.notes ?? pre?.notes ?? '');
   const [prepay, setPrepay] = useState(pre?.prepay?.amount ? String(pre.prepay.amount) : '');
   const [prepayMethod, setPrepayMethod] = useState<PayMethod>(pre?.prepay?.method ?? 'mvola');
@@ -184,10 +190,13 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const known = useMemo(() => findCustomer(phone), [phone]);
-  const minQty = company.wholesaleMinQty ?? 3;
-  const isGros = useWholesale({ lines, wholesale }, minQty);
-  const priced = repriceLines(lines, isGros);
-  const draft = { lines: priced, discount: parseNum(discount) || 0, deliveryFee: parseNum(fee) || 0, payments: [], status: 'new', kind: exchangeOf ? 'exchange' : 'order', credit: exchangeOf ? exchangeOf.returnLines.reduce((s, r) => s + r.qty * r.unitPrice, 0) : 0 } as unknown as Order;
+  const priced = repriceLines(lines);
+  const itemsAr = priced.filter((l) => !l.isChoice).reduce((t, l) => t + l.qty * l.unitPrice, 0);
+  const discAr = discountAr(discount, discUnit, itemsAr);
+  const short = stockShortages(priced, order?.id);
+  const shortOf = (vid: string) => short.find((x) => x.variantId === vid);
+  const reservedNow = useMemo(() => reservedIndex(order?.id), [order?.id, priced.length]);
+  const draft = { lines: priced, discount: discAr, deliveryFee: parseNum(fee) || 0, payments: [], status: 'new', kind: exchangeOf ? 'exchange' : 'order', credit: exchangeOf ? exchangeOf.returnLines.reduce((s, r) => s + r.qty * r.unitPrice, 0) : 0 } as unknown as Order;
   const total = exchangeOf ? exchangeBalance(draft) : orderTotal(draft);
 
   function onPhone(v: string) {
@@ -229,6 +238,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
     }
     if (!priced.length && !exchangeOf) return setError('Ajoutez au moins un article.');
     if (priced.some((l) => l.qty <= 0)) return setError('Chaque article doit avoir une quantité.');
+    if (short.length) return setError(`Stock insuffisant : ${short.map((x) => { const v = get<Variant>('variants', x.variantId); return `${get<Product>('products', v?.productId || '')?.name ?? '?'} ${variantLabel(v)} (demandé ${x.qty}, disponible ${x.available})`; }).join(' ; ')}. Diminuez la quantité ou choisissez un autre article.`);
     setBusy(true);
     try {
       // Fiche client : créée ou complétée automatiquement.
@@ -239,7 +249,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
       else if (cust) await save('customers', { id: cust.id, phone: cust.phone || p || undefined, phone2: cust.phone && p && normPhone(cust.phone) !== p && !cust.phone2 ? p : cust.phone2, name: cust.name || name.trim() || undefined, facebook: cust.facebook || facebook.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
       const data: Partial<Order> = {
         phone: p, name: name.trim() || undefined, facebook: facebook.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,
-        courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, wholesale, discount: parseNum(discount) || 0, notes: notes.trim() || undefined,
+        courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, discount: discAr, discountPct: discUnit === 'pct' ? Number(String(discount).replace(',', '.')) || undefined : undefined, notes: notes.trim() || undefined,
       };
       if (order) {
         await save('orders', { id: order.id, ...data });
@@ -301,8 +311,12 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
                   return (
                     <tr key={l.id}>
                       <td>
-                        <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={48} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}</div></div></div>
-                        <label className="small row" style={{ gap: 6, marginTop: 4 }}><input type="checkbox" checked={!!l.isChoice} onChange={(e) => setLine(l.id, { isChoice: e.target.checked })} /> Envoyé en choix (pas encore vendu)</label>
+                        <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={48} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}</div>
+                          <StockTag variantId={l.variantId} reserved={reservedNow} short={shortOf(l.variantId)} /></div></div>
+                        <div className="line-opts">
+                          <label><input type="checkbox" checked={!!l.wholesale} onChange={(e) => setLine(l.id, { wholesale: e.target.checked, priceManual: false })} /> Prix de gros</label>
+                          <label><input type="checkbox" checked={!!l.isChoice} onChange={(e) => setLine(l.id, { isChoice: e.target.checked })} /> Envoyé en choix</label>
+                        </div>
                       </td>
                       <td><input className="cell-input" inputMode="numeric" aria-label="Quantité" value={l.qty || ''} onChange={(e) => setLine(l.id, { qty: parseNum(e.target.value) || 0 })} /></td>
                       <td><input className="cell-input" inputMode="numeric" aria-label="Prix" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} /></td>
@@ -315,15 +329,10 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
             </table>
           </div>
         )}
-        <div className="row-between">
-          <div className="segmented" role="group" aria-label="Prix de gros">
-            {([['auto', `Gros auto (dès ${minQty} pcs)`], ['yes', 'Prix de gros'], ['no', 'Prix détail']] as const).map(([k, l]) => <button key={k} type="button" aria-pressed={wholesale === k} onClick={() => setWholesale(k)}>{l}</button>)}
-          </div>
-          <span className="small">{isGros ? <Badge tone="brand">Prix de gros appliqué</Badge> : <Badge>Prix détail</Badge>}</span>
-        </div>
+        {short.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Stock insuffisant pour {short.length} article(s) : diminuez la quantité ou choisissez un autre article.</span></div>}
 
         <div className="grid-2">
-          <TextField label="Remise (Ar)" value={discount} onChange={setDiscount} inputMode="numeric" />
+          <DiscountField value={discount} unit={discUnit} onChange={setDiscount} onUnit={setDiscUnit} amount={discAr} />
           <TextField label="Date de livraison souhaitée" type="date" value={wantedDate} onChange={setWantedDate} />
         </div>
         {!order && (
@@ -346,7 +355,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
 
         <div className="summary-box">
           <div><span>Articles</span><strong className="num">{fmtAr(itemsTotal(draft))}</strong></div>
-          {draft.discount > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(draft.discount)}</strong></div>}
+          {draft.discount > 0 && <div><span>Remise{discUnit === 'pct' ? ` (${discount} %)` : ''}</span><strong className="num">− {fmtAr(draft.discount)}</strong></div>}
           {exchangeOf && <div><span>Articles repris</span><strong className="num">− {fmtAr(draft.credit)}</strong></div>}
           <div><span>Frais de livraison</span><strong className="num">{fmtAr(draft.deliveryFee)}</strong></div>
           <div className="summary-total"><span>{exchangeOf ? (total >= 0 ? 'Le client paie' : 'À rendre au client') : 'Total à payer'}</span><strong className="num">{fmtAr(Math.abs(total))}</strong></div>

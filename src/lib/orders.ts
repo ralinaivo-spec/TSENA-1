@@ -22,6 +22,7 @@ export interface OrderLine {
   unitPrice: number;
   priceManual?: boolean;
   isChoice?: boolean;       // envoyé en choix (taille…), pas encore vendu
+  wholesale?: boolean;      // prix de gros pour cet article (sinon prix détail)
   qtyKept?: number;         // renseigné au retour du livreur
   qtyReturned?: number;
 }
@@ -58,6 +59,7 @@ export interface Order extends BaseRecord {
   returnLines?: { variantId: string; qty: number; unitPrice: number }[]; // échange : articles repris au client
   credit?: number;                // échange : valeur des articles repris
   discount: number;
+  discountPct?: number;           // remise saisie en pourcentage (pour l’affichage)
   payments: Payment[];
   notes?: string;
   status: OrderStatus;
@@ -207,8 +209,25 @@ export function linePrice(variantId: string, wholesale: boolean) {
   const gros = v?.priceWholesale ?? p?.priceWholesale;
   return wholesale && gros ? gros : retail;
 }
-export function repriceLines(lines: OrderLine[], wholesale: boolean) {
-  return lines.map((l) => (l.priceManual ? l : { ...l, unitPrice: linePrice(l.variantId, wholesale) }));
+/** Prix de chaque ligne : détail par défaut, gros si la ligne est cochée « Prix de gros » (article par article). */
+export function repriceLines(lines: OrderLine[], _legacy?: boolean) {
+  return lines.map((l) => (l.priceManual ? l : { ...l, unitPrice: linePrice(l.variantId, !!l.wholesale) }));
+}
+/** Anciennes lignes (prix de gros décidé pour toute la commande) : on retrouve si chaque ligne était au prix de gros. */
+export function withLineWholesale(lines: OrderLine[]) {
+  return lines.map((l) => (l.wholesale !== undefined ? l : { ...l, wholesale: l.unitPrice !== linePrice(l.variantId, false) && l.unitPrice === linePrice(l.variantId, true) }));
+}
+/** Remise saisie en Ar ou en % du montant des articles → montant en Ar (arrondi). */
+export function discountAr(value: string | number | undefined, unit: 'ar' | 'pct', base: number) {
+  const n = typeof value === 'number' ? value : Number(String(value ?? '').replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+  return unit === 'pct' ? Math.round((base * Math.min(100, n)) / 100) : Math.round(n);
+}
+/** Quantités demandées au-delà du stock disponible (stock − pièces promises aux autres commandes). */
+export function stockShortages(lines: Pick<OrderLine, 'variantId' | 'qty'>[], excludeOrderId?: string) {
+  const reserved = reservedIndex(excludeOrderId);
+  const want = new Map<string, number>();
+  for (const l of lines) want.set(l.variantId, (want.get(l.variantId) ?? 0) + (l.qty || 0));
+  return [...want.entries()].map(([variantId, qty]) => ({ variantId, qty, available: Math.max(0, availableOf(variantId, reserved)) })).filter((x) => x.qty > x.available);
 }
 
 // ---------- Réservations : pièces promises à des commandes pas encore parties ----------

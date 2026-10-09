@@ -193,6 +193,19 @@ export function MultiPick({ label, values, onChange, options, max = 6, empty = '
     </div>
   );
 }
+/** Remise en Ar ou en % : le montant en Ar calculé s'affiche dessous. */
+export function DiscountField({ value, unit, onChange, onUnit, amount }: { value: string; unit: 'ar' | 'pct'; onChange: (v: string) => void; onUnit: (u: 'ar' | 'pct') => void; amount: number }) {
+  return (
+    <Field label="Remise" hint={unit === 'pct' && amount ? `= ${amount.toLocaleString('fr-FR')} Ar` : undefined}>
+      {(id) => (
+        <div className="input-with-unit">
+          <input id={id} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="0" />
+          <select aria-label="Unité de la remise" value={unit} onChange={(e) => onUnit(e.target.value as 'ar' | 'pct')}><option value="ar">Ar</option><option value="pct">%</option></select>
+        </div>
+      )}
+    </Field>
+  );
+}
 export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <label className={`toggle ${disabled ? 'is-disabled' : ''}`}>

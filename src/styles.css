@@ -982,3 +982,13 @@ tr.row-error td { background: var(--danger-soft); }
 .money-lines .ml-total { font-weight: 700; }
 .money-lines .ml-strong { font-weight: 800; background: var(--brand-soft); border-radius: 10px; padding: 8px 10px; border-bottom: 0; }
 .ml-expected { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); font-weight: 800; font-size: 1.05rem; }
+/* Options discrètes d'une ligne d'article (prix de gros, envoyé en choix) */
+.line-opts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: .8rem; color: var(--muted); }
+.line-opts label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
+.line-opts input { width: 15px; height: 15px; margin: 0; accent-color: var(--brand); }
+.stock-tag { display: inline-block; margin-top: 3px; font-size: .78rem; font-weight: 700; color: var(--ok); }
+.stock-tag.is-low { color: var(--gold); }
+.stock-tag.is-short { color: var(--danger); }
+.input-with-unit { display: flex; gap: 6px; }
+.input-with-unit input { flex: 1; min-width: 0; }
+.input-with-unit select { width: 74px; flex: none; }
