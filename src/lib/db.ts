@@ -80,12 +80,14 @@ export function newId(): string {
 export const nowIso = () => new Date().toISOString();
 
 /**
- * Date de saisie : pour des tests ou pour rattraper un cahier, l'admin peut choisir un jour passé (réglage propre à
- * l'appareil). Les opérations (ventes, commandes, livraisons, paiements, stock, dépenses) prennent alors ce jour,
- * avec l'heure actuelle. La synchronisation, elle, garde toujours l'heure réelle.
+ * Date de saisie : pour des tests ou pour rattraper un cahier, l'admin ou le gérant peut choisir un jour passé.
+ * Réglage COMMUN à tous les appareils (enregistrement « settings/workdate », synchronisé) : il reste en place pour
+ * tous les utilisateurs jusqu'à ce que l'admin ou le gérant le change. Les opérations (ventes, commandes, livraisons,
+ * paiements, stock, dépenses) prennent ce jour, avec l'heure actuelle. La synchronisation garde l'heure réelle.
  */
+export interface WorkDateRec extends BaseRecord { date: string | null; byName?: string; at?: string }
 export function workDate(): string | null {
-  const wd = getMeta<string | null>('workDate', null);
+  const wd = get<WorkDateRec>('settings', 'workdate')?.date ?? null;
   if (!wd) return null;
   const d = new Date(), real = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return wd >= real ? null : wd;

@@ -1,8 +1,8 @@
 // Paramètres → Outils (admin) : vérification de la cohérence, export complet, espace utilisé.
 // Paramètres → Système (super-admin) : effacer les données de test.
 import { useEffect, useMemo, useState } from 'react';
-import { useCan } from '../lib/auth';
-import { setMeta, useMeta, useTable, workDate } from '../lib/db';
+import { currentUser, useCan } from '../lib/auth';
+import { get, save, useTable, workDate, type WorkDateRec } from '../lib/db';
 import { audit } from '../lib/auth';
 import { DATA_GROUPS, KEPT_LABEL, checkData, clearData, exportAllExcel, optimizePhotos, photoStats, tableCounts, type Issue } from '../lib/maintenance';
 import { Badge, Button, Confirm, TextField, toast } from '../ui/kit';
@@ -105,34 +105,45 @@ export function ClearDataCard() {
 const realToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const longDay = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-/** Choisir une date passée pour les saisies (tests ou rattrapage d'un cahier). */
+/** Date de saisie commune à tous les appareils (enregistrée dans les paramètres synchronisés). */
+async function setWorkDate(d: string | null) {
+  const u = currentUser();
+  await save('settings', { id: 'workdate', date: d, byName: u?.fullName, at: new Date().toISOString() });
+  await audit('Date de saisie', d ? `Date de saisie commune fixée au ${d} pour tous les appareils` : 'Retour à la date du jour pour tous les appareils');
+  toast(d ? `Tous les appareils saisiront à la date du ${longDay(d)}` : 'Retour à la date du jour pour tous les appareils');
+}
+
+/** Choisir une date passée pour les saisies (tests ou rattrapage d'un cahier) — pour tous les utilisateurs. */
 function WorkDateCard() {
-  const wd = useMeta<string | null>('workDate', null);
+  useTable('settings');
+  const rec = get<WorkDateRec>('settings', 'workdate');
   const active = workDate();
-  const [d, setD] = useState(wd && active ? wd : '');
+  const [d, setD] = useState(active ?? '');
   return (
     <div className="card stack" style={active ? { borderColor: 'var(--gold)' } : undefined}>
-      <div><h3>Date de saisie</h3>
-        <p className="small muted">Pour faire des essais avec des dates passées, ou pour rattraper les ventes d’un cahier : choisissez un jour passé. Tout ce que vous saisissez ensuite sur cet appareil (ventes sur place, commandes, livraisons, retours, paiements, versements, dépenses, mouvements de stock) sera daté de ce jour, à l’heure actuelle. Les autres appareils ne sont pas concernés. Pensez à revenir à aujourd’hui ensuite (c’est automatique à la déconnexion).</p></div>
+      <div><h3>Date de saisie (tous les appareils)</h3>
+        <p className="small muted">Pour faire des essais avec des dates passées, ou pour rattraper les ventes d’un cahier : choisissez un jour passé. La date s’applique à <strong>tous les utilisateurs et tous les appareils</strong> reliés au cloud (dès leur synchronisation) et reste en place jusqu’à ce que l’admin ou le gérant la change ou revienne à aujourd’hui. Tout ce qui est saisi (ventes sur place, commandes, livraisons, retours, paiements, versements, dépenses, mouvements de stock) prend ce jour, à l’heure actuelle.</p></div>
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <div style={{ maxWidth: 220 }}><TextField label="Saisir à la date du" type="date" value={d} max={realToday()} onChange={setD} /></div>
-        <Button disabled={!d || d >= realToday()} onClick={async () => { await setMeta('workDate', d); await audit('Date de saisie', `Saisies datées du ${d} sur cet appareil`); toast(`Les saisies seront datées du ${longDay(d)}`); }}>Utiliser cette date</Button>
-        {active && <Button variant="ghost" onClick={async () => { await setMeta('workDate', null); setD(''); await audit('Date de saisie', 'Retour à la date du jour'); toast('Retour à la date du jour'); }}>Revenir à aujourd’hui</Button>}
+        <Button disabled={!d || d >= realToday() || d === active} onClick={() => setWorkDate(d)}>Appliquer à tous</Button>
+        {active && <Button variant="ghost" onClick={async () => { await setWorkDate(null); setD(''); }}>Revenir à aujourd’hui (tous)</Button>}
       </div>
-      {active && <p><Badge tone="warn">En cours : saisies datées du {longDay(active)}</Badge></p>}
+      {active && <p><Badge tone="warn">En cours : saisies datées du {longDay(active)}</Badge>{rec?.byName ? <span className="small muted"> — fixée par {rec.byName}{rec.at ? ` le ${new Date(rec.at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}</span> : null}</p>}
     </div>
   );
 }
 
-/** Bandeau visible sur toutes les pages tant qu'une date passée est utilisée. */
+/** Bandeau visible sur toutes les pages, pour tous les utilisateurs, tant qu'une date passée est utilisée. */
 export function WorkDateBanner() {
-  useMeta<string | null>('workDate', null);
+  useTable('settings');
+  const can = useCan();
   const active = workDate();
+  const rec = get<WorkDateRec>('settings', 'workdate');
   if (!active) return null;
   return (
     <div className="notice workdate-banner"><Icon name="alert" />
-      <span style={{ flex: 1 }}><strong>Saisies datées du {longDay(active)}</strong> — tout ce que vous enregistrez prend cette date.</span>
-      <Button variant="ghost" onClick={async () => { await setMeta('workDate', null); await audit('Date de saisie', 'Retour à la date du jour'); toast('Retour à la date du jour'); }}>Revenir à aujourd’hui</Button>
+      <span style={{ flex: 1 }}><strong>Saisies datées du {longDay(active)}</strong> — date fixée{rec?.byName ? ` par ${rec.byName}` : ''} pour tous les appareils : tout ce que vous enregistrez prend cette date.</span>
+      {can('users.manage') && <Button variant="ghost" onClick={() => setWorkDate(null)}>Revenir à aujourd’hui (tous)</Button>}
     </div>
   );
 }

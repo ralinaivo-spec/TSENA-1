@@ -148,7 +148,6 @@ export async function logout() {
   const u = currentUser();
   if (u) await audit('Déconnexion', `${u.fullName} s'est déconnecté(e)`);
   await setMeta('session', null);
-  await setMeta('workDate', null); // la date de saisie passée ne survit pas à la déconnexion
   location.hash = '/';
 }
 
