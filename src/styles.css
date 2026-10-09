@@ -824,3 +824,8 @@ table.table { border-collapse: separate; border-spacing: 0 8px; padding: 0 12px;
 @media (max-width: 520px) { .login-art { padding-bottom: 76px; } .login-dot { display: none; } }
 [data-theme='dark'] .login-card h2 { color: var(--ink); }
 [data-theme='dark'] .login-card .btn-quiet, [data-theme='dark'] .login-card a { color: var(--nav-glow); }
+/* Logo par défaut = icône de l'application (sans cadre autour) */
+.brand-logo:has(img.is-app-icon) { background: transparent !important; box-shadow: none; padding: 0; }
+.brand-logo img.is-app-icon { width: 100%; height: 100%; object-fit: cover; background: transparent; border-radius: inherit; }
+.login-badge .brand-logo:has(img.is-app-icon) { border-radius: 14px; }
+.sidebar .brand-logo:has(img.is-app-icon), .topbar .brand-logo:has(img.is-app-icon), .login-badge .brand-logo:has(img.is-app-icon) { box-shadow: 0 0 0 2px rgba(255,255,255,.28), 0 8px 18px -8px rgba(0,0,0,.5); }

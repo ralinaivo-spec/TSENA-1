@@ -13,7 +13,7 @@ export function BrandLogo({ size }: { size?: number }) {
   const c = useCompany();
   return (
     <span className="brand-logo" style={size ? { width: size, height: size } : undefined}>
-      {c.logo ? <img src={c.logo} alt="" /> : (c.name || 'T').trim().charAt(0).toUpperCase()}
+      <img src={c.logo || './icons/icon.svg'} alt="" className={c.logo ? undefined : 'is-app-icon'} />
     </span>
   );
 }
