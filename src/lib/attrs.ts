@@ -113,7 +113,7 @@ export function combinations(cat: Category, picked: Record<string, string[]>): S
   return out;
 }
 
-export interface ArticleInput { sel: Selection; name?: string; cost?: number; retail?: number; wholesale?: number; stock?: number; alertQty?: number }
+export interface ArticleInput { sel: Selection; name?: string; cost?: number; retail?: number; wholesale?: number; stock?: number; alertQty?: number; photo?: string }
 
 /**
  * Crée ou met à jour des articles d'une page. Nouvel article : article + sa ligne de stock + stock de départ.
@@ -129,7 +129,7 @@ export async function saveArticles(cat: Category, rows: ArticleInput[], reason =
     const existing = findArticle(cat.id, r.sel);
     if (existing) {
       const v = productVariants(existing.id)[0];
-      products.push({ id: existing.id, ...(r.retail != null ? { priceRetail: r.retail } : {}), ...(r.wholesale != null ? { priceWholesale: r.wholesale } : {}), ...(r.alertQty != null ? { alertQty: r.alertQty } : {}), ...(r.name ? { name: r.name } : {}), active: true });
+      products.push({ id: existing.id, ...(r.retail != null ? { priceRetail: r.retail } : {}), ...(r.wholesale != null ? { priceWholesale: r.wholesale } : {}), ...(r.alertQty != null ? { alertQty: r.alertQty } : {}), ...(r.name ? { name: r.name } : {}), ...(r.photo ? { photo: r.photo } : {}), active: true });
       if (v) {
         if (r.cost != null) variants.push({ id: v.id, costAvg: r.cost });
         if (r.stock != null) { const d = r.stock - stockOf(v.id); if (d) moves.push({ variantId: v.id, qty: d, type: 'inventory', unitCost: r.cost ?? v.costAvg, reason: `${reason} : stock remis à ${r.stock}` }); }
@@ -138,7 +138,7 @@ export async function saveArticles(cat: Category, rows: ArticleInput[], reason =
     } else {
       const id = articleId(cat.id, r.sel);
       const vid = `v_${id}`;
-      products.push({ id, code: parts.code, name: r.name?.trim() || parts.name, categoryId: cat.id, attrs: r.sel, priceRetail: r.retail, priceWholesale: r.wholesale ?? r.retail, alertQty: r.alertQty ?? 3, active: true });
+      products.push({ id, code: parts.code, name: r.name?.trim() || parts.name, categoryId: cat.id, attrs: r.sel, priceRetail: r.retail, priceWholesale: r.wholesale ?? r.retail, alertQty: r.alertQty ?? 3, photo: r.photo, active: true });
       variants.push({ id: vid, productId: id, sku: parts.code, costAvg: r.cost, active: true });
       if (r.stock) moves.push({ variantId: vid, qty: r.stock, type: 'initial', unitCost: r.cost, reason: `${reason} : stock de départ` });
       created++;
@@ -154,6 +154,7 @@ export async function saveArticles(cat: Category, rows: ArticleInput[], reason =
 // ---------- Modèle Excel par page ----------
 const MARK = 'tsena-categorie:';
 const FIXED = ['Nom de l’article (facultatif)', 'Prix de revient (Ar)', 'PV détail (Ar)', 'PV gros (Ar)', 'Stock', 'Alerte stock bas'];
+const PHOTO_COL = 'Photo (image collée dans la ligne, facultatif)';
 
 /** Fichier Excel propre à une page : une colonne par variante (liste déroulante), puis prix et stock. Les articles existants sont déjà remplis. */
 export async function categoryTemplate(cat: Category) {
@@ -174,13 +175,14 @@ export async function categoryTemplate(cat: Category) {
   const longest = Math.max(0, ...attrs.map((a) => activeValues(a).length));
   for (let r = 0; r < longest; r++) listRows.push(attrs.map((a) => activeValues(a)[r] ? activeValues(a)[r].label : null));
   const sheets: OutSheet[] = [
-    { name: 'Articles', columns: [...attrs.map((a) => ({ header: a.name + (a.required === false ? ' (facultatif)' : ''), width: 22, input: true })), ...FIXED.map((h, i) => ({ header: h, width: i === 0 ? 24 : 15, input: true, number: i > 0 }))], rows, lists },
+    { name: 'Articles', columns: [...attrs.map((a) => ({ header: a.name + (a.required === false ? ' (facultatif)' : ''), width: 22, input: true })), ...FIXED.map((h, i) => ({ header: h, width: i === 0 ? 24 : 15, input: true, number: i > 0 })), { header: PHOTO_COL, width: 22, input: true }], rows, lists },
     { name: 'Listes', columns: attrs.map((a) => ({ header: a.name, width: 24 })), rows: listRows },
     { name: "Mode d'emploi", columns: [], rows: [], notes: [
       `#Page « ${cat.name} » — fichier d'import TSENA`,
       'Une ligne = un article. Pour chaque variante, choisissez la valeur dans la liste déroulante (ou tapez le libellé ou le code court).',
       'Les articles déjà enregistrés sont pré-remplis : modifiez leurs prix ou leur stock, et ajoutez de nouvelles lignes en dessous.',
       'Nom de l’article : laissez vide, il sera fait avec les codes courts (ex. LP1 B22 7W).',
+      'Photo : collez l’image de l’article dans sa ligne (colonne Photo de préférence). Une image posée sur plusieurs lignes fusionnées sert à toutes ces lignes. Sans image, la photo actuelle de l’article est gardée.',
       'Prix et stock en chiffres, sans espace ni « Ar ». Stock = quantité que vous avez aujourd’hui (pour un article existant, le stock est remis à cette quantité).',
       'Une valeur qui manque dans la liste : ajoutez-la d’abord dans TSENA (Articles et stock → Pages et variantes), puis téléchargez de nouveau ce fichier.',
       'Ne changez pas les titres des colonnes et ne supprimez pas les onglets.',
@@ -198,7 +200,7 @@ export function templateCategory(sheets: Sheet[]): Category | undefined {
   return get<Category>('categories', cell.slice(MARK.length));
 }
 
-export interface ImportRow { line: number; input?: ArticleInput; errors: string[]; name: string; label: string; exists: boolean; current?: number }
+export interface ImportRow { line: number; input?: ArticleInput; errors: string[]; name: string; label: string; exists: boolean; current?: number; photo?: Blob }
 const num = (v: Cell): number | undefined | null => {
   if (v == null || v === '') return undefined;
   if (typeof v === 'number') return v;
@@ -216,6 +218,12 @@ export function parseCategoryFile(cat: Category, sheets: Sheet[]): ImportRow[] {
   const fCols = FIXED.map((h) => colOf(h));
   const out: ImportRow[] = [];
   const seen = new Map<string, number>();
+  // Photos : image ancrée dans la ligne (ou sur des lignes fusionnées : elle sert à toutes).
+  const photoOf = new Map<number, Blob>();
+  for (const im of sh.images ?? []) {
+    const m = (sh.merges ?? []).find((g) => im.row >= g.r1 && im.row <= g.r2 && im.col >= g.c1 && im.col <= g.c2);
+    for (let r = m ? m.r1 : im.row; r <= (m ? m.r2 : im.row); r++) if (!photoOf.has(r)) photoOf.set(r, im.blob);
+  }
   const find = (a: CatAttr, raw: string) => {
     const n = normText(raw).replace(/\s+/g, ' ').trim();
     return a.values.find((v) => normText(v.label).trim() === n) ?? a.values.find((v) => normText(v.code) === n.replace(/\s/g, ''));
@@ -245,7 +253,7 @@ export function parseCategoryFile(cat: Category, sheets: Sheet[]): ImportRow[] {
     if (!errors.length && !existing && retail == null) errors.push('PV détail manquant pour un nouvel article');
     const v = existing ? productVariants(existing.id)[0] : undefined;
     out.push({
-      line: r + 1, errors, name: name || existing?.name || parts.name, label: parts.label, exists: !!existing, current: v ? stockOf(v.id) : undefined,
+      line: r + 1, errors, name: name || existing?.name || parts.name, label: parts.label, exists: !!existing, current: v ? stockOf(v.id) : undefined, photo: photoOf.get(r),
       input: errors.length ? undefined : { sel, name: name || undefined, cost: cost ?? undefined, retail: retail ?? undefined, wholesale: wholesale ?? undefined, stock: stock ?? undefined, alertQty: alertQty ?? undefined },
     });
   }

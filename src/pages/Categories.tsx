@@ -1,6 +1,7 @@
 // Articles et stock → Pages et variantes : chaque page (catégorie) avec ses variantes libres, et création des
 // articles à partir des valeurs (un article ou toutes les combinaisons d'un coup). Modèle Excel par page.
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { compressPhoto } from '../lib/images';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { categoryPath, normText, parseNum, type AttrValue, type CatAttr, type Category, type Product } from '../lib/catalog';
@@ -225,6 +226,8 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const [edits, setEdits] = useState<Record<string, Partial<Line>>>({});
   const [all4, setAll4] = useState({ cost: '', retail: '', wholesale: '', stock: '' });
+  const [photo, setPhoto] = useState<string>();
+  const photoRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const toggle = (aid: string, vid: string) => { const cur = picked[aid] ?? []; setPicked({ ...picked, [aid]: cur.includes(vid) ? cur.filter((x) => x !== vid) : [...cur, vid] }); };
   const lines: Line[] = useMemo(() => {
@@ -251,7 +254,7 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!chosen.length || missing.length > 0} onClick={async () => {
         setBusy(true);
         try {
-          const r = await saveArticles(cat!, chosen.map((l) => ({ sel: l.sel, name: l.name.trim() || undefined, cost: parseNum(l.cost), retail: parseNum(l.retail), wholesale: parseNum(l.wholesale) ?? parseNum(l.retail), stock: parseNum(l.stock) })), 'Création');
+          const r = await saveArticles(cat!, chosen.map((l) => ({ sel: l.sel, name: l.name.trim() || undefined, cost: parseNum(l.cost), retail: parseNum(l.retail), wholesale: parseNum(l.wholesale) ?? parseNum(l.retail), stock: parseNum(l.stock), photo })), 'Création');
           toast(`${r.created} article(s) créé(s)`); onClose();
         } catch (e: any) { toast(e.message, 'error'); setBusy(false); }
       }}>Créer {chosen.length || ''} article(s)</Button></>}>
@@ -280,6 +283,12 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
                 <input className="cell-input" inputMode="numeric" placeholder="PV gros" aria-label="PV gros pour toutes" value={all4.wholesale} onChange={(e) => setAll4({ ...all4, wholesale: e.target.value })} />
                 <input className="cell-input" inputMode="numeric" placeholder="Stock" aria-label="Stock pour toutes" value={all4.stock} onChange={(e) => setAll4({ ...all4, stock: e.target.value })} />
                 <Button variant="ghost" onClick={applyAll}>Appliquer</Button>
+              </div>
+              <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+                <Button variant="ghost" icon="upload" onClick={() => photoRef.current?.click()}>{photo ? 'Changer la photo' : 'Photo des articles créés'}</Button>
+                {photo && <><img src={photo} alt="Photo" style={{ height: 48, borderRadius: 8 }} /><Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer</Button></>}
+                <span className="small muted">Facultatif : la même photo pour tous les articles créés ici. Chaque article peut ensuite avoir sa propre photo (fiche → Modifier).</span>
+                <input ref={photoRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { setPhoto(await compressPhoto(f)); } catch (err: any) { toast(err?.message ?? 'Photo illisible', 'error'); } } e.target.value = ''; }} />
               </div>
             </div>
             <div className="table-wrap"><table className="table builder-table">

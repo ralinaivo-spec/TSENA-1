@@ -34,10 +34,11 @@ function PageImport({ cat, sheets, onDone }: { cat: Category; sheets: Sheet[]; o
         {bad.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Corrigez les lignes en rouge dans le fichier puis importez-le de nouveau. Vous pouvez aussi importer seulement les lignes correctes.</span></div>}
       </div>
       <div className="table-wrap"><table className="table">
-        <thead><tr><th>Ligne</th><th>Article</th><th>État</th><th className="t-num">Revient</th><th className="t-num">PV détail</th><th className="t-num">PV gros</th><th className="t-num">Stock</th></tr></thead>
+        <thead><tr><th>Ligne</th><th>Photo</th><th>Article</th><th>État</th><th className="t-num">Revient</th><th className="t-num">PV détail</th><th className="t-num">PV gros</th><th className="t-num">Stock</th></tr></thead>
         <tbody>{[...bad, ...ok].map((r) => (
           <tr key={r.line} className={r.errors.length ? 'row-error' : ''}>
             <td className="num">{r.line}</td>
+            <td>{r.photo ? <PreviewPhoto blob={r.photo} /> : <span className="small muted">—</span>}</td>
             <td><strong>{r.name || '—'}</strong><div className="small muted">{r.label}</div></td>
             <td className="small">{r.errors.length ? <span className="neg">{r.errors.join(' · ')}</span> : r.exists ? <>Mise à jour{r.input?.stock != null && r.current !== r.input.stock ? ` (stock ${r.current} → ${r.input.stock})` : ''}</> : 'Nouvel article'}</td>
             <td className="t-num">{fmtAr(r.input?.cost)}</td><td className="t-num">{fmtAr(r.input?.retail)}</td><td className="t-num">{fmtAr(r.input?.wholesale ?? r.input?.retail)}</td><td className="t-num">{r.input?.stock ?? '—'}</td>
@@ -48,7 +49,12 @@ function PageImport({ cat, sheets, onDone }: { cat: Category; sheets: Sheet[]; o
         {bad.length > 0 && <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} /> Importer seulement les {ok.length} ligne(s) correcte(s)</label>}
         <Button busy={busy} disabled={!canGo} onClick={async () => {
           setBusy(true);
-          try { const r = await saveArticles(cat, ok.map((x) => x.input!), 'Import Excel'); toast(`${r.created} article(s) créé(s), ${r.updated} mis à jour`); onDone(); }
+          try {
+            const thumbs = new Map<Blob, string>();
+            for (const x of ok) if (x.photo && !thumbs.has(x.photo)) { const t = await blobToThumb(x.photo).catch(() => undefined); if (t) thumbs.set(x.photo, t); }
+            const r = await saveArticles(cat, ok.map((x) => ({ ...x.input!, photo: x.photo ? thumbs.get(x.photo) : undefined })), 'Import Excel');
+            toast(`${r.created} article(s) créé(s), ${r.updated} mis à jour${thumbs.size ? `, ${ok.filter((x) => x.photo).length} photo(s)` : ''}`); onDone();
+          }
           catch (e: any) { toast(e.message, 'error'); setBusy(false); }
         }}>Importer {ok.length} article(s)</Button>
       </div>

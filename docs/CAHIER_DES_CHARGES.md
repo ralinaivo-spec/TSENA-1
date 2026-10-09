@@ -68,6 +68,12 @@ Menu **Stock → Pages et variantes**.
 - **Supprimer un article** *(10/10)* : possible seulement s’il n’a jamais été vendu, commandé, acheté ni reçu (ex. article de test) ; son stock de départ est effacé avec lui. Sinon : « Archiver ».
 - Fiche d’un article par variantes : le bouton crayon de la ligne de stock ne modifie que le **code** (code-barres) et le **coût de revient** (pas de couleur/taille, pas de suppression). Si la ligne de stock a disparu, un bouton **« Rétablir »** la recrée.
 
+- **Photos des articles** *(09/10/2026)* :
+  - fiche article → Modifier → « Ajouter une photo » ;
+  - dans « Créer des articles » : une photo pour tous les articles créés d’un coup ;
+  - dans le **fichier Excel de la page** : image collée dans la ligne (colonne « Photo »), et une image posée sur des lignes fusionnées sert à toutes ces lignes. L’aperçu d’import montre la photo de chaque ligne ; sans image, la photo actuelle est gardée ;
+  - même traitement automatique que les autres photos (JPEG compressé).
+
 ### 3.1 bis Protection contre les actions risquées *(09/10/2026)*
 - Toute **suppression ou action risquée** demande une confirmation, avec un avertissement rouge : « Action risquée… notée dans le journal d’activité avec votre nom ».
 - Les plus graves exigent en plus de **taper un mot** : effacer les données, remettre à l’état d’origine, restaurer une sauvegarde.
