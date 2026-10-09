@@ -76,7 +76,7 @@ const TEMPLATES = [
         ['Boxer homme', 'BXH8', 'Boxer homme coton', 'Bleu', 'XL', 'BXH8 Bleu XL', 25, 5740, 12000, 10000],
       ] },
       { name: "Mode d'emploi", columns: [], rows: [], notes: [
-        '#Modèle Articles et stock — TSENA',
+        '#Modèle Articles et stock — Trésor en ligne',
         'Une ligne = une variante (une couleur et une taille d’un article).',
         'Les lignes qui ont le même « Code article » forment un seul article avec plusieurs variantes.',
         'Code variante : facultatif. S’il est vide, il est fabriqué avec Code article + Couleur + Taille.',
@@ -100,10 +100,10 @@ const TEMPLATES = [
         ['PH6', null, null, null, null, 'XL', 20, null, 27.48, null, null, null, 48000, 45000],
       ] },
       { name: "Mode d'emploi", columns: [], rows: [], notes: [
-        '#Modèle Commande Chine — TSENA',
+        '#Modèle Commande Chine — Trésor en ligne',
         'Une ligne par taille (colonne NOM). Répétez la REFERENCE ou fusionnez les cellules, comme dans vos fichiers actuels.',
         'FRAIS CHINE et REMISE : une seule fois par commande (première ligne).',
-        'Le taux du RMB et les tarifs du transit ne sont pas dans ce fichier : ils se saisissent dans TSENA (taux à l’import, transit à la réception).',
+        'Le taux du RMB et les tarifs du transit ne sont pas dans ce fichier : ils se saisissent dans Trésor en ligne (taux à l’import, transit à la réception).',
         'Vos anciens fichiers (avec PRIX DE REVIENT, Volume m3, Frais transit…) sont aussi acceptés tels quels.',
       ] },
     ]),
@@ -140,7 +140,7 @@ export function ImportPage() {
       sh.forEach(fillMerged);
       const pageCat = templateCategory(sh);
       if (pageCat) { setSheets(sh); setKind('page'); setPageId(pageCat.id); return; }
-      if (sh.some((x) => x.name === 'tsena')) throw new Error('Ce fichier a été fait pour une page qui n’existe plus dans TSENA (supprimée ?). Téléchargez de nouveau le fichier de la page.');
+      if (sh.some((x) => x.name === 'tsena')) throw new Error('Ce fichier a été fait pour une page qui n’existe plus dans Trésor en ligne (supprimée ?). Téléchargez de nouveau le fichier de la page.');
       const k = detectKind(sh);
       if (!k) throw new Error("Je ne reconnais pas les colonnes de ce fichier. Utilisez un des modèles ci-dessous, ou vérifiez la ligne des titres.");
       setSheets(sh); setKind(k);
@@ -155,7 +155,7 @@ export function ImportPage() {
         <h2>Importer un fichier</h2>
         <label className="dropzone">
           <Icon name="upload" size={28} />
-          <span><strong>Choisir un fichier Excel (.xlsx)</strong><br /><span className="small muted">Fichier de reprise du stock, fichier de commande Chine, modèle TSENA…</span></span>
+          <span><strong>Choisir un fichier Excel (.xlsx)</strong><br /><span className="small muted">Fichier de reprise du stock, fichier de commande Chine, modèle Trésor en ligne…</span></span>
           <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => { const f = e.target.files?.[0]; if (f) open(f); e.target.value = ''; }} />
         </label>
         {busy && <p className="small muted">Lecture du fichier…</p>}
@@ -171,7 +171,7 @@ export function ImportPage() {
         <div><h2>Articles d’une page (recommandé)</h2><p className="small muted">1. Créez la page et ses variantes dans <a href="#/pages">Pages et variantes</a>. 2. Téléchargez le fichier de la page : une colonne par variante avec liste déroulante, puis prix et stock (les articles existants sont déjà remplis). 3. Remplissez-le et importez-le ci-dessus : chaque ligne est contrôlée avant d’enregistrer.</p></div>
         <div className="row" style={{ alignItems: 'flex-end' }}>
           <div style={{ flex: '1 1 240px' }}><SelectField label="Page" value={tplCat} onChange={setTplCat} options={[{ value: '', label: 'Choisir la page…' }, ...cats.filter((c) => activeAttrs(c).length).map((c) => ({ value: c.id, label: c.name }))]} /></div>
-          <Button icon="download" disabled={!tplCat} onClick={async () => { const c = get<Category>('categories', tplCat)!; downloadBlob(await categoryTemplate(c), `TSENA-${(c.code || 'page').toLowerCase()}-articles.xlsx`); }}>Télécharger le fichier de la page</Button>
+          <Button icon="download" disabled={!tplCat} onClick={async () => { const c = get<Category>('categories', tplCat)!; downloadBlob(await categoryTemplate(c), `Tresor-en-ligne-${(c.code || 'page').toLowerCase()}-articles.xlsx`); }}>Télécharger le fichier de la page</Button>
         </div>
         {!cats.some((c) => activeAttrs(c).length) && <p className="small muted">Aucune page n’a encore de variantes.</p>}
       </div>
@@ -183,7 +183,7 @@ export function ImportPage() {
             <li key={t.key} className="list-item" style={{ padding: '12px 0' }}>
               <span className="avatar"><Icon name="download" size={18} /></span>
               <div className="list-item-main"><span className="list-item-title">{t.title}</span><p className="small muted">{t.text}</p></div>
-              <Button variant="ghost" icon="download" onClick={async () => downloadBlob(await t.build(), `TSENA-modele-${t.key}.xlsx`)}>Télécharger</Button>
+              <Button variant="ghost" icon="download" onClick={async () => downloadBlob(await t.build(), `Tresor-en-ligne-modele-${t.key}.xlsx`)}>Télécharger</Button>
             </li>
           ))}
         </ul>

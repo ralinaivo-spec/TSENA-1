@@ -1,6 +1,6 @@
 {
-  "name": "TSENA — Gestion commerciale",
-  "short_name": "TSENA",
+  "name": "Trésor en ligne — Gestion commerciale",
+  "short_name": "Trésor en ligne",
   "description": "Achats, stock, ventes, livraisons et trésorerie, en ligne et hors ligne.",
   "lang": "fr",
   "start_url": "./",

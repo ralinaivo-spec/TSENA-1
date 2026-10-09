@@ -185,7 +185,7 @@ function sheetXml(s: OutSheet) {
   out.push('</sheetData>');
   if (s.lists?.length) {
     out.push(`<dataValidations count="${s.lists.length}">`);
-    for (const l of s.lists) out.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Valeur inconnue" error="Choisissez une valeur dans la liste (ou ajoutez-la d'abord dans TSENA)." sqref="${colLetter(l.col)}2:${colLetter(l.col)}${l.rows + 1}"><formula1>${esc(l.formula)}</formula1></dataValidation>`);
+    for (const l of s.lists) out.push(`<dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Valeur inconnue" error="Choisissez une valeur dans la liste (ou ajoutez-la d'abord dans Trésor en ligne)." sqref="${colLetter(l.col)}2:${colLetter(l.col)}${l.rows + 1}"><formula1>${esc(l.formula)}</formula1></dataValidation>`);
     out.push('</dataValidations>');
   }
   out.push('</worksheet>');

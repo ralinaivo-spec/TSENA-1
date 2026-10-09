@@ -151,7 +151,7 @@ function MoveForm({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
           {withCat && <SelectField label="Catégorie" value={cat} onChange={setCat} options={cats.map((c) => ({ value: c.id, label: c.name }))} />}
           <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} />
         </div>
-        {kind === 'opening' && <p className="small muted">L’argent déjà présent sur ce compte au moment où vous commencez avec TSENA (peut être négatif pour corriger).</p>}
+        {kind === 'opening' && <p className="small muted">L’argent déjà présent sur ce compte au moment où vous commencez avec Trésor en ligne (peut être négatif pour corriger).</p>}
         <TextField label={withCat ? 'Description (ex. loyer d’octobre)' : 'Description (facultatif)'} value={label} onChange={setLabel} />
         <TextField label="Note (facultatif)" value={note} onChange={setNote} />
         {kind === 'expense' && (

@@ -53,7 +53,7 @@ async function boot() {
         <div className="card stack" style={{ maxWidth: 440, margin: 20 }}>
           <h2>Impossible d'ouvrir les données</h2>
           <p>{e?.message || String(e)}</p>
-          <p className="small muted">Si vous êtes en navigation privée, ouvrez TSENA dans une fenêtre normale.</p>
+          <p className="small muted">Si vous êtes en navigation privée, ouvrez Trésor en ligne dans une fenêtre normale.</p>
           <button className="btn btn-primary" onClick={() => location.reload()}>Réessayer</button>
         </div>
       </div>

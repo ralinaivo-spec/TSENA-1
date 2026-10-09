@@ -321,7 +321,7 @@ function RestoreFileModal({ onClose, onReady }: { onClose: () => void; onReady: 
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!file) return;
-    file.text().then((t) => { try { setNeedPwd(!!JSON.parse(t).encrypted); } catch { setError("Ce fichier n'est pas une sauvegarde TSENA."); } });
+    file.text().then((t) => { try { setNeedPwd(!!JSON.parse(t).encrypted); } catch { setError("Ce fichier n'est pas une sauvegarde Trésor en ligne."); } });
   }, [file]);
   return (
     <Modal title="Restaurer depuis un fichier" onClose={onClose}
@@ -365,7 +365,7 @@ function SystemTab() {
   return (
     <div className="stack">
       <div className="card stack">
-        <div><h3>Version</h3><p className="small muted">TSENA {__APP_VERSION__} — construite le {fmtDateTime(__BUILD_DATE__)}.</p></div>
+        <div><h3>Version</h3><p className="small muted">Trésor en ligne {__APP_VERSION__} — construite le {fmtDateTime(__BUILD_DATE__)}.</p></div>
         <div className="row">
           <Button variant="ghost" icon="refresh" onClick={async () => {
             const reg = await navigator.serviceWorker?.getRegistration();

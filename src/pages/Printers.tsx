@@ -74,7 +74,7 @@ export function PrintersTab() {
 
       <div className="card stack">
         <div><h2>Poste d’impression partagé</h2>
-          <p className="small muted">Pour imprimer depuis un iPhone ou un téléphone sans Bluetooth : l’appareil relié à l’imprimante (ex. le téléphone Android ou l’ordinateur de la caisse) devient « poste d’impression ». Les autres appareils lui envoient les tickets par le cloud. Le poste doit rester allumé avec TSENA ouvert.</p></div>
+          <p className="small muted">Pour imprimer depuis un iPhone ou un téléphone sans Bluetooth : l’appareil relié à l’imprimante (ex. le téléphone Android ou l’ordinateur de la caisse) devient « poste d’impression ». Les autres appareils lui envoient les tickets par le cloud. Le poste doit rester allumé avec Trésor en ligne ouvert.</p></div>
         {!getCloud() && <div className="notice"><Icon name="cloudOff" /><span>Reliez d’abord le cloud (onglet « Cloud et synchronisation ») pour utiliser un poste partagé.</span></div>}
         {myStation ? (
           <div className="notice notice-ok"><Icon name="check" /><span><strong>Cet appareil est le poste « {myStation.name} ».</strong> Il imprime sur « {myStation.printerName} » les tickets envoyés par les autres. <button className="link-btn" onClick={() => setStation(true)}>Modifier</button> · <button className="link-btn" onClick={async () => { await stopStation(); toast('Cet appareil n’est plus un poste d’impression'); }}>Arrêter</button></span></div>
@@ -112,7 +112,7 @@ export function PrintersTab() {
 
       <div className="card stack-s">
         <h2>Quelle imprimante acheter ?</h2>
-        <p className="small">Une imprimante à tickets <strong>58 mm « ESC/POS »</strong> avec <strong>Bluetooth et USB</strong>. Sur Android (Chrome) et sur ordinateur (Chrome ou Edge), TSENA imprime directement dessus. Sur iPhone, Apple bloque le Bluetooth direct : utilisez un poste d’impression partagé, une imprimante compatible AirPrint, ou le partage en image.</p>
+        <p className="small">Une imprimante à tickets <strong>58 mm « ESC/POS »</strong> avec <strong>Bluetooth et USB</strong>. Sur Android (Chrome) et sur ordinateur (Chrome ou Edge), Trésor en ligne imprime directement dessus. Sur iPhone, Apple bloque le Bluetooth direct : utilisez un poste d’impression partagé, une imprimante compatible AirPrint, ou le partage en image.</p>
         <p className="small muted">Ce navigateur : Bluetooth {support.bluetooth ? '✓' : '✗'} · USB {support.usb ? '✓' : '✗'} · Port série {support.serial ? '✓' : '✗'}</p>
       </div>
 

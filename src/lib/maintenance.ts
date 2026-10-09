@@ -44,7 +44,7 @@ export async function consumeEmailLink(): Promise<void> {
     return;
   }
   const cfg = getCloud();
-  if (!cfg) { await setMeta('resetError', "Ouvrez le lien sur un appareil déjà relié au cloud de la société (où TSENA est installé)."); return; }
+  if (!cfg) { await setMeta('resetError', "Ouvrez le lien sur un appareil déjà relié au cloud de la société (où Trésor en ligne est installé)."); return; }
   const token = params.get('access_token')!;
   try {
     const res = await fetch(`${cfg.url}/auth/v1/user`, { headers: { apikey: cfg.anonKey, Authorization: `Bearer ${token}` } });
@@ -232,7 +232,7 @@ export async function exportAllExcel() {
     };
   });
   const blob = await writeXlsx(sheets);
-  downloadBlob(blob, `TSENA-export-complet-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  downloadBlob(blob, `Tresor-en-ligne-export-complet-${new Date().toISOString().slice(0, 10)}.xlsx`);
   await audit('Export', 'Export complet des données en Excel');
 }
 

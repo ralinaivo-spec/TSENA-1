@@ -130,7 +130,7 @@ function ForgotScreen({ onBack }: { onBack: () => void }) {
       )}
       {user && method === 'email' && (
         sent ? (
-          <div className="notice notice-ok"><Icon name="check" /><span>E-mail envoyé à <strong>{maskEmail(cloud?.email || '')}</strong>. Ouvrez-le <strong>sur cet appareil</strong> (ou un autre appareil où TSENA est relié au cloud) et touchez le lien : vous pourrez choisir un nouveau mot de passe. Le lien est valable 1 heure. Pensez à regarder dans les spams.</span></div>
+          <div className="notice notice-ok"><Icon name="check" /><span>E-mail envoyé à <strong>{maskEmail(cloud?.email || '')}</strong>. Ouvrez-le <strong>sur cet appareil</strong> (ou un autre appareil où Trésor en ligne est relié au cloud) et touchez le lien : vous pourrez choisir un nouveau mot de passe. Le lien est valable 1 heure. Pensez à regarder dans les spams.</span></div>
         ) : (
           <form className="stack" onSubmit={async (e) => {
             e.preventDefault(); setBusy(true); setError(null);

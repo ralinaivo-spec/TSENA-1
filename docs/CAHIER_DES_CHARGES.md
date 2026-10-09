@@ -1,5 +1,7 @@
 # TSENA — Cahier des charges (version 4.2, mise à jour le 09/10/2026 — refonte v4, phases 1 à 3)
 
+> **Nom de l’application : « Trésor en ligne »** (depuis le 09/10/2026 ; anciennement TSENA). Le nom et l’adresse de la société (ex. II VK Ankadindramamy) se règlent dans Paramètres → Société.
+
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
 

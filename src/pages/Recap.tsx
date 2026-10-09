@@ -175,7 +175,7 @@ function WeekTables({ days, r }: { days: ReturnType<typeof weekDays>; r: Report 
       <div className="card stack-s">
         <h2>Fin de semaine : espèces</h2>
         <table className="kv-table"><tbody>
-          <tr><td>Caisse espèces (selon TSENA)</td><td>{fmtAr(r.balancesEnd.cash)}</td></tr>
+          <tr><td>Caisse espèces (selon Trésor en ligne)</td><td>{fmtAr(r.balancesEnd.cash)}</td></tr>
           <tr><td>À verser en espèces par les livreurs</td><td>{fmtAr(r.courierDue)}</td></tr>
           <tr className="total"><td>Total des espèces attendues</td><td>{fmtAr(r.balancesEnd.cash + r.courierDue)}</td></tr>
         </tbody></table>

@@ -66,7 +66,7 @@ export function PrintDialog({ docs, onClose }: { docs: DocChoice[]; onClose: () 
             </div>
           )}
           {printer?.kind === 'system' && <p className="small muted">La fenêtre d’impression de l’appareil va s’ouvrir : choisissez-y votre imprimante par son nom. Pour un ticket, réglez les marges sur « Aucune ».</p>}
-          {t?.kind === 'station' && !t.online && <div className="notice"><Icon name="alert" /><span>Ce poste semble éteint ou hors ligne : le ticket sortira dès qu’il sera rallumé avec TSENA ouvert.</span></div>}
+          {t?.kind === 'station' && !t.online && <div className="notice"><Icon name="alert" /><span>Ce poste semble éteint ou hors ligne : le ticket sortira dès qu’il sera rallumé avec Trésor en ligne ouvert.</span></div>}
         </div>
         <div className="ticket-preview" aria-label="Aperçu">
           <div className={`ticket paper-${paper === 'a4' ? '80' : paper}`} dangerouslySetInnerHTML={{ __html: html }} />

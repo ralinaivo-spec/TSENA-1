@@ -305,7 +305,7 @@ export function testDoc(c: Company, printerName: string): PrintDoc {
       T(dt(new Date().toISOString()), { align: 'center' }),
       L(),
       T('Accents : é è ê à â ç ô û ù ï « »'),
-      T('Si les accents sont mal imprimés, changez le « jeu de caractères » de l’imprimante dans TSENA.'),
+      T('Si les accents sont mal imprimés, changez le « jeu de caractères » de l’imprimante dans Trésor en ligne.'),
       P('Article exemple', ar(25000)),
       P('TOTAL', ar(25000), { bold: true, big: true }),
       L('='),

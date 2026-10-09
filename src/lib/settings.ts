@@ -91,7 +91,7 @@ export function useApplyAppearance() {
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
   }, [company.brandColor, theme]);
-  useEffect(() => { document.title = company.name || 'TSENA'; }, [company.name]);
+  useEffect(() => { document.title = company.name || 'Trésor en ligne'; }, [company.name]);
 }
 
 /** Réduit une image (logo) pour la stocker légèrement. */

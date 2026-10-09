@@ -18,7 +18,7 @@ export interface BackupFile {
 }
 
 function companyName() {
-  return (all('settings').find((s) => s.id === 'company') as any)?.name || 'TSENA';
+  return (all('settings').find((s) => s.id === 'company') as any)?.name || 'Trésor en ligne';
 }
 
 export async function buildBackup(password?: string): Promise<BackupFile> {
@@ -45,7 +45,7 @@ export function downloadJson(obj: unknown, filename: string) {
 
 export function backupFilename(d = new Date()) {
   const p = (n: number) => String(n).padStart(2, '0');
-  return `TSENA-sauvegarde-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}.tsena`;
+  return `Tresor-en-ligne-sauvegarde-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}.tsena`;
 }
 
 export async function downloadBackup(password?: string) {
@@ -57,7 +57,7 @@ export async function downloadBackup(password?: string) {
 
 export async function readBackup(file: File, password?: string): Promise<{ meta: BackupFile; data: Record<string, BaseRecord[]> }> {
   const meta = JSON.parse(await file.text()) as BackupFile;
-  if (meta.app !== 'TSENA') throw new Error("Ce fichier n'est pas une sauvegarde TSENA.");
+  if (meta.app !== 'TSENA') throw new Error("Ce fichier n'est pas une sauvegarde Trésor en ligne.");
   if (meta.encrypted) {
     if (!password) throw new Error('Cette sauvegarde est protégée : saisissez son mot de passe.');
     try { return { meta, data: JSON.parse(await decryptText(meta.payload, password)) }; }

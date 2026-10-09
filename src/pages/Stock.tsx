@@ -83,7 +83,7 @@ function StockState() {
         ...(showCost ? [{ header: 'Coût moyen (Ar)', width: 14, number: true }, { header: 'Valeur (Ar)', width: 14, number: true }] : [])],
       rows: rows.map((r) => [categoryPath(r.p!.categoryId), r.p!.code, r.p!.name, r.v.color ?? '', r.v.size ?? '', r.v.sku, r.stock, r.incoming, ...(showCost ? [Math.round(r.v.costAvg ?? 0), Math.round(r.value)] : [])]),
     }]);
-    downloadBlob(blob, `TSENA-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    downloadBlob(blob, `Tresor-en-ligne-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   return (

@@ -13,7 +13,7 @@ import { downloadBlob } from '../lib/xlsx';
 import { Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, navigate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
-const fileName = (c: Category) => `TSENA-${(c.code || suggestCatCode(c.name)).toLowerCase()}-articles.xlsx`;
+const fileName = (c: Category) => `Tresor-en-ligne-${(c.code || suggestCatCode(c.name)).toLowerCase()}-articles.xlsx`;
 
 export function CategoriesPage() {
   const can = useCan();

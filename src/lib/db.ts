@@ -52,7 +52,7 @@ export async function openDb(): Promise<void> {
     };
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);
-    r.onblocked = () => reject(new Error('Fermez les autres onglets TSENA puis rechargez la page.'));
+    r.onblocked = () => reject(new Error('Fermez les autres onglets Trésor en ligne puis rechargez la page.'));
   });
   // Demande au navigateur de ne pas effacer les données en cas de manque de place.
   try { await navigator.storage?.persist?.(); } catch { /* facultatif */ }
