@@ -10,7 +10,8 @@ import { audit, currentUser } from './auth';
 import { salesLedger } from './analytics';
 import { rootOf } from './scope';
 import { addDays, dayOf, type AccountId, type CashMove, type FinanceCategory } from './money';
-import type { Category } from './catalog';
+import { variantLabel, type Category, type Product, type Variant } from './catalog';
+import { hasPendingChoice, orderLabel, type Order } from './orders';
 import { readingsOf } from './boosts';
 import { payoutId, type Payout } from './closed';
 import { DEFAULT_COMPANY, type Company } from './settings';
@@ -168,4 +169,35 @@ export function dayRecapText(ymd: string, companyName: string, sender?: string) 
   L.push(`*MONTANT NET DU JOUR : ${ar(r.net)}*`, '_(total des ventes − dépenses de la caisse commune)_');
   if (sender) L.push('', `Envoyé par ${sender} le ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`);
   return L.join('\n');
+}
+
+export interface ReviewRow { key: string; at: string; number: string; orderId: string; kind: 'shop' | 'online' | 'return'; who: string; pages: string[]; items: string[]; qty: number; amount: number; seller?: string }
+/** Aperçu détaillé du jour pour la vérification avant envoi : une ligne par vente / livraison / retour. */
+export function dayReview(ymd: string) {
+  const rows = new Map<string, ReviewRow>();
+  for (const l of salesLedger(ymd, ymd)) {
+    const kind: ReviewRow['kind'] = l.kind === 'return' ? 'return' : l.channel === 'shop' ? 'shop' : 'online';
+    const key = `${l.order.id}|${kind}|${l.at}`;
+    let r = rows.get(key);
+    if (!r) { r = { key, at: l.at, number: l.order.number, orderId: l.order.id, kind, who: orderLabel(l.order), pages: [], items: [], qty: 0, amount: 0, seller: l.order.createdByName }; rows.set(key, r); }
+    const v = get<Variant>('variants', l.variantId); const prod = v && get<Product>('products', v.productId);
+    const page = get<Category>('categories', rootOf(l.categoryId) || '')?.name ?? 'Sans page';
+    if (!r.pages.includes(page)) r.pages.push(page);
+    r.items.push(`${Math.abs(l.qty)} × ${prod?.name ?? 'article ?'}${v && variantLabel(v) !== 'Unique' ? ` ${variantLabel(v)}` : ''}`.trim());
+    r.qty += l.qty; r.amount += l.amount;
+  }
+  const list = [...rows.values()].sort((a, b) => a.at.localeCompare(b.at));
+  // Points d'attention : ce qui pourrait manquer ou fausser les totaux.
+  const orders = all<Order>('orders');
+  const warnings: string[] = [];
+  const out = orders.filter((o) => o.status === 'out');
+  const pend = out.filter((o) => hasPendingChoice(o));
+  if (out.length) warnings.push(`${out.length} livraison(s) encore chez les livreurs (pas encore confirmées livrées ou refusées) : leurs retours éventuels ne sont pas encore déduits.`);
+  if (pend.length) warnings.push(`${pend.length} livraison(s) avec un « choix à préciser » : le choix gardé par le client n’est pas encore compté.`);
+  const ready = orders.filter((o) => (o.status === 'confirmed' || o.status === 'ready') && dayOf(o.createdAt) <= ymd);
+  if (ready.length) warnings.push(`${ready.length} commande(s) confirmée(s) ou prête(s) pas encore remise(s) au livreur : elles ne sont pas dans les ventes du jour.`);
+  if (list.some((r) => r.pages.includes('Sans page'))) warnings.push('Des ventes concernent un article sans page (catégorie) : elles sont comptées dans « Sans page ».');
+  const zero = list.filter((r) => r.kind !== 'return' && r.amount <= 0);
+  if (zero.length) warnings.push(`${zero.length} vente(s) à 0 Ar ou moins : vérifiez les prix ou les remises (${zero.map((r) => r.number).join(', ')}).`);
+  return { rows: list, warnings };
 }

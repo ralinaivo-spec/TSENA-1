@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 3.4, mise à jour le 09/10/2026)
+# TSENA — Cahier des charges (version 3.5, mise à jour le 09/10/2026)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -227,7 +227,9 @@ Menu **Ventes → Caisse du jour** + raccourci sur l’accueil (droit « Caisse 
 - **Une seule caisse commune** pour tous les vendeurs : pas de caisse ni de suivi de dépenses par vendeur. Chaque dépense saisie va dans le compte **Caisse espèces**, quel que soit le vendeur ; son nom est noté (traçabilité).
 - **Saisie des dépenses du jour** : montant, catégorie (Dépenses diverses par défaut), description obligatoire, photo du reçu facultative. Saisie le jour même uniquement ; un vendeur peut supprimer sa propre dépense du jour ; les autres corrections passent par le gérant (Trésorerie). Impossible sur une semaine déjà versée au patron.
 - **Récapitulatif global du jour**, identique pour tous les vendeurs : ventes par page, **total des ventes de tous les vendeurs** (sur place / livraisons), détail et **total des dépenses de la caisse commune**, **montant net du jour = total des ventes − dépenses de la caisse commune**.
-- **Envoi WhatsApp en un clic** : au gérant, au patron (numéros dans Paramètres → Société) ou à un autre contact / groupe ; bouton Copier. Chaque envoi est noté dans le journal d’activité.
+- **Aperçu à vérifier avant l’envoi** : (1) tableau de toutes les ventes du jour de tous les vendeurs — heure, n°, type (sur place, livraison, retour), client, page, articles, vendeur, montant, total ; (2) tableau des totaux transmis (ventes par page, total, dépenses de la caisse commune, montant net) ; (3) **points à contrôler** : livraisons encore chez les livreurs, choix à préciser, commandes confirmées pas encore remises au livreur, ventes sans page, ventes à 0 Ar.
+- **Vérification obligatoire** : le vendeur coche « ventes vérifiées », « dépenses vérifiées », « totaux confirmés » puis « Confirmer la vérification » (noté dans le journal d’activité). Les boutons WhatsApp ne s’activent qu’après. Si une vente ou une dépense change ensuite, l’envoi est de nouveau bloqué jusqu’à une nouvelle vérification.
+- **Envoi WhatsApp en un clic** (après vérification) : au gérant, au patron (numéros dans Paramètres → Société) ou à un autre contact / groupe ; bouton Copier. Chaque envoi est noté dans le journal d’activité.
 
 ### 10.4 Tableau de la semaine et versement au patron *(ajout du 09/10/2026)*
 Inspiré du cahier Excel « Recette et Dépense » (onglets RECAP JOURNALIER / HEBDOMADAIRE / MENSUEL).

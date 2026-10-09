@@ -846,3 +846,6 @@ table.table { border-collapse: separate; border-spacing: 0 8px; padding: 0 12px;
 .daycash-shortcut { flex-wrap: wrap; gap: 10px; }
 .daycash-shortcut > div:first-child { min-width: 0; flex: 1 1 220px; }
 .daycash-send .row .btn { flex: 0 1 auto; white-space: normal; text-align: center; }
+.review-check { align-items: flex-start; gap: 8px; flex-wrap: nowrap; }
+.review-check input { margin-top: 3px; flex: none; }
+.review-table td.small { white-space: normal; min-width: 90px; }

@@ -7,7 +7,7 @@ import { useTable } from '../lib/db';
 import { fmtAr, parseNum } from '../lib/catalog';
 import { compressPhoto } from '../lib/images';
 import { addDays, addMove, atFor, deleteMove, today, type FinanceCategory } from '../lib/money';
-import { catName, dayRecap, dayRecapText } from '../lib/payouts';
+import { catName, dayRecap, dayRecapText, dayReview } from '../lib/payouts';
 import { closedBy } from '../lib/closed';
 import { fmtPhone, normPhone } from '../lib/orders';
 import { useCompany } from '../lib/settings';
@@ -31,7 +31,6 @@ export function DayCashPage() {
   const r = dayRecap(date);
   const text = dayRecapText(date, company.name, user?.fullName);
   const longDate = new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const sent = (to: string) => { void audit('Récapitulatif du jour envoyé', `${fmtDate(date)} → ${to} : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`); };
 
   return (
     <>
@@ -51,33 +50,7 @@ export function DayCashPage() {
 
       <Expenses date={date} moves={r.g.expenseMoves} total={r.expenses} />
 
-      <div className="card stack-s daycash-send">
-        <h2>Envoyer le récapitulatif du jour</h2>
-        <p className="small muted">Le même récapitulatif global pour tous les vendeurs : ventes par page, total des ventes, dépenses de la caisse commune et montant net (ventes − dépenses).</p>
-        <div className="row">
-          <a className="btn btn-primary btn-wa" href={wa(company.managerPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('gérant')}><Icon name="share" />WhatsApp au gérant</a>
-          <a className="btn btn-primary btn-wa" href={wa(company.bossPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('patron')}><Icon name="share" />WhatsApp au patron</a>
-          <a className="btn btn-ghost" href={wa('', text)} target="_blank" rel="noreferrer" onClick={() => sent('autre contact ou groupe')}>Autre contact ou groupe</a>
-          <Button variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(text); toast('Récapitulatif copié'); } catch { toast('Copie impossible sur cet appareil', 'error'); } }}>Copier</Button>
-        </div>
-        <p className="small muted">{company.managerPhone ? `Gérant : ${fmtPhone(company.managerPhone)}` : 'Gérant : numéro non renseigné'} · {company.bossPhone ? `Patron : ${fmtPhone(company.bossPhone)}` : 'Patron : numéro non renseigné'}</p>
-        {(!company.managerPhone || !company.bossPhone) && <p className="small muted">Numéros WhatsApp du gérant et du patron : Paramètres → Société (à remplir par l’admin). Sans numéro, WhatsApp vous laisse choisir le contact.</p>}
-        <details><summary className="small">Voir le message</summary><pre className="recap-text">{text}</pre></details>
-      </div>
-
-      <div className="card card-flush">
-        <div className="card-pad row-between"><h2>Ventes par page</h2><strong className="num">{fmtAr(r.sales)}</strong></div>
-        {r.pages.length === 0 ? <p className="card-pad small muted">Aucune vente ce jour.</p> : (
-          <div className="table-wrap"><table className="table">
-            <thead><tr><th>Page</th><th className="t-num">Ventes</th></tr></thead>
-            <tbody>
-              {r.pages.map((p) => <tr key={p.id}><td>{p.name}</td><td className="t-num">{fmtAr(r.g.pageTotals[p.id])}</td></tr>)}
-              <tr className="t-total"><td>Total <span className="small muted">(sur place {fmtAr(r.shop)} · livraisons {fmtAr(r.online)})</span></td><td className="t-num">{fmtAr(r.sales)}</td></tr>
-            </tbody>
-          </table></div>
-        )}
-      </div>
-
+      <Review date={date} r={r} text={text} />
     </>
   );
 }
@@ -142,5 +115,94 @@ function Expenses({ date, moves, total }: { date: string; moves: CashMove[]; tot
       )}
       {del && <Confirm title="Supprimer cette dépense ?" danger confirmLabel="Supprimer" message={<p>{del.label} — {fmtAr(-del.amount)}</p>} onConfirm={async () => { await deleteMove(del); toast('Dépense supprimée'); }} onClose={() => setDel(null)} />}
     </div>
+  );
+}
+
+const KIND = { shop: { label: 'Sur place', tone: 'brand' }, online: { label: 'Livraison', tone: 'neutral' }, return: { label: 'Retour', tone: 'danger' } } as const;
+const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+/** Aperçu du jour à vérifier, puis envoi WhatsApp (seulement après confirmation de la vérification). */
+function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap>; text: string }) {
+  const company = useCompany();
+  const { rows, warnings } = dayReview(date);
+  // Empreinte des chiffres : si une vente ou une dépense change après la vérification, il faut revérifier.
+  const sig = `${date}|${rows.length}|${Math.round(r.sales)}|${r.g.expenseMoves.length}|${r.expenses}`;
+  const [checks, setChecks] = useState({ sales: false, expenses: false, totals: false });
+  const [verified, setVerified] = useState<string | null>(null);
+  const ok = verified === sig;
+  const allChecked = checks.sales && checks.expenses && checks.totals;
+  const stale = verified !== null && verified !== sig;
+  const confirm = async () => {
+    setVerified(sig);
+    await audit('Récapitulatif du jour vérifié', `${fmtDate(date)} : ${rows.length} opération(s) de vente, ventes ${fmtAr(r.sales)}, ${r.g.expenseMoves.length} dépense(s) ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`);
+    toast('Vérification confirmée : vous pouvez envoyer le récapitulatif');
+  };
+  const sent = (to: string) => { void audit('Récapitulatif du jour envoyé', `${fmtDate(date)} → ${to} : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`); };
+  const box = (k: keyof typeof checks, label: string) => (
+    <label className="row small review-check"><input type="checkbox" checked={checks[k]} onChange={(e) => { setChecks({ ...checks, [k]: e.target.checked }); setVerified(null); }} /> {label}</label>
+  );
+  return (
+    <>
+      <div className="card card-flush">
+        <div className="card-pad"><h2>1. Aperçu des ventes du jour <Badge>{rows.length} opération(s)</Badge></h2>
+          <p className="small muted">Toutes les ventes enregistrées par tous les vendeurs : ventes sur place, colis remis aux livreurs et retours. Vérifiez qu’il ne manque rien et que les montants sont justes.</p></div>
+        {rows.length === 0 ? <p className="card-pad small muted">Aucune vente enregistrée ce jour.</p> : (
+          <div className="table-wrap"><table className="table review-table">
+            <thead><tr><th>Heure</th><th>N°</th><th>Type</th><th>Client</th><th>Page</th><th>Articles</th><th>Vendeur</th><th className="t-num">Montant</th></tr></thead>
+            <tbody>
+              {rows.map((x) => (
+                <tr key={x.key}>
+                  <td>{hm(x.at)}</td><td><a href={`#/commandes/${x.orderId}`}>{x.number}</a></td>
+                  <td><Badge tone={KIND[x.kind].tone}>{KIND[x.kind].label}</Badge></td>
+                  <td className="small">{x.who}</td><td className="small">{x.pages.join(', ')}</td>
+                  <td className="small">{x.items.join(' ; ')}</td><td className="small">{x.seller ?? '—'}</td>
+                  <td className={`t-num ${x.amount < 0 ? 'neg' : ''}`}><strong>{fmtAr(x.amount)}</strong></td>
+                </tr>
+              ))}
+              <tr className="t-total"><td colSpan={7}>Total des ventes (retours déduits)</td><td className="t-num">{fmtAr(r.sales)}</td></tr>
+            </tbody>
+          </table></div>
+        )}
+      </div>
+
+      <div className="card card-flush">
+        <div className="card-pad"><h2>2. Totaux à transmettre</h2><p className="small muted">Ce sont exactement les montants du message WhatsApp.</p></div>
+        <div className="table-wrap"><table className="table">
+          <tbody>
+            {r.pages.map((p) => <tr key={p.id}><td>Ventes — {p.name}</td><td className="t-num">{fmtAr(r.g.pageTotals[p.id])}</td></tr>)}
+            <tr className="t-total"><td>Total des ventes <span className="small muted">(sur place {fmtAr(r.shop)} · livraisons {fmtAr(r.online)})</span></td><td className="t-num">{fmtAr(r.sales)}</td></tr>
+            <tr><td>Dépenses de la caisse commune ({r.g.expenseMoves.length})</td><td className="t-num neg">− {fmtAr(r.expenses)}</td></tr>
+            <tr className="t-total"><td><strong>Montant net du jour</strong> <span className="small muted">= ventes − dépenses</span></td><td className="t-num"><strong>{fmtAr(r.net)}</strong></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div className="card stack-s daycash-send">
+        <h2>3. Vérifier puis envoyer</h2>
+        {warnings.length > 0 && <div className="notice"><Icon name="alert" /><div className="stack-s"><strong>Points à contrôler avant l’envoi</strong>{warnings.map((w) => <span key={w} className="small">• {w}</span>)}</div></div>}
+        {stale && <div className="notice notice-danger"><Icon name="alert" /><span>Les chiffres ont changé depuis votre vérification (vente ou dépense ajoutée, modifiée ou supprimée). Vérifiez à nouveau.</span></div>}
+        <div className="stack-s">
+          {box('sales', `J’ai vérifié les ${rows.length} vente(s) / retour(s) du tableau 1 : rien ne manque et les montants sont justes.`)}
+          {box('expenses', `J’ai vérifié les ${r.g.expenseMoves.length} dépense(s) de la caisse commune : rien ne manque.`)}
+          {box('totals', `Je confirme les totaux : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}.`)}
+        </div>
+        {!ok && <div><Button icon="check" disabled={!allChecked} onClick={confirm}>Confirmer la vérification</Button></div>}
+        {ok && <p className="small pos"><strong>✓ Vérification confirmée.</strong> Vous pouvez envoyer le récapitulatif.</p>}
+        <div className={`row ${ok ? '' : 'is-locked'}`} aria-disabled={!ok}>
+          {ok ? <>
+            <a className="btn btn-primary btn-wa" href={wa(company.managerPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('gérant')}><Icon name="share" />WhatsApp au gérant</a>
+            <a className="btn btn-primary btn-wa" href={wa(company.bossPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('patron')}><Icon name="share" />WhatsApp au patron</a>
+            <a className="btn btn-ghost" href={wa('', text)} target="_blank" rel="noreferrer" onClick={() => sent('autre contact ou groupe')}>Autre contact ou groupe</a>
+            <Button variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(text); sent('copie'); toast('Récapitulatif copié'); } catch { toast('Copie impossible sur cet appareil', 'error'); } }}>Copier</Button>
+          </> : <>
+            <Button icon="share" disabled>WhatsApp au gérant</Button>
+            <Button icon="share" disabled>WhatsApp au patron</Button>
+          </>}
+        </div>
+        {!ok && <p className="small muted">L’envoi s’active une fois les trois cases cochées et la vérification confirmée.</p>}
+        <p className="small muted">{company.managerPhone ? `Gérant : ${fmtPhone(company.managerPhone)}` : 'Gérant : numéro non renseigné'} · {company.bossPhone ? `Patron : ${fmtPhone(company.bossPhone)}` : 'Patron : numéro non renseigné'}</p>
+        <details><summary className="small">Voir le message qui sera envoyé</summary><pre className="recap-text">{text}</pre></details>
+      </div>
+    </>
   );
 }
