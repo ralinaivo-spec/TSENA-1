@@ -1,21 +1,16 @@
-// Génère les icônes de l'application (dégradé violet → magenta, sac de boutique sous l'auvent du marché).
-// Lancer : node scripts/icons.mjs (nécessite Playwright/Chromium).
-import { chromium } from 'playwright';
-import { writeFileSync } from 'node:fs';
-// full = fond jusqu'aux bords (icône « maskable » / Apple) ; sinon coins arrondis.
-const svg = (full, scale = 1) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5B3DB0"/><stop offset=".55" stop-color="#7A2AA8"/><stop offset="1" stop-color="#A3168F"/></linearGradient>
     <radialGradient id="glow" cx=".82" cy=".14" r=".6"><stop offset="0" stop-color="#E25BC4" stop-opacity=".55"/><stop offset="1" stop-color="#E25BC4" stop-opacity="0"/></radialGradient>
     <linearGradient id="bag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EFE7FB"/></linearGradient>
   </defs>
-  <clipPath id="r"><rect width="512" height="512" rx="${full ? 0 : 116}"/></clipPath>
+  <clipPath id="r"><rect width="512" height="512" rx="116"/></clipPath>
   <g clip-path="url(#r)">
   <rect width="512" height="512" fill="url(#bg)"/>
   <rect width="512" height="512" fill="url(#glow)"/>
   <path d="M0 430 L70 380 L130 412 L210 350 L300 420 L370 386 L440 428 L512 392 L512 512 L0 512 Z" fill="#2A0B4A" opacity=".22"/>
   </g>
-  <g transform="translate(256 268) scale(${scale}) translate(-256 -268)">
+  <g transform="translate(256 268) scale(1) translate(-256 -268)">
     <!-- anse -->
     <path d="M196 196 C196 134 316 134 316 196" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
     <!-- sac -->
@@ -27,19 +22,4 @@ const svg = (full, scale = 1) => `<svg xmlns="http://www.w3.org/2000/svg" viewBo
     <path d="M256 284 L266 314 L296 324 L266 334 L256 364 L246 334 L216 324 L246 314 Z" fill="#A3168F"/>
   </g>
   <circle cx="404" cy="104" r="7" fill="#FFFFFF" opacity=".85"/><circle cx="110" cy="132" r="5" fill="#FFFFFF" opacity=".7"/>
-</svg>`;
-writeFileSync('public/icons/icon.svg', svg(false));
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const p = await b.newPage();
-const render = async (s, size, file, transparent = true) => {
-  await p.setViewportSize({ width: size, height: size });
-  await p.setContent(`<html><body style="margin:0;background:transparent">${s.replace('width="512" height="512"', `width="${size}" height="${size}"`)}</body></html>`);
-  await p.screenshot({ path: file, omitBackground: transparent, clip: { x: 0, y: 0, width: size, height: size } });
-};
-const out = 'public/icons/';
-await render(svg(false), 192, out + 'icon-192.png');
-await render(svg(false), 512, out + 'icon-512.png');
-await render(svg(true, 0.78), 512, out + 'icon-maskable-512.png', false);
-await render(svg(true, 0.9), 180, out + 'apple-touch-icon.png', false);
-
-await b.close();
+</svg>
