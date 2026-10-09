@@ -81,7 +81,42 @@ export function PasswordField({ label, hint, error, value, onChange, autoComplet
     </Field>
   );
 }
+/** Au-delà de ce nombre d'options, une liste déroulante devient une liste avec recherche. */
+export const SEARCH_AT = 12;
+const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** Liste déroulante avec recherche (longues listes : clients, articles, zones, catégories…). */
+export function SearchSelect({ id, value, onChange, options, label }: { id?: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const cur = options.find((o) => o.value === value);
+  const words = fold(q).split(/\s+/).filter(Boolean);
+  const shown = options.filter((o) => words.every((w) => fold(o.label).includes(w)));
+  const pick = (v: string) => { onChange(v); setOpen(false); setQ(''); };
+  return (
+    <div className="multipick">
+      <button id={id} type="button" className="multipick-btn" aria-expanded={open} aria-haspopup="listbox" aria-label={label} onClick={() => setOpen(!open)}>
+        <span>{cur?.label ?? '— Choisir —'}</span><Icon name="chevronDown" size={16} />
+      </button>
+      {open && (
+        <div className="multipick-pop" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }}>
+          <input autoFocus className="cell-input" placeholder="Rechercher…" aria-label={`Rechercher${label ? ' — ' + label : ''}`} value={q} onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { e.preventDefault(); pick(shown[0].value); } }} />
+          <div className="multipick-list" role="listbox">
+            {shown.map((o) => <button key={o.value} type="button" role="option" aria-selected={o.value === value} className={`multipick-item ss-item ${o.value === value ? 'is-on' : ''}`} onClick={() => pick(o.value)}>{o.label}</button>)}
+            {!shown.length && <p className="small muted" style={{ padding: 8 }}>Aucun résultat</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+/** Filtre en tête de liste : liste déroulante simple, ou avec recherche si elle est longue. */
+export function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  if (options.length > SEARCH_AT) return <SearchSelect label={label} value={value} onChange={onChange} options={options} />;
+  return <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+}
 export function SelectField({ label, hint, value, onChange, options }: { label: string; hint?: ReactNode; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  if (options.length > SEARCH_AT) return <Field label={label} hint={hint}>{(id) => <SearchSelect id={id} label={label} value={value} onChange={onChange} options={options} />}</Field>;
   return (
     <Field label={label} hint={hint}>
       {(id) => (

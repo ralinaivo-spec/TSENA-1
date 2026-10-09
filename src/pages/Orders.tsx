@@ -9,7 +9,7 @@ import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit,
-  type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone,
+  type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
@@ -65,7 +65,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       .filter((o) => !isWalkIn(o) && scope.mine(o))
       .filter((o) => (n ? true : tab.statuses.includes(o.status)))
       .filter((o) => !done || n || inPeriod(o.createdAt, period))
-      .filter((o) => !n || o.number.toLowerCase().includes(n) || (o.name || '').toLowerCase().includes(n) || (np.length >= 3 && normPhone(o.phone).includes(np)) || (o.place || '').toLowerCase().includes(n))
+      .filter((o) => !n || matchQuery(orderText(o), q))
       .sort((a, b) => (done ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)));
   }, [orders, tab.key, q, period, scope.on]);
 
@@ -83,7 +83,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       </div>
       {tabKey === 'suivre' ? <ProspectList /> : <>
       <div className="card stack">
-        <div className="field"><input aria-label="Rechercher" placeholder="Rechercher un téléphone, un nom, un n° de commande, un lieu…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <div className="field"><input aria-label="Rechercher" placeholder="Rechercher : téléphone, nom, Facebook, n°, lieu, article, montant…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         {done && !q && <PeriodPicker value={period} onChange={setPeriod} />}
       </div>
       <div className="card card-flush">
@@ -128,9 +128,32 @@ export function OrderRow({ o }: { o: Order }) {
   );
 }
 
+// ---------- Client existant ----------
+/** Recherche d'un client déjà connu (téléphone, nom Facebook, nom, lieu) : ses informations se remplissent toutes seules. */
+export function CustomerSearch({ onPick }: { onPick: (c: Customer) => void }) {
+  const customers = useTable<Customer>('customers');
+  const [q, setQ] = useState('');
+  const [done, setDone] = useState<string | null>(null);
+  const found = q.trim().length >= 2 ? customers.filter((c) => matchQuery(customerText(c), q)).slice(0, 6) : [];
+  return (
+    <div className="stack-s cust-search">
+      <div className="field"><label htmlFor="cust-q">Client déjà connu ?</label>
+        <input id="cust-q" value={q} onChange={(e) => { setQ(e.target.value); setDone(null); }} placeholder="Rechercher : téléphone, nom Facebook, nom, lieu…" autoComplete="off" /></div>
+      {done && <p className="small ok-text"><Icon name="check" size={14} /> {done} : informations remplies.</p>}
+      {!done && found.length > 0 && <ul className="list card" style={{ padding: 0 }}>{found.map((c) => (
+        <li key={c.id}><button type="button" className="list-item list-link btn-reset" onClick={() => { onPick(c); setDone(c.name || c.facebook || fmtPhone(c.phone)); setQ(''); }}>
+          <span className="avatar">{(c.name || c.facebook || '?').charAt(0).toUpperCase()}</span>
+          <div className="list-item-main"><span className="list-item-title">{c.name || c.facebook || fmtPhone(c.phone)}</span><p className="small muted">{[c.phone && fmtPhone(c.phone), c.facebook && `FB : ${c.facebook}`, c.place].filter(Boolean).join(' · ')}</p></div>
+        </button></li>
+      ))}</ul>}
+      {!done && q.trim().length >= 2 && !found.length && <p className="small muted">Aucun client trouvé : remplissez les champs ci-dessous, la fiche sera créée avec la commande.</p>}
+    </div>
+  );
+}
+
 // ---------- Saisie d'une commande ----------
 /** Données reprises d'un client à suivre au moment de le transformer en commande. */
-export interface OrderPrefill { phone?: string; name?: string; zoneId?: string; place?: string; lines?: { variantId: string; qty: number }[]; notes?: string; prepay?: { amount: number; method: PayMethod; ref?: string } }
+export interface OrderPrefill { phone?: string; name?: string; facebook?: string; zoneId?: string; place?: string; lines?: { variantId: string; qty: number }[]; notes?: string; prepay?: { amount: number; method: PayMethod; ref?: string } }
 export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }: { order?: Order; exchangeOf?: { parent: Order; returnLines: { variantId: string; qty: number; unitPrice: number }[] }; onClose: () => void; onSaved?: (o: Order) => void; prefill?: OrderPrefill }) {
   const company = useCompany();
   const zones = useTable<Zone>('zones').filter((z) => z.active !== false).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name));
@@ -138,6 +161,8 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const base = exchangeOf?.parent;
   const [phone, setPhone] = useState(order?.phone ?? base?.phone ?? pre?.phone ?? '');
   const [name, setName] = useState(order?.name ?? base?.name ?? pre?.name ?? '');
+  const [facebook, setFacebook] = useState(order?.facebook ?? base?.facebook ?? pre?.facebook ?? '');
+  const [pickedCust, setPickedCust] = useState<string | undefined>(order?.customerId ?? base?.customerId);
   const [channel, setChannel] = useState<Order['channel']>(order?.channel ?? base?.channel ?? 'facebook');
   const [zoneId, setZoneId] = useState(order?.zoneId ?? base?.zoneId ?? pre?.zoneId ?? '');
   const [place, setPlace] = useState(order?.place ?? base?.place ?? pre?.place ?? '');
@@ -168,6 +193,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
     const c = findCustomer(v);
     if (c && !order) {
       if (!name) setName(c.name || '');
+      if (!facebook && c.facebook) setFacebook(c.facebook);
       if (!zoneId && c.zoneId) { setZoneId(c.zoneId); setFee(String(get<Zone>('zones', c.zoneId)?.fee ?? '')); }
       if (!place && c.place) setPlace(c.place);
     }
@@ -206,11 +232,11 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
       // Fiche client : créée ou complétée automatiquement.
       let cid = courierId;
       if (!pickup && cid === '__new') { const [c] = await save('couriers', { name: newCourier.trim(), active: true }); cid = c.id; }
-      let cust = p ? findCustomer(p) : undefined;
-      if (p && !cust) { const [c] = await save('customers', { id: customerIdFor(p), phone: p, name: name.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
-      else if (cust) await save('customers', { id: cust.id, name: cust.name || name.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
+      let cust = (pickedCust ? get<Customer>('customers', pickedCust) : undefined) ?? findCustomerBy(p, facebook);
+      if (p && !cust) { const [c] = await save('customers', { id: customerIdFor(p), phone: p, name: name.trim() || undefined, facebook: facebook.trim() || undefined, zoneId: zoneId || undefined, place: place.trim() || undefined }); cust = c as Customer; }
+      else if (cust) await save('customers', { id: cust.id, phone: cust.phone || p || undefined, phone2: cust.phone && p && normPhone(cust.phone) !== p && !cust.phone2 ? p : cust.phone2, name: cust.name || name.trim() || undefined, facebook: cust.facebook || facebook.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
       const data: Partial<Order> = {
-        phone: p, name: name.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,
+        phone: p, name: name.trim() || undefined, facebook: facebook.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,
         courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, wholesale, discount: parseNum(discount) || 0, notes: notes.trim() || undefined,
       };
       if (order) {
@@ -237,6 +263,10 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
     <Modal title={order ? `Modifier ${order.number}` : exchangeOf ? `Échange — ${exchangeOf.parent.number}` : 'Nouvelle commande'} onClose={onClose} wide
       footer={<><span className="small" style={{ marginRight: 'auto' }}>{exchangeOf ? (total >= 0 ? 'Le client paie ' : 'À rendre au client ') : 'Total à payer '}<strong className="num">{fmtAr(Math.abs(total))}</strong></span><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} onClick={submit}>{order ? 'Enregistrer' : 'Enregistrer la commande'}</Button></>}>
       <div className="stack">
+        {!order && !exchangeOf && <CustomerSearch onPick={(c) => {
+          setPickedCust(c.id); setPhone(c.phone || ''); setName(c.name || ''); setFacebook(c.facebook || '');
+          if (c.zoneId) onZone(c.zoneId); if (c.place) setPlace(c.place);
+        }} />}
         <div className="grid-2">
           <SelectField label="Commande reçue par" value={channel} onChange={onChannel} options={Object.entries(CHANNELS).filter(([k]) => k !== 'shop').map(([value, label]) => ({ value, label }))} />
           <div />
@@ -245,6 +275,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
             {known && !order && <p className="small"><Icon name="check" size={14} /> Client connu : <strong>{known.name || fmtPhone(known.phone)}</strong>{known.place ? ` · ${known.place}` : ''}</p>}
           </div>
           <TextField label="Nom du client (facultatif)" value={name} onChange={setName} />
+          <TextField label="Nom Facebook (facultatif)" value={facebook} onChange={setFacebook} placeholder="Tel qu’il apparaît dans Messenger" />
           <SelectField label="Zone de livraison" value={zoneId} onChange={onZone} options={[{ value: '', label: '— Choisir —' }, ...zones.map((z) => ({ value: z.id, label: `${z.name} (${fmtAr(z.fee)})` }))]} />
           <TextField label={pickup ? 'Lieu (facultatif)' : 'Lieu précis (obligatoire)'} value={place} onChange={setPlace} placeholder={pickup ? 'Boutique' : 'Ex. Analakely, devant la pharmacie'} />
           <TextField label="Frais de livraison (Ar)" value={pickup ? '0' : fee} onChange={setFee} inputMode="numeric" disabled={pickup} hint={pickup ? 'Retrait en boutique : pas de frais.' : 'Obligatoire. Rempli selon la zone, modifiable.'} />

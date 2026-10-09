@@ -1,7 +1,7 @@
 // Commandes clients, livraisons, livreurs, zones : règles de calcul et actions.
 import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
-import { addMoves, nextNumber, stockOf, type Product, type Variant } from './catalog';
+import { addMoves, nextNumber, stockOf, variantLabel, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
 import { assertOpenNow } from './closed';
 
@@ -9,7 +9,7 @@ export interface Zone extends BaseRecord { name: string; fee: number; order?: nu
 /** Zone « Sur boutique » : le client vient chercher, pas de frais ni de livreur. */
 export const isPickupZone = (z?: Zone | string) => { const zone = typeof z === 'string' ? get<Zone>('zones', z) : z; return !!zone && (zone.pickup || zone.id === 'zone-retrait'); };
 export interface Courier extends BaseRecord { name: string; phone?: string; zoneIds?: string[]; active: boolean; notes?: string }
-export interface Customer extends BaseRecord { phone: string; phone2?: string; name?: string; facebook?: string; place?: string; zoneId?: string; notes?: string }
+export interface Customer extends BaseRecord { phone?: string; phone2?: string; name?: string; facebook?: string; place?: string; zoneId?: string; notes?: string }
 
 export type OrderStatus = 'new' | 'confirmed' | 'ready' | 'out' | 'delivered' | 'partial' | 'refused' | 'cancelled';
 export type PayMethod = 'cash' | 'mvola' | 'orange' | 'airtel';
@@ -46,6 +46,7 @@ export interface Order extends BaseRecord {
   customerId?: string;
   phone: string;
   name?: string;
+  facebook?: string;              // nom Facebook du client
   zoneId?: string;
   place?: string;
   placeToConfirm?: boolean;
@@ -92,8 +93,8 @@ export const CHANNELS = { facebook: 'Facebook', phone: 'Téléphone', shop: 'Ven
 export const isWalkIn = (o: Pick<Order, 'channel'>) => o.channel === 'shop';
 export const isInternal = (o: Pick<Order, 'internal'>) => !!o.internal;
 /** Nom affiché : client, sinon téléphone, sinon « Vente sur place ». */
-export const orderLabel = (o: Pick<Order, 'name' | 'phone' | 'channel'> & Partial<Pick<Order, 'internal' | 'employeeName'>>) =>
-  o.internal ? `Vente interne · ${o.employeeName || '?'}` : o.name || (o.phone ? fmtPhone(o.phone) : o.channel === 'shop' ? 'Vente sur place' : '—');
+export const orderLabel = (o: Pick<Order, 'name' | 'phone' | 'channel'> & Partial<Pick<Order, 'internal' | 'employeeName' | 'facebook'>>) =>
+  o.internal ? `Vente interne · ${o.employeeName || '?'}` : o.name || o.facebook || (o.phone ? fmtPhone(o.phone) : o.channel === 'shop' ? 'Vente sur place' : '—');
 
 /** Prix d'une vente interne : prix de revient arrondi au palier supérieur (1 Ar par défaut, ou 100, 500…). */
 export function internalPrice(variantId: string, step = 1) {
@@ -120,7 +121,7 @@ export const customerIdFor = (phone: string) => `cus_${normPhone(phone)}`;
 export function findCustomer(phone: string) {
   const n = normPhone(phone);
   if (n.length < 6) return undefined;
-  return all<Customer>('customers').find((c) => normPhone(c.phone) === n || (c.phone2 && normPhone(c.phone2) === n));
+  return all<Customer>('customers').find((c) => (c.phone && normPhone(c.phone) === n) || (c.phone2 && normPhone(c.phone2) === n));
 }
 
 // ---------- Zones par défaut (identifiants fixes : identiques sur tous les appareils) ----------
@@ -403,3 +404,22 @@ export function courierAccount(courierId: string, from?: string, to?: string) {
   return { collected, fees, due: collected - fees, deliveries, out, outValue };
 }
 
+
+// ---------- Recherche partout ----------
+/** Tout le texte d'une commande : numéro, client, téléphone, Facebook, lieu, zone, livreur, articles, montants, observations. */
+export function orderText(o: Order) {
+  const parts: (string | number | undefined)[] = [o.number, o.name, o.facebook, o.phone, fmtPhone(o.phone), o.place, o.notes, ORDER_STATUS[o.status]?.label,
+    get<Zone>('zones', o.zoneId || '')?.name, get<Courier>('couriers', o.courierId || '')?.name, orderTotal(o), o.createdByName];
+  for (const l of o.lines) { const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId); parts.push(p?.code, p?.name, v ? variantLabel(v) : undefined, v?.sku); }
+  return parts.filter((x) => x !== undefined && x !== '').join(' ');
+}
+/** Tout le texte d'une fiche client. */
+export const customerText = (c: Customer) => [c.name, c.facebook, c.phone, c.phone && fmtPhone(c.phone), c.phone2, c.place, get<Zone>('zones', c.zoneId || '')?.name, c.notes].filter(Boolean).join(' ');
+/** Fiche client retrouvée par téléphone, sinon par nom Facebook (même orthographe, sans accents ni majuscules). */
+export function findCustomerBy(phone?: string, facebook?: string) {
+  const byPhone = phone ? findCustomer(phone) : undefined;
+  if (byPhone) return byPhone;
+  const f = (facebook || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!f) return undefined;
+  return all<Customer>('customers').find((c) => (c.facebook || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === f);
+}

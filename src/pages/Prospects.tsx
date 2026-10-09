@@ -219,7 +219,7 @@ function ProspectDetail({ p, onClose }: { p: Prospect; onClose: () => void }) {
   const manage = can('orders.create');
   if (edit) return <ProspectForm p={p} onClose={() => setEdit(false)} />;
   if (convert) return <OrderForm onClose={() => setConvert(false)}
-    prefill={{ phone: p.phone, name: p.fbName, zoneId: p.zoneId, place: p.place, lines: p.items.filter((i) => i.variantId && i.qty).map((i) => ({ variantId: i.variantId!, qty: i.qty! })), notes: [p.notes, p.waitNote].filter(Boolean).join(' — ') || undefined, prepay: p.paid }}
+    prefill={{ phone: p.phone, name: p.fbName, facebook: p.fbName, zoneId: p.zoneId, place: p.place, lines: p.items.filter((i) => i.variantId && i.qty).map((i) => ({ variantId: i.variantId!, qty: i.qty! })), notes: [p.notes, p.waitNote].filter(Boolean).join(' — ') || undefined, prepay: p.paid }}
     onSaved={async (o: Order) => { await markConverted(p, o.id, o.number); onClose(); navigate('/commandes/' + o.id); }} />;
   const checks: [string, boolean][] = [
     ['Téléphone du client', normPhone(p.phone || '').length >= 9],

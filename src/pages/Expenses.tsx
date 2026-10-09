@@ -11,7 +11,7 @@ import {
   type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring, type Rhythm,
 } from '../lib/money';
 import { closedBy } from '../lib/closed';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, Button, FilterSelect, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { SortTable, exportTables, type Col } from '../ui/table';
@@ -286,7 +286,7 @@ function ExpenseList() {
         <PeriodPicker value={period} onChange={setPeriod} />
         <div className="row">
           <div className="field" style={{ flex: '2 1 220px' }}><input aria-label="Rechercher une dépense" placeholder="Rechercher (description, note, montant, personne)…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="field" style={{ flex: '1 1 180px' }}><select aria-label="Catégorie" value={cat} onChange={(e) => setCat(e.target.value)}><option value="">Toutes les catégories</option>{cats.filter((c) => c.kind === 'expense').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div className="field" style={{ flex: '1 1 180px' }}><FilterSelect label="Catégorie" value={cat} onChange={setCat} options={[{ value: '', label: 'Toutes les catégories' }, ...cats.filter((c) => c.kind === 'expense').map((c) => ({ value: c.id, label: c.name }))]} /></div>
           <div className="field" style={{ flex: '1 1 160px' }}><select aria-label="Type" value={type} onChange={(e) => setType(e.target.value)}><option value="">Tous les types</option>{cats.filter((c) => c.kind === 'etype').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
         </div>
         <div className="stat-grid">

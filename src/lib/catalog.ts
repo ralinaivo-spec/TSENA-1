@@ -276,6 +276,13 @@ export { newId };
 export const normText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 /** Vrai si tous les mots de la recherche se trouvent dans le texte (accents et majuscules ignorés). */
 export function matchQuery(text: string, q: string) {
+  // Numéro tapé avec ou sans espaces (« 034 12 » = « 03412 », « +261 34… » = « 034… ») : comparé chiffres contre chiffres.
+  const raw = q.trim();
+  if (/^[+\d\s.-]+$/.test(raw) && raw.replace(/\D/g, '').length >= 3) {
+    let d = raw.replace(/\D/g, ''); if (d.startsWith('261')) d = '0' + d.slice(3);
+    const td = text.replace(/[\s.-]/g, '');
+    if (td.includes(d) || (d.startsWith('0') && td.includes(d.slice(1)))) return true;
+  }
   const words = normText(q).split(/\s+/).filter(Boolean);
   if (!words.length) return true;
   const t = normText(text);

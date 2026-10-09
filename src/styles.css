@@ -954,3 +954,5 @@ tr.row-error td { background: var(--danger-soft); }
 .tab-count-hot { background: var(--danger); color: #fff; }
 .detail-grid { grid-template-columns: 1fr 1fr; }
 .checks svg { flex: none; }
+.ss-item { width: 100%; border: 0; background: transparent; color: var(--ink); font: 500 .95rem var(--font-body); text-align: left; }
+.ss-item.is-on { background: var(--brand-soft); font-weight: 700; }

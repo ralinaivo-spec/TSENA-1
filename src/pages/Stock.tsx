@@ -8,7 +8,7 @@ import {
   addMoves, categoryPath, fmtAr, fmtNum, incomingOf, MOVE_LABELS, parseNum, stockOf, useCatalog, variantLabel,
   type Category, type MoveType, type Product, type StockMove, type Variant, photoOf, matchQuery, productText,
 } from '../lib/catalog';
-import { Button, Confirm, Empty, PageHead, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Button, FilterSelect, Confirm, Empty, PageHead, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { categoryOptions, Thumb } from './Products';
 import { downloadBlob, writeXlsx } from '../lib/xlsx';
@@ -99,7 +99,7 @@ function StockState() {
         <div className="row">
           <div className="field" style={{ flex: '1 1 220px' }}><input aria-label="Rechercher" placeholder="Rechercher un code ou un article" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="field" style={{ flex: '0 1 220px' }}>
-            <select aria-label="Catégorie" value={cat} onChange={(e) => setCat(e.target.value)}>{categoryOptions(categories, 'Toutes les catégories').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            <FilterSelect label="Catégorie" value={cat} onChange={setCat} options={categoryOptions(categories, 'Toutes les catégories')} />
           </div>
           <div className="field" style={{ flex: '0 1 180px' }}>
             <select aria-label="Trier" value={sort} onChange={(e) => setSort(e.target.value as any)}>
@@ -242,7 +242,7 @@ function InventoryTab() {
       <div className="card stack">
         <p className="muted small">Comptez les articles en boutique et saisissez la quantité trouvée. Seules les lignes remplies sont prises en compte. À la validation, les écarts corrigent le stock et restent dans l’historique (type « Inventaire »).</p>
         <div className="row">
-          <div className="field" style={{ flex: '0 1 240px' }}><select aria-label="Catégorie" value={cat} onChange={(e) => setCat(e.target.value)}>{categoryOptions(categories, 'Toutes les catégories').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+          <div className="field" style={{ flex: '0 1 240px' }}><FilterSelect label="Catégorie" value={cat} onChange={setCat} options={categoryOptions(categories, 'Toutes les catégories')} /></div>
           <div className="field" style={{ flex: '1 1 200px' }}><input aria-label="Rechercher" placeholder="Rechercher" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         </div>
         <div className="row-between">
