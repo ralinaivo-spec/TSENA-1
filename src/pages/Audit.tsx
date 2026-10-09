@@ -8,7 +8,7 @@ import { PeriodPicker, inPeriod, type Period, defaultPeriod } from '../ui/period
 export function AuditPage() {
   const rows = useTable('audit');
   const users = useTable<User>('users');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('7d'));
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const [userId, setUserId] = useState('');
   const [action, setAction] = useState('');
   const [q, setQ] = useState('');

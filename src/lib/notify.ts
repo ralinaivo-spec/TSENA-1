@@ -10,6 +10,7 @@ import { courierBalance, dueRecurring, mondayOf, today, type Recurring } from '.
 import type { Courier } from './orders';
 import { unpaidWeeks } from './payouts';
 import { dueProspects } from './prospects';
+import { reportsDue } from '../pages/BossReport';
 import { currentUser } from './auth';
 import { fmtAr } from './catalog';
 
@@ -34,6 +35,7 @@ export function useNotifications() {
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); const recs = useTable<Recurring>('recurring');
   const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts'); const prospects = useTable('prospects'); const couriers = useTable<Courier>('couriers'); const settles = useTable('courierSettlements');
   const snoozes = useMeta<Snoozes>('notifSnooze', {});
+  const reportSent = useMeta<Record<string, string>>('reportSent', {});
   const lastFile = useMeta<string | null>('lastFileBackup', null); const lastCloud = useMeta<string | null>('lastCloudBackup', null);
   // Le temps passe : les charges « à telle heure » apparaissent sans autre changement (rafraîchi chaque minute par le composant).
   const minute = Math.floor(Date.now() / 60000);
@@ -66,6 +68,10 @@ export function useNotifications() {
       const due = dueProspects(can('users.manage') ? undefined : currentUser()?.id);
       if (due.length) out.push({ id: 'suivre', level: 'important', title: `${due.length} client(s) à relancer`, text: due.slice(0, 4).map((p) => p.fbName).join(', '), href: '#/commandes/suivre' });
     }
+    if (can('reports.view')) {
+      // Rapports au patron à envoyer : du jour (le soir), de la semaine (lundi), du mois (le 1er), de l'année (1er janvier).
+      for (const d of reportsDue()) if (!reportSent[d.key]) out.push({ id: 'rapport:' + d.key, level: d.kind === 'day' ? 'info' : 'important', title: `Rapport ${d.kind === 'day' ? 'du jour' : d.kind === 'week' ? 'de la semaine' : d.kind === 'month' ? 'du mois' : "de l'année"} à envoyer au patron`, text: d.label, href: `#/rapports/patron?p=${d.kind}&a=${d.anchor}` });
+    }
     if (can('payout.validate')) {
       const w = unpaidWeeks(today(), mondayOf);
       if (w.length) out.push({ id: 'versement', level: 'important', title: `${w.length} semaine(s) terminée(s) pas encore versée(s) au patron`, text: `Dernière : ${fmtAr(w[0].expected)} à verser`, href: '#/recapitulatif' });
@@ -86,7 +92,7 @@ export function useNotifications() {
     }
     const rank: Record<Level, number> = { urgent: 0, important: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
-  }, [orders, moves, recs, products, sm, conflicts, payouts, prospects, couriers, settles, lastFile, lastCloud, minute]);
+  }, [orders, moves, recs, products, sm, conflicts, payouts, prospects, couriers, settles, reportSent, lastFile, lastCloud, minute]);
   const now = new Date().toISOString();
   return list.map((n) => ({ ...n, until: snoozes[n.id] && snoozes[n.id] > now ? snoozes[n.id] : undefined }));
 }

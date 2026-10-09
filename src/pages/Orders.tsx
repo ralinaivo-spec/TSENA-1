@@ -56,7 +56,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   const [creating, setCreating] = useState(false);
   const [following, setFollowing] = useState(false);
   const prospects = useTable<Prospect>('prospects');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('30d'));
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const scope = useMyScope();
   const tab = TABS.find((t) => t.key === tabKey) ?? TABS.find((t) => orders.some((o) => !isWalkIn(o) && t.statuses.includes(o.status) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status))) ?? TABS[0];
   const done = ['terminees', 'annulees'].includes(tab.key);

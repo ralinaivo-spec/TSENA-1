@@ -42,6 +42,21 @@ const OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: 'custom', label: 'Dates…' },
 ];
 
+/** Période précédente / suivante de même longueur (jour, semaine, mois, année ou dates libres). */
+export function shiftPeriod(p: Period, dir: -1 | 1): Period {
+  const r = p.from ? { from: p.from, to: p.to ?? ymd(new Date()) } : rangeOf(p.key);
+  if (!r.from || !r.to) return p;
+  const d = (s: string) => new Date(`${s}T12:00:00`);
+  if (p.key === 'month' || (p.from?.endsWith('-01') && d(r.to).getDate() === new Date(d(r.to).getFullYear(), d(r.to).getMonth() + 1, 0).getDate() && r.from.slice(0, 7) === r.to.slice(0, 7))) {
+    const f = d(r.from); f.setMonth(f.getMonth() + dir); const l = new Date(f.getFullYear(), f.getMonth() + 1, 0);
+    return { key: 'custom', from: ymd(f), to: ymd(l) };
+  }
+  if (p.key === 'year') { const y = Number(r.from.slice(0, 4)) + dir; return { key: 'custom', from: `${y}-01-01`, to: `${y}-12-31` }; }
+  const len = p.key === 'week' ? 7 : Math.round((d(r.to).getTime() - d(r.from).getTime()) / 86400_000) + 1;
+  const f = d(r.from); f.setDate(f.getDate() + len * dir); const t = new Date(f); t.setDate(f.getDate() + len - 1);
+  return { key: 'custom', from: ymd(f), to: ymd(t) };
+}
+
 /** Période : une seule liste déroulante (compacte sur téléphone), et les deux dates si « Dates… ». */
 export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
   return (
@@ -51,6 +66,10 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
         <select id="p-key" aria-label="Période" value={value.key} onChange={(e) => { const k = e.target.value as PeriodKey; onChange(k === 'custom' ? { key: 'custom', from: value.from ?? ymd(new Date()), to: value.to ?? ymd(new Date()) } : defaultPeriod(k)); }}>
           {OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
         </select>
+      </div>
+      <div className="period-arrows">
+        <button type="button" className="icon-btn" aria-label="Période précédente" onClick={() => onChange(shiftPeriod(value, -1))}>‹</button>
+        <button type="button" className="icon-btn" aria-label="Période suivante" disabled={!!value.to && value.to >= ymd(new Date())} onClick={() => onChange(shiftPeriod(value, 1))}>›</button>
       </div>
       {value.key === 'custom' && <>
         <div className="field"><label htmlFor="p-from">Du</label><input id="p-from" type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} /></div>

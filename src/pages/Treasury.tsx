@@ -202,7 +202,7 @@ function Expenses() {
   const moves = useTable<CashMove>('cashMoves');
   const cats = useTable<FinanceCategory>('financeCategories');
   useTable<Recurring>('recurring');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('month'));
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const [form, setForm] = useState<FormKind | null>(null);
   const [confirm, setConfirm] = useState<ReturnType<typeof dueRecurring>[number] | null>(null);
   const due = can('expenses.manage') ? dueRecurring('income') : [];

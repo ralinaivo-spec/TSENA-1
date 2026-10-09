@@ -31,6 +31,7 @@ function guessDeviceName() {
 async function boot() {
   try {
     await openDb();
+  await setMeta('dashPeriod', null); // le tableau de bord rouvre toujours sur « Aujourd'hui »
     await consumeEmailLink(); // retour depuis le lien « mot de passe oublié » reçu par e-mail
     window.addEventListener('hashchange', () => { if (/access_token=|error_description=/.test(location.hash)) consumeEmailLink(); });
     if (!getMeta('deviceId')) {

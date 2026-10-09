@@ -145,7 +145,7 @@ function MovesTab() {
   const moves = useTable<StockMove>('stockMoves');
   const users = useTable<User>('users');
   useCatalog();
-  const [period, setPeriod] = useState<Period>(defaultPeriod('month'));
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const [type, setType] = useState('');
   const [dir, setDir] = useState<'' | 'in' | 'out'>('');
   const [userId, setUserId] = useState('');

@@ -1,8 +1,11 @@
 // Accueil : tableau de bord adapté au rôle (chiffres de la période, trésorerie, stock, livreurs, meilleurs articles).
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { setMeta } from '../lib/db';
 import { fmtAr, productStock, type Product } from '../lib/catalog';
 import { bucketOf, type Prospect } from '../lib/prospects';
+import { rootOf } from '../lib/scope';
+import { get } from '../lib/db';
+import type { Category } from '../lib/catalog';
 import { OrderRow } from './Orders';
 import { ACCOUNTS, balances, courierBalance, today as todayYmd, type AccountId } from '../lib/money';
 import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabel, salesLedger, series, stockValue, dormant } from '../lib/analytics';
@@ -18,7 +21,7 @@ import { isWalkIn } from '../lib/orders';
 import { MyDeliveriesPage } from './MyDeliveries';
 import { DEFAULT_COMPANY, useCompany } from '../lib/settings';
 import { useSyncStatus } from '../lib/sync';
-import { IconButton, PageHead, timeAgo } from '../ui/kit';
+import { Choice, IconButton, PageHead, timeAgo } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 export function DashboardPage() {
@@ -70,7 +73,7 @@ function Board() {
         </div>
       )}
 
-      {(can('reports.view') || can('treasury.view')) ? <ManagerSales /> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
+      {(can('reports.view') || can('treasury.view')) ? <><ManagerSales /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
       {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
         <div className="card row-between daycash-shortcut">
@@ -82,8 +85,8 @@ function Board() {
         </div>
       )}
 
-      {(can('orders.create') || can('pos.sell')) && <RecentActivity />}
-      {(can('reports.view') || can('treasury.view')) && <ManagerMore />}
+      {(can('orders.create') || can('pos.sell')) && <BestSellers />}
+      {(can('reports.view') || can('treasury.view')) && <><ManagerChart /><h2 className="dash-title">Argent, stock et alertes</h2><ManagerMore /></>}
       {can('catalog.view') && <LowStock />}
       {steps.length > 0 && doneCount < steps.length && (
         <div className="card stack">
@@ -144,7 +147,7 @@ function Board() {
   );
 }
 
-const pct = (n: number) => (n * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
+const pct = (n: number) => (Math.abs(n) < 0.0005 ? 0 : n * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
 
 function usePeriod() {
   const saved = useMeta<Period | null>('dashPeriod', null);
@@ -154,10 +157,12 @@ function usePeriod() {
 
 /** 1. Ventes de la période (en premier). */
 function ManagerSales() { return <ManagerBoard part="sales" />; }
+function ManagerMoney() { return <ManagerBoard part="money" />; }
+function ManagerChart() { return <ManagerBoard part="chart" />; }
 /** 4. Dépenses, bénéfice, évolution par jour, trésorerie, stock, meilleurs articles. */
 function ManagerMore() { return <ManagerBoard part="more" />; }
 
-function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
+function ManagerBoard({ part }: { part: 'sales' | 'money' | 'chart' | 'more' }) {
   const can = useCan();
   const cost = can('costs.view');
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); useTable('variants'); useTable('stockMoves'); useTable('purchases'); useTable('courierSettlements');
@@ -188,7 +193,7 @@ function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
     { label: k.net >= 0 ? 'Bénéfice net' : 'Perte nette', value: fmtAr(k.net), cur: k.net, prev: kp.net, show: cost, strong: true, part: 'more' },
     { label: 'Taux de marge', value: pct(k.margin), cur: k.margin, prev: kp.margin, show: cost, isPct: true, part: 'more' },
   ] as { label: string; value: string; cur: number; prev: number; show: boolean; part: string; strong?: boolean; isPct?: boolean; invert?: boolean }[];
-  const tiles = all.filter((t) => t.show && t.part === part);
+  const tiles = all.filter((t) => t.show && t.part === (part === 'money' ? 'more' : part));
   if (part === 'sales') return (
     <>
       <h2 className="dash-title">Ventes</h2>
@@ -204,7 +209,7 @@ function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
       </div>
     </>
   );
-  return (
+  if (part === 'money') return (
     <>
       <h2 className="dash-title">Dépenses et bénéfice</h2>
       <div className="stat-grid">
@@ -216,10 +221,16 @@ function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
           </div>
         ))}
       </div>
-      <div className="card stack-s">
-        <h2>{cost ? 'Bénéfice net' : "Chiffre d'affaires"} par {bucket === 'hour' ? 'heure' : bucket === 'day' ? 'jour' : 'mois'}</h2>
-        <BarChart title="Évolution" bars={pts.map((p) => ({ key: p.key, label: p.label, long: p.long, value: cost ? p.gross - p.expenses : p.revenue, extra: `${p.orders} vente(s) · CA ${fmtAr(p.revenue)}` }))} format={fmtAr} />
-      </div>
+    </>
+  );
+  if (part === 'chart') return (
+    <div className="card stack-s">
+      <h2>{cost ? 'Bénéfice net' : "Chiffre d'affaires"} par {bucket === 'day' ? 'jour' : 'mois'}{pts.length <= 1 ? ' (choisissez une semaine ou un mois pour voir l’évolution)' : ''}</h2>
+      <BarChart title="Évolution" bars={pts.map((p) => ({ key: p.key, label: p.label, long: p.long, value: cost ? p.gross - p.expenses : p.revenue, extra: `${p.orders} vente(s) · CA ${fmtAr(p.revenue)}` }))} format={fmtAr} />
+    </div>
+  );
+  return (
+    <>
       <div className="grid-2" style={{ alignItems: 'start' }}>
         {can('treasury.view') && (
           <a className="card stack-s" href="#/tresorerie" style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -241,12 +252,6 @@ function ManagerBoard({ part }: { part: 'sales' | 'more' }) {
             {cost && purchases.unpaidAr > 0 && <tr><td>Reste à payer aux fournisseurs</td><td>{fmtAr(purchases.unpaidAr)}</td></tr>}
             <tr><td>En livraison maintenant</td><td>{out.length} commande(s)</td></tr>
           </tbody></table>
-        </div>
-        <div className="card stack-s">
-          <h2>Meilleurs articles</h2>
-          {top.length === 0 ? <p className="small muted">Aucune vente sur la période.</p> : (
-            <table className="kv-table"><tbody>{top.map((g) => <tr key={g.key}><td>{g.label} <span className="muted small">· {g.qty} pcs</span></td><td>{fmtAr(g.revenue)}</td></tr>)}</tbody></table>
-          )}
         </div>
         <div className="card stack-s">
           <h2>Articles dormants</h2>
@@ -339,5 +344,40 @@ function LowStock() {
       <table className="kv-table"><tbody>{low.slice(0, 6).map(({ p, s }) => <tr key={p.id}><td>{p.name} <span className="muted small">· {p.code}</span></td><td className={s <= 0 ? 'neg' : ''}>{s <= 0 ? 'épuisé' : `${s} pcs`}</td></tr>)}</tbody></table>
       {low.length > 6 && <p className="small muted">… et {low.length - 6} autre(s).</p>}
     </div>
+  );
+}
+
+/** 4. Meilleures ventes de la période (articles ou pages, triées au choix) et dernières ventes et commandes. */
+function BestSellers() {
+  const can = useCan();
+  const cost = can('costs.view');
+  const orders = useTable<Order>('orders'); useTable('variants'); useTable('products'); useTable('categories');
+  const [period] = usePeriod();
+  const scope = useMyScope();
+  const [view, setView] = useState<'articles' | 'pages' | 'dernieres'>('articles');
+  const [sort, setSort] = useState<'revenue' | 'qty' | 'gross'>('revenue');
+  const from = period.from ?? '2000-01-01', to = period.to ?? todayYmd();
+  const lines = useMemo(() => salesLedger(from, to).filter((l) => scope.mine(l.order)), [from, to, orders, scope.on]);
+  const groups = (view === 'pages' ? groupBy(lines, (l) => rootOf(l.categoryId) || '_', (k) => ({ label: k === '_' ? 'Sans page' : get<Category>('categories', k)?.name ?? '?' })) : groupBy(lines, (l) => l.productId, productLabel))
+    .sort((a, b) => (b[sort] as number) - (a[sort] as number)).slice(0, 8);
+  const max = Math.max(1, ...groups.map((g) => Math.abs(g[sort] as number)));
+  const last = [...orders].filter((o) => scope.mine(o) && o.status !== 'cancelled').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
+  const fmt = (g: { revenue: number; qty: number; gross: number }) => (sort === 'qty' ? `${g.qty} pcs` : fmtAr(sort === 'gross' ? g.gross : g.revenue));
+  return (
+    <>
+      <h2 className="dash-title">Meilleures ventes</h2>
+      <div className="card stack-s">
+        <div className="row-between" style={{ gap: 8 }}>
+          <Choice label="Voir" value={view} onChange={(v) => setView(v as typeof view)} options={[{ value: 'articles', label: 'Articles' }, { value: 'pages', label: 'Pages' }, { value: 'dernieres', label: 'Dernières commandes' }]} />
+          {view !== 'dernieres' && <Choice label="Trier par" value={sort} onChange={(v) => setSort(v as typeof sort)} options={[{ value: 'revenue', label: 'CA' }, { value: 'qty', label: 'Quantité' }, ...(cost ? [{ value: 'gross', label: 'Bénéfice' }] : [])]} />}
+        </div>
+        {view === 'dernieres' ? (last.length ? <ul className="list">{last.map((o) => <OrderRow key={o.id} o={o} />)}</ul> : <p className="small muted">Aucune commande.</p>)
+          : groups.length === 0 ? <p className="small muted">Aucune vente sur la période choisie en haut (Ventes).</p> : (
+            <div className="bars">{groups.map((g, i) => (
+              <div key={g.key} className="bar-row"><span className="bar-label"><span className="rank">{i + 1}</span> {g.label}{g.sub ? <span className="muted small"> · {g.sub}</span> : null}</span><span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(2, (Math.abs(g[sort] as number) / max) * 100)}%` }} /></span><strong className="num">{fmt(g)}</strong></div>
+            ))}</div>
+          )}
+      </div>
+    </>
   );
 }

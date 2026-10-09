@@ -559,3 +559,15 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 - **Prix détail par défaut, prix de gros article par article** : petite case discrète « Prix de gros » sur chaque ligne (à côté de « Envoyé en choix »). L'ancien choix « gros automatique dès N pièces » est supprimé.
 - **Remise en Ar ou en %** (le montant en Ar est affiché).
 - Le rappel « question secrète / mot de passe provisoire » de l'accueil se ferme (×) jusqu'à la prochaine connexion.
+
+## 9 sexies. Rapport au patron et tableau de bord de décision *(10/10/2026, proposition v5 — étape a et tableau de bord)*
+
+**Périodes.** Toutes les listes et analyses datées s'ouvrent sur **« Aujourd'hui »** (tableau de bord, rapports, dépenses, trésorerie, commandes terminées, mouvements de stock, journal). Flèches **‹ ›** pour la période précédente / suivante de même longueur.
+
+**Rapports → « Rapport au patron »** (premier onglet). Type : **Jour** (par défaut), **Semaine** (du lundi au samedi ; le dimanche est compté s'il y a eu des ventes), **Mois**, **Année**, **Période** (du … au …), avec ‹ › pour naviguer.
+- **Résultat** : CA, dépenses (toutes), reste (CA − dépenses), boost Facebook ($ × taux, sauf rapport du jour), **bénéfice net** = CA − coût des articles vendus − dépenses (− boost hors rapport du jour : « sans boost » pour le jour) ; chaque chiffre comparé à la période précédente.
+- **CA par page** : barres + tableau triable (CA, part, pièces, coût, boost, bénéfice) ; les pages sans vente ne sont pas affichées.
+- **Stock** (au prix de revient, hors rapport du jour) : valeur au début + entrées (réceptions, ajustements) − valeur à la fin = **valeur du stock sorti**, dont vendu (coût des ventes) et autres sorties ; **stock par page** (pages sans stock non affichées).
+- **Envoi** : texte **WhatsApp** au patron, **PDF A4** (impression ou « Enregistrer en PDF », en-tête société, tableaux, pied de page), **Excel**. « Envoyé le … » est noté ; **rappels** : rapport du jour à partir de 18 h, de la semaine le lundi, du mois le 1er, de l'année le 1er janvier (jusqu'à l'envoi).
+
+**Tableau de bord, dans l'ordre :** a. Ventes (période, CA, nombre de ventes, panier moyen, retours) ; b. Dépenses et bénéfice ; c. État des commandes ; d. **Meilleures ventes** de la période : articles ou pages, tri par CA, quantité ou bénéfice, ou dernières commandes ; e. Graphe du bénéfice net par jour (par mois sur une année) ; puis argent, stock, articles dormants, stock faible, mise en route.

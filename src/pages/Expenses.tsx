@@ -255,7 +255,7 @@ function ExpenseList() {
   const can = useCan();
   const moves = useTable<CashMove>('cashMoves');
   const cats = useTable<FinanceCategory>('financeCategories');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('month'));
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
   const [cat, setCat] = useState('');
   const [type, setType] = useState('');
   const [q, setQ] = useState('');

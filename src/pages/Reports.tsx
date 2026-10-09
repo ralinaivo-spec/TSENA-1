@@ -15,8 +15,10 @@ import { BarChart } from '../ui/chart';
 import { SortTable, exportTables, type Col } from '../ui/table';
 import { today } from '../lib/money';
 import { MonthlyRecap } from './WeekBoard';
+import { BossReport } from './BossReport';
 
 const TABS = [
+  { key: 'patron', label: 'Rapport au patron' },
   { key: 'mensuel', label: 'Récapitulatif mensuel' },
   { key: 'resultat', label: 'Bénéfice et perte' },
   { key: 'ventes', label: 'Journal des ventes' },
@@ -34,15 +36,17 @@ export function ReportsPage() {
   const can = useCan();
   const route = useRoute();
   useTable('orders'); useTable('cashMoves'); useTable('variants'); useTable('products'); useTable('stockMoves'); useTable('purchases'); useTable('courierSettlements');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('month'));
-  const cur = TABS.find((t) => route.endsWith('/' + t.key)) ?? TABS[0];
+  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
+  const seg = route.split('?')[0].split('/')[2];
+  const cur = TABS.find((t) => t.key === seg) ?? TABS[0];
   if (!can('reports.view')) return <Empty icon="lock" title="Accès réservé" />;
   const { from, to } = range(period);
   return (
     <>
-      <PageHead title="Rapports" subtitle="Toutes les analyses par période, triables et exportables en Excel" />
+      <PageHead title="Rapports" subtitle="Rapport au patron (jour, semaine, mois, année) et analyses détaillées, triables, en PDF et Excel" />
       <div className="tabs" role="tablist">{TABS.map((t) => <button key={t.key} role="tab" aria-selected={cur.key === t.key} onClick={() => navigate('/rapports/' + t.key)}>{t.label}</button>)}</div>
-      {cur.key !== 'stock' && cur.key !== 'mensuel' && <div className="card"><PeriodPicker value={period} onChange={setPeriod} /></div>}
+      {!['stock', 'mensuel', 'patron'].includes(cur.key) && <div className="card"><PeriodPicker value={period} onChange={setPeriod} /></div>}
+      {cur.key === 'patron' && <BossReport />}
       {cur.key === 'mensuel' && <MonthlyRecap />}
       {cur.key === 'resultat' && <ProfitLoss from={from} to={to} />}
       {cur.key === 'ventes' && <SalesJournal from={from} to={to} />}
