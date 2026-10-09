@@ -1,7 +1,7 @@
 // Articles et stock → Pages et variantes : chaque page (catégorie) avec ses variantes libres, et création des
 // articles à partir des valeurs (un article ou toutes les combinaisons d'un coup). Modèle Excel par page.
 import { useMemo, useRef, useState } from 'react';
-import { compressPhoto } from '../lib/images';
+import { compressPhoto, photoBytes } from '../lib/images';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { categoryPath, normText, parseNum, type AttrValue, type CatAttr, type Category, type Product } from '../lib/catalog';
@@ -286,7 +286,7 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
               </div>
               <div className="row" style={{ alignItems: 'center', gap: 8 }}>
                 <Button variant="ghost" icon="upload" onClick={() => photoRef.current?.click()}>{photo ? 'Changer la photo' : 'Photo des articles créés'}</Button>
-                {photo && <><img src={photo} alt="Photo" style={{ height: 48, borderRadius: 8 }} /><Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer</Button></>}
+                {photo && <><img src={photo} alt="Photo" style={{ height: 48, borderRadius: 8 }} /><span className="small muted">{Math.max(1, Math.round(photoBytes(photo) / 1024))} Ko</span><Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer</Button></>}
                 <span className="small muted">Facultatif : la même photo pour tous les articles créés ici. Chaque article peut ensuite avoir sa propre photo (fiche → Modifier).</span>
                 <input ref={photoRef} type="file" accept="image/*" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) { try { setPhoto(await compressPhoto(f)); } catch (err: any) { toast(err?.message ?? 'Photo illisible', 'error'); } } e.target.value = ''; }} />
               </div>

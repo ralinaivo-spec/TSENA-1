@@ -10,6 +10,7 @@ import {
   type Category, type Product, type StockMove, type Variant,
 } from '../lib/catalog';
 import { blobToThumb } from '../lib/xlsx';
+import { photoBytes } from '../lib/images';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ArticleBuilder, AttrBadges } from './Categories';
@@ -356,6 +357,7 @@ export function ProductForm({ product, onClose, onSaved }: { product?: Product; 
             <Thumb src={photo} size={88} />
             <span className="small">{photo ? 'Changer' : 'Ajouter une photo'}</span>
           </button>
+          {photo && <span className="small muted">Photo compressée : {Math.max(1, Math.round(photoBytes(photo) / 1024))} Ko</span>}
           {photo && <Button variant="quiet" onClick={() => setPhoto(undefined)}>Retirer la photo</Button>}
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={async (e) => {
             const f = e.target.files?.[0];

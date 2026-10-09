@@ -21,7 +21,7 @@ export async function compressPhoto(src: Blob | string, opts: { max?: number; ta
   try {
     let scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     let best = '';
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = 0; pass < 7; pass++) {
       const c = document.createElement('canvas');
       c.width = Math.max(1, Math.round(img.naturalWidth * scale));
       c.height = Math.max(1, Math.round(img.naturalHeight * scale));
