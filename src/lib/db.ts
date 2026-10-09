@@ -6,7 +6,7 @@ export const DB_NAME = 'tsena';
 export const DB_VERSION = 8;
 
 /** Tables métier synchronisées. Ajouter un nom ici (et augmenter DB_VERSION) crée la table. */
-import { mergeRecords, observe, sameContent, stampWrite, tick, baseStamp, type Conflict } from './merge';
+import { META, mergeRecords, observe, sameContent, stampWrite, tick, baseStamp, type Conflict } from './merge';
 
 export const TABLES = ['users', 'roles', 'settings', 'audit', 'categories', 'products', 'variants', 'stockMoves', 'suppliers', 'purchases', 'receptions', 'zones', 'couriers', 'customers', 'orders', 'printStations', 'printJobs', 'cashMoves', 'financeCategories', 'recurring', 'courierSettlements', 'closings', 'boosts', 'boostReadings', 'pageMessages', 'syncConflicts', 'devices', 'payouts'] as const;
 export type TableName = (typeof TABLES)[number];
@@ -120,10 +120,16 @@ export function getRaw(table: TableName, id: string) {
 }
 
 /** Écrit un ou plusieurs enregistrements (création ou modification) et les met en file pour la synchro. */
-export async function save(table: TableName, records: Partial<BaseRecord> | Partial<BaseRecord>[]): Promise<BaseRecord[]> {
+export async function save(table: TableName, records: Partial<BaseRecord> | Partial<BaseRecord>[], opts: { force?: boolean } = {}): Promise<BaseRecord[]> {
   const list = Array.isArray(records) ? records : [records];
   const now = nowIso();
-  const stamp = tick();
+  let stamp = tick();
+  // « Ce que je vois est ce que j'enregistre » (fiche Société…) : chaque champ envoyé est horodaté de nouveau,
+  // plus récent que toutes les versions déjà connues, même si l'horloge d'un autre appareil était en avance.
+  if (opts.force) {
+    for (const r of list) { const prev = r.id ? cache.get(table)?.get(r.id) : undefined; for (const v of Object.values((prev as any)?._f ?? {})) if (typeof v === 'number' && v >= stamp) stamp = v + 1; }
+    observe(stamp);
+  }
   const who = { by: writer.name, dev: getMeta('deviceId', '') || undefined };
   const changed = new Map<string, string[]>();
   const bases = new Map<string, Record<string, number>>();
@@ -139,6 +145,7 @@ export async function save(table: TableName, records: Partial<BaseRecord> | Part
       patch.deleted = false;
     }
     const rec = stampWrite(prev as any, patch, who, stamp) as BaseRecord;
+    if (opts.force) for (const k of Object.keys(patch)) if (!META.has(k)) rec._f![k] = stamp;
     rec.createdAt = prev?.createdAt || r.createdAt || (BIZ_TABLES.has(table) ? bizNow() : now);
     const fields = Object.keys(rec._f || {}).filter((k) => rec._f[k] === stamp);
     changed.set(id, fields);

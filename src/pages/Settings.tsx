@@ -53,11 +53,19 @@ export function SettingsPage() {
 function CompanyTab() {
   const c = useCompany();
   const [form, setForm] = useState(c);
+  const [base, setBase] = useState(c);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const set = (k: keyof typeof c) => (v: string) => setForm({ ...form, [k]: v });
+  // La fiche arrive d'un autre appareil pendant que la page est ouverte : le formulaire suit, tant qu'on n'a rien modifié.
+  useEffect(() => {
+    if (c.updatedAt === base.updatedAt) return;
+    if (JSON.stringify(form) === JSON.stringify(base)) setForm(c);
+    setBase(c);
+  }, [c.updatedAt]);
   return (
     <div className="card stack">
+      {c.updatedAt > '2001' && <p className="small muted">Dernière modification : {fmtDateTime(c.updatedAt)}{c._by ? ` par ${c._by}` : ''}. Sur chaque appareil, ces informations doivent être identiques après la synchronisation.</p>}
       <div className="row" style={{ alignItems: 'center', gap: 16 }}>
         <div className="logo-preview">{form.logo ? <img src={form.logo} alt="Logo" /> : <Icon name="store" size={32} />}</div>
         <div className="stack-s">
@@ -109,8 +117,8 @@ function CompanyTab() {
       <div className="row">
         <Button busy={busy} disabled={!form.name.trim()} onClick={async () => {
           setBusy(true);
-          const { createdAt, updatedAt, ...data } = form as BaseRecord;
-          await save('settings', { ...data, id: 'company', name: form.name.trim() });
+          const { createdAt, updatedAt, _f, _v, _by, _dev, ...data } = form as any;
+          await save('settings', { ...data, id: 'company', name: form.name.trim() }, { force: true });
           await audit('Paramètres', 'Informations de la société modifiées', 'settings', 'company');
           setBusy(false);
           toast('Informations enregistrées');
