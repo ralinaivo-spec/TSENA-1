@@ -227,6 +227,7 @@ function CloudTab() {
       </div>
       {cloud && <ConflictsCard />}
       {cloud && <DevicesCard />}
+      <VersionAndResync />
       <div className="card stack-s small">
         <h3>Travailler sans Internet</h3>
         <p>Tout ce que vous saisissez est d’abord enregistré sur cet appareil : vous pouvez continuer à travailler sans connexion. Les modifications attendent dans une file d’envoi (« {status.pending} en attente ») et partent toutes seules dès que la connexion revient.</p>
@@ -367,11 +368,11 @@ function RestoreConfirm({ pick, onClose }: { pick: { label: string; data: Record
   );
 }
 
-function SystemTab() {
-  const [resetOpen, setResetOpen] = useState(false);
+/** Version de l'application et réparation de la synchronisation (onglets Cloud et Système). */
+function VersionAndResync() {
   const [resyncOpen, setResyncOpen] = useState(false);
   return (
-    <div className="stack">
+    <>
       <div className="card stack">
         <div><h3>Version</h3><p className="small muted">Trésor en ligne {__APP_VERSION__} — construite le {fmtDateTime(__BUILD_DATE__)}.</p></div>
         <div className="row">
@@ -386,11 +387,6 @@ function SystemTab() {
         <div><h3>Réparer la synchronisation</h3><p className="small muted">Retélécharge toutes les données du cloud et renvoie toutes celles de cet appareil. À utiliser si un appareil semble ne pas avoir les mêmes données que les autres.</p></div>
         <div><Button variant="ghost" icon="refresh" onClick={() => setResyncOpen(true)}>Tout resynchroniser</Button></div>
       </div>
-      <ClearDataCard />
-      <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
-        <div><h3>Remettre à l'état d'origine</h3><p className="small muted">Efface toutes les données et tous les comptes sur tous les appareils, et remet le compte super-admin avec son mot de passe d'origine. Une sauvegarde est faite juste avant.</p></div>
-        <div><Button variant="danger" icon="trash" onClick={() => setResetOpen(true)}>Remettre à l'état d'origine</Button></div>
-      </div>
       {resyncOpen && <Confirm title="Tout resynchroniser" confirmLabel="Lancer" onClose={() => setResyncOpen(false)}
         message={<p>Toutes les données vont être échangées à nouveau avec le cloud. Cela peut prendre une minute.</p>}
         onConfirm={async () => {
@@ -401,6 +397,20 @@ function SystemTab() {
           await audit('Système', 'Resynchronisation complète');
           toast('Resynchronisation terminée');
         }} />}
+    </>
+  );
+}
+
+function SystemTab() {
+  const [resetOpen, setResetOpen] = useState(false);
+  return (
+    <div className="stack">
+      <VersionAndResync />
+      <ClearDataCard />
+      <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
+        <div><h3>Remettre à l'état d'origine</h3><p className="small muted">Efface toutes les données et tous les comptes sur tous les appareils, et remet le compte super-admin avec son mot de passe d'origine. Une sauvegarde est faite juste avant.</p></div>
+        <div><Button variant="danger" icon="trash" onClick={() => setResetOpen(true)}>Remettre à l'état d'origine</Button></div>
+      </div>
       {resetOpen && <Confirm title="Remettre à l'état d'origine" danger confirmLabel="Tout effacer" typeToConfirm="EFFACER" onClose={() => setResetOpen(false)}
         message={<div className="stack-s"><p><strong>Cette action efface tout</strong> : utilisateurs, paramètres et toutes les données, sur tous les appareils reliés.</p><p className="small muted">Un fichier de sauvegarde est téléchargé juste avant{getMeta('cloud', null) ? ' et une copie est faite dans le cloud' : ''}.</p></div>}
         onConfirm={async () => { await factoryReset(); }} />}
