@@ -63,6 +63,7 @@ function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boo
   const [feeAccount, setFeeAccount] = useState<AccountId>('cash');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(false);
 
   const rows = useMemo(() => b.pending.map((o) => {
     const open = o.status === 'out';
@@ -172,9 +173,13 @@ function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boo
           </div>
           <TextField label="Remarque (facultatif)" value={note} onChange={setNote} />
           <p className="small">{after === 0 ? '✓ Après validation, le compte du livreur est à zéro.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (reporté au prochain retour).` : `La boutique lui devra ${fmtAr(-after)} (sur son compte, à payer plus tard).`}</p>
-          <div className="row"><Button busy={busy} disabled={!canSettle} icon="check" onClick={validate}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
+          <div className="row"><Button busy={busy} disabled={!canSettle} icon="check" onClick={() => setAsk(true)}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
         </div>
       )}
+      {ask && <Confirm title={`Valider le retour de ${courier.name} ?`} confirmLabel="Valider" onClose={() => setAsk(false)} onConfirm={validate}
+        message={<div className="stack-s"><p>{on.length} colis seront enregistrés et réglés : {on.filter((r) => r.open).map((r) => `${r.o.number} ${r.d === 'delivered' ? 'livrée' : 'refusée'}`).join(', ') || 'déjà saisis'}.</p>
+          <p><strong>{courier.name} vous remet {fmtAr(n)}</strong> ({ACCOUNTS[account]}){payFees ? <> ; vous lui payez <strong>{fmtAr(payFees)}</strong> de frais ({ACCOUNTS[feeAccount]})</> : ''}.</p>
+          <p className="small muted">Après validation, ces colis ne peuvent plus changer de livreur. Une erreur se corrige ensuite par un nouveau versement.</p></div>} />}
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
       {toShop && <Confirm title="Le client vient chercher en boutique" confirmLabel="Annuler la livraison" message={<p>Le colis {toShop.number} revient en boutique, réservé pour le client. Pas de frais de livraison, pas de dédommagement pour le livreur. La commande deviendra une vente sur place quand le client passera.</p>}
         onClose={() => setToShop(null)} onConfirm={async () => { await cancelDeliveryToShop(toShop); toast('Livraison annulée : la commande attend le client en boutique'); }} />}

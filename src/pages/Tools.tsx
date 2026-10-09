@@ -119,15 +119,18 @@ function WorkDateCard() {
   const rec = get<WorkDateRec>('settings', 'workdate');
   const active = workDate();
   const [d, setD] = useState(active ?? '');
+  const [ask, setAsk] = useState(false);
   return (
     <div className="card stack" style={active ? { borderColor: 'var(--gold)' } : undefined}>
       <div><h3>Date de saisie (tous les appareils)</h3>
         <p className="small muted">Pour faire des essais avec des dates passées, ou pour rattraper les ventes d’un cahier : choisissez un jour passé. La date s’applique à <strong>tous les utilisateurs et tous les appareils</strong> reliés au cloud (dès leur synchronisation) et reste en place jusqu’à ce que l’admin ou le gérant la change ou revienne à aujourd’hui. Tout ce qui est saisi (ventes sur place, commandes, livraisons, retours, paiements, versements, dépenses, mouvements de stock) prend ce jour, à l’heure actuelle.</p></div>
       <div className="row" style={{ alignItems: 'flex-end' }}>
         <div style={{ maxWidth: 220 }}><TextField label="Saisir à la date du" type="date" value={d} max={realToday()} onChange={setD} /></div>
-        <Button disabled={!d || d >= realToday() || d === active} onClick={() => setWorkDate(d)}>Appliquer à tous</Button>
+        <Button disabled={!d || d >= realToday() || d === active} onClick={() => setAsk(true)}>Appliquer à tous</Button>
         {active && <Button variant="ghost" onClick={async () => { await setWorkDate(null); setD(''); }}>Revenir à aujourd’hui (tous)</Button>}
       </div>
+      {ask && <Confirm title="Changer la date de saisie de tous les appareils ?" danger confirmLabel="Appliquer à tous" onClose={() => setAsk(false)} onConfirm={() => setWorkDate(d)}
+        message={<p>À partir de maintenant, <strong>tous les utilisateurs</strong> enregistreront leurs ventes, livraisons, dépenses et mouvements de stock à la date du <strong>{d ? longDay(d) : ''}</strong>, jusqu’à ce que vous reveniez à aujourd’hui. À n’utiliser que pour des essais ou pour rattraper un cahier.</p>} />}
       {active && <p><Badge tone="warn">En cours : saisies datées du {longDay(active)}</Badge>{rec?.byName ? <span className="small muted"> — fixée par {rec.byName}{rec.at ? ` le ${new Date(rec.at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}</span> : null}</p>}
     </div>
   );

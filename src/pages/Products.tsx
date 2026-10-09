@@ -6,7 +6,7 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import {
   ADJUST_REASONS, addMoves, categoryPath, createProduct, fmtAr, fmtNum, incomingOf, makeSku, MOVE_LABELS, normSize, parseNum,
-  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel, matchQuery, productText, attrSummary, articleUsage, deleteArticle, repairArticle,
+  productIncoming, productStock, productVariants, sizeRank, stockOf, useCatalog, variantLabel, matchQuery, productText, attrSummary, articleUsage, deleteArticle, repairArticle, variantUsed,
   type Category, type Product, type StockMove, type Variant,
 } from '../lib/catalog';
 import { blobToThumb } from '../lib/xlsx';
@@ -429,7 +429,7 @@ function VariantForm({ product, variant, onClose }: { product: Product; variant:
   const [wholesale, setWholesale] = useState(variant.priceWholesale?.toString() ?? '');
   const [cost, setCost] = useState(variant.costAvg?.toString() ?? '');
   const [del, setDel] = useState(false);
-  const hasMoves = useTable<StockMove>('stockMoves').some((m) => m.variantId === variant.id);
+  const hasMoves = useTable<StockMove>('stockMoves').some((m) => m.variantId === variant.id) || variantUsed(variant.id);
   const attr = !!product.attrs;
   return (
     <Modal title={attr ? `Code et coût — ${product.name}` : `Variante ${variantLabel(variant)}`} onClose={onClose}
@@ -455,7 +455,7 @@ function VariantForm({ product, variant, onClose }: { product: Product; variant:
         </div>}
         {can('costs.view') && <TextField label="Coût de revient moyen (Ar)" value={cost} onChange={setCost} inputMode="decimal" hint="Calculé automatiquement à chaque réception. Ne le modifiez que pour corriger." />}
       </div>
-      {del && <Confirm title="Supprimer la variante" danger confirmLabel="Supprimer" message={<p>La variante {variantLabel(variant)} sera supprimée.</p>}
+      {del && <Confirm title="Supprimer la variante" danger confirmLabel="Supprimer" message={<p>La variante {variantLabel(variant)} sera supprimée. Elle n’a ni stock, ni vente, ni achat.</p>}
         onClose={() => setDel(false)} onConfirm={async () => { await remove('variants', variant.id); onClose(); }} />}
     </Modal>
   );

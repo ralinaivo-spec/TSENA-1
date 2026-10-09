@@ -117,6 +117,8 @@ export async function addTransfer(from: AccountId, to: AccountId, amount: number
   await audit('Virement entre comptes', `${label} : ${amount} Ar${fee ? ` (frais ${fee} Ar)` : ''}`, 'cashMoves', transferId);
 }
 export async function deleteMove(m: CashMove) {
+  if (m.refType === 'purchases' || (m.type === 'purchase' && m.refId)) throw new Error('Ce mouvement est un paiement de commande Chine : supprimez-le depuis la commande (Achats), pour que la commande et la trésorerie restent d’accord.');
+  if (m.type === 'courier_settlement') throw new Error('Ce mouvement est un versement de livreur : il ne se supprime pas depuis la trésorerie.');
   if (m.refType === 'payouts') throw new Error('Ce mouvement est un versement de la semaine : annulez-le depuis Récapitulatif → Semaine → Historique des versements.');
   if (m.type === 'expense' || m.type === 'income') assertOpenAt(m.at, 'Suppression');
   const linked = m.transferId ? all<CashMove>('cashMoves').filter((x) => x.transferId === m.transferId) : [m];

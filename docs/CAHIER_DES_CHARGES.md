@@ -68,6 +68,22 @@ Menu **Stock → Pages et variantes**.
 - **Supprimer un article** *(10/10)* : possible seulement s’il n’a jamais été vendu, commandé, acheté ni reçu (ex. article de test) ; son stock de départ est effacé avec lui. Sinon : « Archiver ».
 - Fiche d’un article par variantes : le bouton crayon de la ligne de stock ne modifie que le **code** (code-barres) et le **coût de revient** (pas de couleur/taille, pas de suppression). Si la ligne de stock a disparu, un bouton **« Rétablir »** la recrée.
 
+### 3.1 bis Protection contre les actions risquées *(09/10/2026)*
+- Toute **suppression ou action risquée** demande une confirmation, avec un avertissement rouge : « Action risquée… notée dans le journal d’activité avec votre nom ».
+- Les plus graves exigent en plus de **taper un mot** : effacer les données, remettre à l’état d’origine, restaurer une sauvegarde.
+- **Interdit** quand cela casserait l’historique (il faut alors archiver ou désactiver) :
+  - supprimer un article ou une variante déjà vendu, commandé ou acheté ;
+  - supprimer une valeur ou une variante de page déjà utilisée ;
+  - supprimer une page qui a des articles ;
+  - supprimer un rôle encore attribué ;
+  - supprimer depuis la Trésorerie un paiement de commande Chine (à faire depuis la commande), un versement de livreur ou un versement au patron.
+- **Confirmation avec résumé** :
+  - suppression d’un paiement fournisseur (retiré aussi de la trésorerie) ;
+  - suppression d’une commande Chine (ses paiements sont retirés de la trésorerie) ;
+  - validation du **retour livreur** (montant remis, frais payés) ;
+  - changement de la **date de saisie pour tous les appareils**.
+- Avertissement dans l’éditeur d’une page qui a déjà des articles (effet d’un changement de libellé ou de code court).
+
 ### 3.2 Import Excel par page *(phase 1)*
 1. Créer la page et ses variantes (à la main). 2. Télécharger **le fichier de la page** (depuis la page ou Import Excel) : une colonne par variante avec **liste déroulante** des valeurs, puis Nom (facultatif), Prix de revient, PV détail, PV gros, Stock, Alerte stock bas ; les articles existants sont pré-remplis ; onglets « Listes » et « Mode d’emploi ». 3. Importer : **chaque ligne est contrôlée avant d’enregistrer** (valeur inconnue avec la liste des codes permis, variante obligatoire manquante, nombre invalide, doublon dans le fichier, PV détail manquant pour un nouvel article). Aperçu : nouveaux, mises à jour (avec le changement de stock), erreurs en rouge. L’import est bloqué tant qu’il y a des erreurs, sauf si l’on choisit d’importer seulement les lignes correctes. Valeurs acceptées par libellé ou par code, sans tenir compte des majuscules. Article existant : prix et coût mis à jour, stock remis à la quantité du fichier (mouvement « inventaire » tracé).
 

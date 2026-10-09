@@ -79,6 +79,7 @@ function CategoryEditor({ cat, onClose }: { cat?: Category; onClose: () => void 
   const [parentId, setParentId] = useState(cat?.parentId ?? '');
   const [attrs, setAttrs] = useState<CatAttr[]>(() => structuredClone(cat?.attrs ?? []));
   const [preset, setPreset] = useState('');
+  const products = useTable<Product>('products').filter((p) => cat && p.categoryId === cat.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoCode = suggestCatCode(name);
@@ -116,6 +117,7 @@ function CategoryEditor({ cat, onClose }: { cat?: Category; onClose: () => void 
           <TextField label="Nom de la page (catégorie)" value={name} onChange={setName} placeholder="Ex. Lampe rechargeable" />
           <TextField label="Code court de la page" value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder={autoCode} hint={`Début du code des articles (ex. ${code || autoCode}-LP1-B22-7W).`} />
         </div>
+        {cat && products.length > 0 && <div className="notice"><Icon name="alert" /><span>Cette page a déjà <strong>{products.length} article(s)</strong>. Changer un <strong>libellé</strong> change ce qui s’affiche pour ces articles ; changer un <strong>code court</strong> ne renomme pas les articles déjà créés. Une variante ou une valeur utilisée ne peut pas être supprimée : elle se désactive.</span></div>}
         {(parentId || cats.some((x) => x.parentId)) && (
           <SelectField label="Rangée dans (facultatif)" value={parentId} onChange={setParentId} options={[{ value: '', label: 'Aucune — c’est une page' }, ...cats.filter((x) => x.id !== cat?.id && !x.parentId).map((x) => ({ value: x.id, label: x.name }))]} />
         )}

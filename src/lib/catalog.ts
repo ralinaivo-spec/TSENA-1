@@ -334,3 +334,8 @@ export async function repairArticle(p: Product) {
   await save('variants', { id: `v_${p.id}`, productId: p.id, sku: p.code, active: true, deleted: false });
   await audit('Article réparé', `${p.code} — ligne de stock rétablie`, 'products', p.id);
 }
+/** Variante utilisée dans une commande, une vente ou un achat. */
+export function variantUsed(variantId: string) {
+  return all<any>('orders').some((o) => (o.lines || []).some((l: any) => l.variantId === variantId) || (o.returnLines || []).some((l: any) => l.variantId === variantId))
+    || all<Purchase>('purchases').some((p) => p.lines.some((l) => l.variantId === variantId));
+}

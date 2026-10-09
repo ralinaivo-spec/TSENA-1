@@ -140,6 +140,7 @@ export function Confirm({ title, message, confirmLabel, danger, typeToConfirm, o
       </>
     }>
       <div className="stack">
+        {danger && <div className="notice notice-danger"><Icon name="alert" /><span><strong>Action risquée.</strong> Vérifiez bien avant de confirmer : elle peut être difficile ou impossible à défaire. Elle est notée dans le journal d’activité avec votre nom.</span></div>}
         <div>{message}</div>
         {typeToConfirm && <TextField label={`Pour confirmer, tapez ${typeToConfirm}`} value={typed} onChange={setTyped} autoFocus />}
       </div>

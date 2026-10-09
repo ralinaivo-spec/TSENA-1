@@ -107,6 +107,7 @@ function PurchaseDetail({ id }: { id: string }) {
   const [paying, setPaying] = useState(false);
   const [cancel, setCancel] = useState(false);
   const [close, setClose] = useState(false);
+  const [delPay, setDelPay] = useState<Purchase['payments'][number] | null>(null);
   const [del, setDel] = useState(false);
   if (!p) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/achats')}>Retour</Button></Empty>;
   const st = PURCHASE_STATUS[p.status];
@@ -219,7 +220,7 @@ function PurchaseDetail({ id }: { id: string }) {
               {p.payments.map((x) => (
                 <li key={x.id} className="list-item" style={{ padding: '10px 0' }}>
                   <div className="list-item-main"><strong className="num">{money(x.amount, x.currency)}</strong><p className="small muted">{fmtDate(x.date)} · {x.method}{x.note ? ` · ${x.note}` : ''}</p></div>
-                  {can('purchases.manage') && <IconButton icon="trash" label="Supprimer le paiement" onClick={async () => { if ((x as any).moveId) await remove('cashMoves', (x as any).moveId); await save('purchases', { id: p.id, payments: p.payments.filter((y) => y.id !== x.id) }); }} />}
+                  {can('purchases.manage') && <IconButton icon="trash" label="Supprimer le paiement" onClick={() => setDelPay(x)} />}
                 </li>
               ))}
             </ul>
@@ -240,8 +241,10 @@ function PurchaseDetail({ id }: { id: string }) {
       {paying && <PaymentModal purchase={p} onClose={() => setPaying(false)} />}
       {cancel && <Confirm title="Annuler la commande" danger confirmLabel="Annuler la commande" message={<p>Les pièces ne seront plus comptées « en arrivage ».</p>} onClose={() => setCancel(false)} onConfirm={() => setStatus('cancelled')} />}
       {close && <Confirm title="Clôturer la commande" confirmLabel="Clôturer" message={<p>Les pièces non reçues ne seront plus attendues. Elles restent visibles comme manquantes.</p>} onClose={() => setClose(false)} onConfirm={() => setStatus('received')} />}
-      {del && <Confirm title="Supprimer la commande" danger confirmLabel="Supprimer" message={<p>La commande {p.number} sera supprimée.</p>} onClose={() => setDel(false)}
-        onConfirm={async () => { await remove('purchases', p.id); await audit('Commande Chine supprimée', p.number, 'purchases', p.id); navigate('/achats'); }} />}
+      {delPay && <Confirm title="Supprimer ce paiement ?" danger confirmLabel="Supprimer le paiement" message={<p>Paiement de {money(delPay.amount, delPay.currency)} du {fmtDate(delPay.date)} : il sera retiré de la commande {p.number}{(delPay as any).moveId ? ' et de la trésorerie (le solde du compte remonte)' : ''}.</p>}
+        onClose={() => setDelPay(null)} onConfirm={async () => { if ((delPay as any).moveId) await remove('cashMoves', (delPay as any).moveId); await save('purchases', { id: p.id, payments: p.payments.filter((y) => y.id !== delPay.id) }); await audit('Paiement fournisseur supprimé', `${p.number} : ${money(delPay.amount, delPay.currency)}`, 'purchases', p.id); }} />}
+      {del && <Confirm title="Supprimer la commande" danger confirmLabel="Supprimer" message={<p>La commande {p.number} sera supprimée.{(p.payments || []).length ? ' Ses paiements seront aussi retirés de la trésorerie.' : ''}</p>} onClose={() => setDel(false)}
+        onConfirm={async () => { for (const x of p.payments || []) if ((x as any).moveId) await remove('cashMoves', (x as any).moveId); await remove('purchases', p.id); await audit('Commande Chine supprimée', p.number, 'purchases', p.id); navigate('/achats'); }} />}
     </>
   );
 }
