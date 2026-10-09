@@ -257,6 +257,13 @@ Chaque phase est mise en ligne et testée avec vous avant de passer à la suivan
 
 **Votre besoin.** En répondant aux messages privés de la page, le vendeur repère des clients qui vont probablement acheter mais pas tout de suite. Ils attendent une confirmation, une information (taille, couleur, quantité, prix, photo), un paiement, ou autre chose. Ce n'est pas encore une commande, car il manque des informations essentielles. On veut pourtant les noter tout de suite, les suivre, puis les transformer en commande en un clic dès que tout est complet.
 
+### 15.0 Principe retenu (version simplifiée du 09/10/2026)
+**Un seul formulaire** pour tout : le vendeur ouvre « Nouvelle commande » et saisit ce qu'il sait.
+- Si tous les critères essentiels sont remplis → **Créer la commande** (comme aujourd'hui).
+- S'il manque quelque chose → le bouton devient **« Mettre à suivre »**. La fiche part dans l'onglet À suivre avec la liste de ce qui manque (« article pas encore choisi », « quantité inconnue »…) et la date de relance.
+- Plus tard, on rouvre la fiche, on complète, et dès que tout est coché : **Transformer en commande**, sans rien ressaisir.
+- Le motif d'attente est **proposé automatiquement** à partir de ce qui manque (article ou quantité manquants → « Attend une information »). Le vendeur peut ajouter « Attend le paiement », « Attend sa confirmation » ou « Autre ».
+
 ### 15.1 Un nouvel onglet « À suivre » dans Commandes clients
 Onglets : **À suivre** · Enregistrées · En attente de livraison · En livraison · Terminées · Annulées.
 
