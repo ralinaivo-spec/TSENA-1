@@ -894,3 +894,21 @@ tr.row-error td { background: var(--danger-soft); }
   .pos-mobile-bar { display: flex; position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 5; width: 100%; justify-content: space-between; align-items: center; gap: 10px;
     padding: 14px 18px; border: 0; border-radius: 16px; background: var(--brand); color: var(--brand-ink); font: 700 1rem var(--font-body); box-shadow: 0 10px 28px -10px rgba(0,0,0,.45); cursor: pointer; }
 }
+/* Notifications */
+.notif-bar { display: grid; gap: 8px; margin-bottom: 14px; }
+.notif { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--brand); box-shadow: 0 6px 18px -14px rgba(0,0,0,.35); }
+.notif-urgent { border-left-color: var(--danger, #c0392b); background: color-mix(in srgb, var(--danger-soft, #fde2e2) 55%, var(--surface)); }
+.notif-important { border-left-color: var(--gold, #d69e2e); }
+.notif-info { border-left-color: var(--line-strong); }
+.notif.is-snoozed { opacity: .65; }
+.notif-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.notif-main strong { overflow-wrap: anywhere; }
+.notif-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 600px) { .notif { flex-wrap: wrap; } .notif-actions { width: 100%; } }
+.bell { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; border: 0; background: rgba(255,255,255,.12); color: inherit; cursor: pointer; }
+.bell-count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: var(--gold, #d69e2e); color: #1d1238; font: 800 .72rem/20px var(--font-body); text-align: center; }
+.bell-count.is-urgent { background: #e5484d; color: #fff; }
+.sidebar-tools { display: flex; align-items: center; gap: 8px; }
+.due-card h2 { display: flex; align-items: center; gap: 8px; }
+.due-card .list-item { flex-wrap: wrap; }
+.due-card .list-item-main { flex: 1 1 200px; min-width: 0; }

@@ -33,6 +33,8 @@ import { BoostsPage } from './pages/Boosts';
 import { DayCashPage } from './pages/DayCash';
 import { CategoriesPage } from './pages/Categories';
 import { MyDeliveriesPage } from './pages/MyDeliveries';
+import { ExpensesPage } from './pages/Expenses';
+import { NotifBar, NotifBell } from './ui/notifications';
 
 interface NavItem { path: string; label: string; icon: IconName; perm?: string; group: string; page: () => ReactNode; mobile?: boolean }
 
@@ -50,6 +52,7 @@ const NAV: NavItem[] = [
   { path: '/stock', label: 'Stock', icon: 'package', perm: 'catalog.view', group: 'Stock', page: () => <StockPage /> },
   { path: '/achats', label: 'Achats Chine', icon: 'inbox', perm: 'purchases.manage', group: 'Achats', page: () => <PurchasesPage /> },
   { path: '/receptions', label: 'Réceptions', icon: 'download', perm: 'purchases.receive', group: 'Achats', page: () => <ReceptionsPage /> },
+  { path: '/depenses', label: 'Dépenses', icon: 'wallet', perm: 'expenses.manage', group: 'Argent', page: () => <ExpensesPage /> },
   { path: '/tresorerie', label: 'Trésorerie', icon: 'wallet', perm: 'treasury.view', group: 'Argent', page: () => <TreasuryPage /> },
   { path: '/recapitulatif', label: 'Récapitulatifs', icon: 'list', perm: 'treasury.view', group: 'Argent', page: () => <RecapPage /> },
   { path: '/rapports', label: 'Rapports', icon: 'chart', perm: 'reports.view', group: 'Argent', page: () => <ReportsPage /> },
@@ -126,7 +129,7 @@ function Shell() {
   const company = useCompany();
   const route = useRoute();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((n) => (!n.perm || can(n.perm)) && (n.path !== '/mes-livraisons' || !!user?.courierId));
+  const items = NAV.filter((n) => (!n.perm || can(n.perm) || (n.path === '/depenses' && can('treasury.view'))) && (n.path !== '/mes-livraisons' || !!user?.courierId));
   const current = [...items].sort((a, b) => b.path.length - a.path.length).find((n) => n.path === '/' ? route === '/' : route.startsWith(n.path)) ?? items[0];
   useEffect(() => { setOpen(false); window.scrollTo(0, 0); }, [route]);
   // Menu ouvert sur téléphone : la page derrière ne défile plus, seul le menu défile.
@@ -154,7 +157,7 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <SyncPill />
+          <div className="sidebar-tools"><SyncPill /><NotifBell /></div>
           <a className="me" href="#/compte" aria-current={route === '/compte' ? 'page' : undefined}>
             <span className="avatar">{user.fullName.charAt(0).toUpperCase()}</span>
             <span style={{ minWidth: 0, flex: 1 }}>
@@ -171,10 +174,11 @@ function Shell() {
         <header className="topbar">
           <IconButton icon="menu" label="Ouvrir le menu" onClick={() => setOpen(true)} />
           <div className="brand"><BrandLogo /><span className="brand-name">{company.name}</span></div>
+          <NotifBell />
           <SyncPill />
         </header>
         <main className="main">
-          <div className="content"><WorkDateBanner />{current.page()}</div>
+          <div className="content"><WorkDateBanner /><NotifBar />{current.page()}</div>
         </main>
         <nav className="bottom-nav" aria-label="Raccourcis">
           {mobileItems.map((i) => (

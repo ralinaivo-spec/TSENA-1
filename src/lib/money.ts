@@ -27,13 +27,28 @@ export interface CashMove extends BaseRecord {
   photo?: string;        // photo du reçu
   transferId?: string;   // les deux lignes d'un virement
   recurringId?: string;
-  period?: string;       // AAAA-MM (opération récurrente)
+  period?: string;       // échéance d'une charge fixe (AAAA-MM, AAAA, ou AAAA-MM-JJ)
+  typeId?: string;       // type de dépense (courante, charge fixe, exceptionnelle…)
   refType?: string;
   refId?: string;
   userName?: string;
 }
-export interface FinanceCategory extends BaseRecord { kind: 'expense' | 'income'; name: string; order?: number; active: boolean }
-export interface Recurring extends BaseRecord { kind: 'expense' | 'income'; label: string; categoryId: string; account: AccountId; amount: number; day: number; startMonth: string; active: boolean; skipped?: string[] }
+/** kind 'etype' = type de dépense (Dépense courante, Charge fixe…). */
+export interface FinanceCategory extends BaseRecord { kind: 'expense' | 'income' | 'etype'; name: string; order?: number; active: boolean }
+export type Freq = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export const FREQS: Record<Freq, string> = { daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois', yearly: 'Chaque année' };
+export const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+export interface Recurring extends BaseRecord {
+  kind: 'expense' | 'income'; label: string; categoryId: string; account: AccountId; amount: number;
+  day: number;            // jour du mois (mensuel, annuel)
+  startMonth: string;     // AAAA-MM : début
+  freq?: Freq;            // mensuel par défaut
+  weekday?: number;       // hebdomadaire : 0 = dimanche … 6 = samedi
+  month?: number;         // annuel : 1 … 12
+  time?: string;          // HH:MM : heure du rappel (notification)
+  typeId?: string;        // type de dépense (Charge fixe par défaut)
+  active: boolean; skipped?: string[];
+}
 export interface CourierSettlement extends BaseRecord { courierId: string; at: string; amount: number; account: AccountId; balanceBefore: number; orderIds: string[]; note?: string; userName?: string }
 // ---------- Dates (heure de Madagascar = heure de l'appareil) ----------
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -46,11 +61,12 @@ export const atFor = (ymd: string) => (ymd === today() ? bizNow() : new Date(`${
 
 // ---------- Catégories par défaut (identifiants fixes, identiques sur tous les appareils) ----------
 const SEED = '2000-01-01T00:00:00.000Z';
-const DEFAULT_CATS: [string, 'expense' | 'income', string][] = [
+const DEFAULT_CATS: [string, 'expense' | 'income' | 'etype', string][] = [
   ['fc-loyer', 'expense', 'Loyer'], ['fc-salaires', 'expense', 'Salaires'], ['fc-jirama', 'expense', 'Électricité et eau (JIRAMA)'],
   ['fc-internet', 'expense', 'Internet et crédit téléphone'], ['fc-transport', 'expense', 'Carburant et transport'], ['fc-pub', 'expense', 'Publicité Facebook'],
   ['fc-emballage', 'expense', 'Emballage'], ['fc-transit', 'expense', 'Transit et dédouanement'], ['fc-entretien', 'expense', 'Entretien et réparations'],
   ['fc-impots', 'expense', 'Impôts et taxes'], ['fc-frais-mm', 'expense', 'Frais Mobile Money'], ['fc-divers', 'expense', 'Dépenses diverses'],
+  ['et-courante', 'etype', 'Dépense courante'], ['et-fixe', 'etype', 'Charge fixe'], ['et-exception', 'etype', 'Dépense exceptionnelle'],
   ['fc-location', 'income', 'Location'], ['fc-prestations', 'income', 'Prestations'], ['fc-commissions', 'income', 'Commissions'], ['fc-autres', 'income', 'Autres revenus'],
 ];
 /** Remet les catégories de dépenses et revenus par défaut (après une remise à l'état d'origine). */
@@ -134,26 +150,62 @@ const monthsBetween = (start: string, end: string) => {
   while (y < ey || (y === ey && m <= em)) { out.push(`${y}-${pad(m)}`); m++; if (m > 12) { m = 1; y++; } }
   return out;
 };
-/** Échéances arrivées et pas encore confirmées. */
-export function dueRecurring(): { r: Recurring; period: string; date: string }[] {
+/** Échéances d'une charge fixe jusqu'à un jour donné (AAAA-MM-JJ). */
+export function occurrences(r: Recurring, until: string): { period: string; date: string }[] {
+  const freq = r.freq ?? 'monthly';
+  const start = `${r.startMonth}-01`;
+  const out: { period: string; date: string }[] = [];
+  if (freq === 'monthly') {
+    for (const period of monthsBetween(r.startMonth, until.slice(0, 7))) {
+      const [y, m] = period.split('-').map(Number);
+      out.push({ period, date: `${period}-${pad(Math.min(r.day, new Date(y, m, 0).getDate()))}` });
+    }
+  } else if (freq === 'yearly') {
+    for (let y = Number(r.startMonth.slice(0, 4)); y <= Number(until.slice(0, 4)); y++) {
+      const m = r.month ?? 1;
+      out.push({ period: String(y), date: `${y}-${pad(m)}-${pad(Math.min(r.day, new Date(y, m, 0).getDate()))}` });
+    }
+  } else {
+    const d = new Date(`${start}T12:00:00`);
+    if (freq === 'weekly') while (d.getDay() !== (r.weekday ?? 1)) d.setDate(d.getDate() + 1);
+    const limit = new Date(`${until}T12:00:00`); limit.setDate(limit.getDate() - (freq === 'daily' ? 31 : 7 * 26)); // pas plus loin que 1 mois / 6 mois en arrière
+    for (; dayOf(d.toISOString()) <= until; d.setDate(d.getDate() + (freq === 'daily' ? 1 : 7))) {
+      if (d < limit) continue;
+      const ymd = dayOf(d.toISOString());
+      out.push({ period: ymd, date: ymd });
+    }
+  }
+  return out.filter((o) => o.date >= start);
+}
+const hhmm = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/** Échéances arrivées (jour et heure) et pas encore payées ni ignorées. */
+export function dueRecurring(kind?: 'expense' | 'income'): { r: Recurring; period: string; date: string }[] {
   const t = today();
   const moves = all<CashMove>('cashMoves');
   const out: { r: Recurring; period: string; date: string }[] = [];
   for (const r of all<Recurring>('recurring')) {
-    if (!r.active) continue;
-    for (const period of monthsBetween(r.startMonth, t.slice(0, 7))) {
-      const [y, m] = period.split('-').map(Number);
-      const last = new Date(y, m, 0).getDate();
-      const date = `${period}-${pad(Math.min(r.day, last))}`;
-      if (date > t || r.skipped?.includes(period)) continue;
-      if (moves.some((x) => x.recurringId === r.id && x.period === period)) continue;
-      out.push({ r, period, date });
+    if (!r.active || (kind && r.kind !== kind)) continue;
+    for (const o of occurrences(r, t)) {
+      if (o.date > t || (o.date === t && r.time && hhmm() < r.time) || r.skipped?.includes(o.period)) continue;
+      if (moves.some((x) => x.recurringId === r.id && x.period === o.period)) continue;
+      out.push({ r, ...o });
     }
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
+/** Prochaine échéance (pour l'affichage). */
+export function nextOccurrence(r: Recurring): string | undefined {
+  const t = today();
+  const far = addDays(t, 400);
+  return occurrences(r, far).find((o) => o.date >= t && !r.skipped?.includes(o.period))?.date;
+}
+export function recurringText(r: Recurring) {
+  const f = r.freq ?? 'monthly';
+  const when = f === 'monthly' ? `le ${r.day} de chaque mois` : f === 'weekly' ? `chaque ${WEEKDAYS[r.weekday ?? 1]}` : f === 'daily' ? 'chaque jour' : `chaque année le ${r.day}/${pad(r.month ?? 1)}`;
+  return `${when}${r.time ? ` à ${r.time}` : ''}`;
+}
 export async function confirmRecurring(d: { r: Recurring; period: string; date: string }, amount: number, account: AccountId) {
-  await addMove({ at: atFor(d.date), account, amount: d.r.kind === 'expense' ? -amount : amount, type: d.r.kind, categoryId: d.r.categoryId, label: d.r.label, recurringId: d.r.id, period: d.period });
+  await addMove({ at: atFor(d.date), account, amount: d.r.kind === 'expense' ? -amount : amount, type: d.r.kind, categoryId: d.r.categoryId, label: d.r.label, recurringId: d.r.id, period: d.period, typeId: d.r.kind === 'expense' ? d.r.typeId ?? 'et-fixe' : undefined });
 }
 export async function skipRecurring(d: { r: Recurring; period: string }) {
   await save('recurring', { id: d.r.id, skipped: [...(d.r.skipped || []), d.period] });

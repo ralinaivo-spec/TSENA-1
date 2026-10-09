@@ -1,4 +1,4 @@
-# TSENA — Cahier des charges (version 4.1, mise à jour le 09/10/2026 — refonte v4, phases 1 et 2)
+# TSENA — Cahier des charges (version 4.2, mise à jour le 09/10/2026 — refonte v4, phases 1 à 3)
 
 > Logiciel de gestion commerciale et de comptabilité : achats (Chine), stock, ventes en ligne et en boutique, livraisons, trésorerie, rapports.
 > Fonctionne **en ligne et hors ligne** (coupure de connexion ou de courant), sur **téléphone et ordinateur** (iOS, Android, Windows, macOS).
@@ -327,6 +327,39 @@ Inspiré du cahier Excel « Recette et Dépense » (onglets RECAP JOURNALIER / H
 - **Historique des versements** : semaine, ventes, dépenses, à verser, remis, écart, validé par / le, remarque, état (versé / annulé) ; liste des **semaines terminées pas encore versées** (12 dernières) ; export Excel.
 
 ---
+
+## 9 bis. Dépenses, charges fixes et notifications *(refonte v4 — phase 3, 09/10/2026)*
+
+**Menu Argent → Dépenses** (saisie : droit « Saisir les dépenses » ; consultation aussi avec « Voir la trésorerie »).
+
+- **« + Ajouter une dépense »** :
+  - champs : montant, date, **catégorie**, **type** (Dépense courante, Charge fixe, Dépense exceptionnelle…), payé depuis (caisse par défaut), description, note, photo du reçu ;
+  - une catégorie ou un type qui manque se crée **directement dans la liste** (« + Nouvelle catégorie… », « + Nouveau type… »), sans passer par les réglages ;
+  - interdit sur une semaine déjà versée au patron.
+- **Liste** :
+  - filtres : **période** (aujourd’hui, semaine, mois, année, dates libres…), **catégorie**, **type**, recherche (description, note, montant, personne) ;
+  - totaux : total, totaux par type, barres par catégorie ;
+  - tableau triable (date, description, catégorie, type, compte, saisi par, montant) avec ligne de total, reçu visible ;
+  - suppression confirmée ; **export Excel** (liste et totaux par catégorie).
+- **Charges fixes** (loyer, salaires, JIRAMA, internet…) :
+  - définies une fois : montant, catégorie, type (Charge fixe par défaut), compte ;
+  - répétition : chaque jour, chaque semaine (jour choisi), chaque mois (jour du mois) ou chaque année (jour et mois) ;
+  - **heure du rappel**, mois de début, active ou arrêtée ; prochaine échéance affichée ;
+  - **le jour et à l’heure venus**, la charge apparaît « à payer » (en tête du menu Dépenses et en notification) : **Payer** (montant et compte modifiables : la dépense est enregistrée avec le type Charge fixe) ou **Ignorer l’échéance** (confirmation) ; « Plus tard » = fermer la notification ;
+  - les charges fixes de revenus restent possibles.
+- **Catégories et types** : ajout, renommage, désactivation (jamais supprimés, pour garder l’historique). Les catégories d’autres revenus et les autres revenus restent dans Trésorerie.
+
+**Notifications** (cloche en bas du menu et en haut sur téléphone, avec le nombre ; bandeau en haut des pages pour les 3 plus importantes) :
+
+| Importance | Notifications | Revient après × |
+|---|---|---|
+| Urgente | Charge fixe à payer (une par charge, avec le nombre d’échéances en attente), livraisons avec choix à préciser | 1 h |
+| Importante | Semaines terminées pas encore versées au patron, stock presque épuisé ou en rupture, conflits de synchronisation | 2 h |
+| Information | Pas de sauvegarde depuis 7 jours | 5 h |
+
+- Chaque notification a un **×** (elle revient plus tard), **« Pas aujourd’hui »**, **« Ouvrir »**, et **« Payer »** pour une charge.
+- Dans la cloche, les notifications reportées montrent leur **heure de retour** et peuvent être réaffichées.
+- Chacun ne voit que ce qui concerne ses droits. Le report est propre à chaque appareil.
 
 ## 10 bis. Boosts publicitaires *(ajout du 08/10/2026)*
 

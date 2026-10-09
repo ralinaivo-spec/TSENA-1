@@ -16,8 +16,8 @@ import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 
 const TABS = [
   { key: 'comptes', label: 'Soldes et mouvements' },
-  { key: 'depenses', label: 'Dépenses et revenus' },
-  { key: 'categories', label: 'Catégories et récurrentes' },
+  { key: 'depenses', label: 'Autres revenus' },
+  { key: 'categories', label: 'Catégories de revenus' },
 ];
 
 /** Plus de clôture verrouillée : toutes les journées restent modifiables (traçées dans le journal). */
@@ -205,13 +205,13 @@ function Expenses() {
   const [period, setPeriod] = useState<Period>(defaultPeriod('month'));
   const [form, setForm] = useState<FormKind | null>(null);
   const [confirm, setConfirm] = useState<ReturnType<typeof dueRecurring>[number] | null>(null);
-  const due = can('expenses.manage') ? dueRecurring() : [];
+  const due = can('expenses.manage') ? dueRecurring('income') : [];
   const inP = (iso: string) => (!period.from || dayOf(iso) >= period.from) && (!period.to || dayOf(iso) <= period.to);
-  const list = moves.filter((m) => (m.type === 'expense' || m.type === 'income') && inP(m.at)).sort((a, b) => b.at.localeCompare(a.at));
+  const list = moves.filter((m) => m.type === 'income' && inP(m.at)).sort((a, b) => b.at.localeCompare(a.at));
   const name = (id?: string) => cats.find((c) => c.id === id)?.name ?? 'Sans catégorie';
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
-    for (const x of list) if (x.type === 'expense') m.set(name(x.categoryId), (m.get(name(x.categoryId)) ?? 0) - x.amount);
+    for (const x of list) m.set(name(x.categoryId), (m.get(name(x.categoryId)) ?? 0) + x.amount);
     return [...m.entries()].sort((a, b) => b[1] - a[1]);
   }, [list, cats]);
   const totalExp = byCat.reduce((s, [, v]) => s + v, 0);
@@ -235,9 +235,8 @@ function Expenses() {
       )}
       <div className="card stack">
         <div className="row-between"><PeriodPicker value={period} onChange={setPeriod} />
-          {can('expenses.manage') && <div className="row"><Button icon="plus" onClick={() => setForm('expense')}>Dépense</Button><Button variant="ghost" icon="plus" onClick={() => setForm('income')}>Autre revenu</Button></div>}</div>
+          {can('expenses.manage') && <div className="row"><Button icon="plus" onClick={() => setForm('income')}>Autre revenu</Button><Button variant="ghost" onClick={() => navigate('/depenses')}>Les dépenses sont dans le menu Dépenses ›</Button></div>}</div>
         <div className="stat-grid">
-          <div className="card stat"><span className="small muted">Dépenses</span><strong className="stat-value num neg">{fmtAr(totalExp)}</strong></div>
           <div className="card stat"><span className="small muted">Autres revenus</span><strong className="stat-value num pos">{fmtAr(totalInc)}</strong></div>
         </div>
         {byCat.length > 0 && (
@@ -249,7 +248,7 @@ function Expenses() {
         )}
       </div>
       <div className="card card-flush">
-        {list.length === 0 ? <Empty icon="list" title="Aucune dépense ni revenu sur la période" /> : (
+        {list.length === 0 ? <Empty icon="list" title="Aucun autre revenu sur la période" /> : (
           <ul className="list">
             {list.map((m) => <FlowRow key={m.id} f={{ id: m.id, at: m.at, account: m.account, amount: m.amount, label: m.label || name(m.categoryId), detail: [m.label ? name(m.categoryId) : '', m.note, m.userName].filter(Boolean).join(' · '), move: m }} />)}
           </ul>
@@ -287,7 +286,7 @@ function Categories() {
   return (
     <>
       <div className="grid-2" style={{ alignItems: 'start' }}>
-        {(['expense', 'income'] as const).map((k) => (
+        {(['income'] as const).map((k) => (
           <div key={k} className="card stack-s">
             <div className="row-between"><h2>{k === 'expense' ? 'Catégories de dépenses' : 'Catégories d’autres revenus'}</h2>{manage && <Button variant="ghost" icon="plus" onClick={() => setEdit({ kind: k })}>Ajouter</Button>}</div>
             <ul className="list">
@@ -301,20 +300,7 @@ function Categories() {
           </div>
         ))}
       </div>
-      <div className="card stack-s">
-        <div className="row-between"><div><h2>Opérations récurrentes</h2><p className="small muted">Loyer, salaires, abonnements… À chaque échéance, elles apparaissent dans « Dépenses et revenus » pour être confirmées.</p></div>{manage && <Button icon="plus" onClick={() => setRec('new')}>Ajouter</Button>}</div>
-        {recs.length === 0 ? <Empty icon="refresh" title="Aucune opération récurrente" /> : (
-          <ul className="list">
-            {recs.map((r) => (
-              <li key={r.id} className="list-item" style={{ opacity: r.active ? 1 : .5 }}>
-                <div className="list-item-main"><span className="list-item-title">{r.label}</span><p className="small muted">Le {r.day} de chaque mois · {cats.find((c) => c.id === r.categoryId)?.name} · {ACCOUNTS[r.account]}{r.active ? '' : ' · arrêtée'}</p></div>
-                <strong className="num">{fmtAr(r.amount)}</strong>
-                {manage && <IconButton icon="edit" label="Modifier" onClick={() => setRec(r)} />}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <div className="card"><p className="small">Les catégories et types de <strong>dépenses</strong> et les <strong>charges fixes</strong> (loyer, salaires…) sont dans le menu <a href="#/depenses/fixes">Dépenses</a>.</p></div>
       {edit && <CategoryForm cat={edit} onClose={() => setEdit(null)} />}
       {rec && <RecurringForm rec={rec === 'new' ? undefined : rec} onClose={() => setRec(null)} />}
     </>

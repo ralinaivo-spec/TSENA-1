@@ -29,6 +29,7 @@ const P: Record<string, string> = {
   search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3',
   chevronRight: 'M9 18l6-6-6-6',
   chevronLeft: 'M15 18l-6-6 6-6',
+  bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   chevronUp: 'M18 15l-6-6-6 6',
   chevronDown: 'M6 9l6 6 6-6',
   database: 'M12 8c5 0 9-1.3 9-3s-4-3-9-3-9 1.3-9 3 4 3 9 3zM3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5M3 12c0 1.7 4 3 9 3s9-1.3 9-3',

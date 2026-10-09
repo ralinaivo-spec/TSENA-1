@@ -1,0 +1,75 @@
+// Notifications : calculées à partir des données (charges à payer, choix à préciser, stock bas, semaines à verser,
+// conflits de synchronisation, sauvegarde). Chacune peut être fermée (×) : elle revient plus tard selon son importance
+// (urgente : 1 h, importante : 2 h, information : 5 h), ou « pas aujourd'hui ». Réglage propre à chaque appareil.
+import { useMemo } from 'react';
+import { useCan } from './auth';
+import { getMeta, setMeta, useMeta, useTable } from './db';
+import { productStock, type Product } from './catalog';
+import { hasPendingChoice, type Order } from './orders';
+import { dueRecurring, mondayOf, today, type Recurring } from './money';
+import { unpaidWeeks } from './payouts';
+import { fmtAr } from './catalog';
+
+export type Level = 'urgent' | 'important' | 'info';
+export const SNOOZE_H: Record<Level, number> = { urgent: 1, important: 2, info: 5 };
+export const LEVEL_LABEL: Record<Level, string> = { urgent: 'Urgent', important: 'Important', info: 'Information' };
+export interface Notif { id: string; level: Level; title: string; text?: string; href?: string; due?: ReturnType<typeof dueRecurring>[number] }
+
+type Snoozes = Record<string, string>;
+export function snooze(id: string, hours: number | 'today') {
+  const until = hours === 'today' ? (() => { const d = new Date(); d.setHours(23, 59, 59, 0); return d; })() : new Date(Date.now() + hours * 3600_000);
+  const cur = { ...getMeta<Snoozes>('notifSnooze', {}) };
+  for (const [k, v] of Object.entries(cur)) if (v < new Date().toISOString()) delete cur[k]; // ménage
+  cur[id] = until.toISOString();
+  return setMeta('notifSnooze', cur);
+}
+export const unsnooze = (id: string) => { const cur = { ...getMeta<Snoozes>('notifSnooze', {}) }; delete cur[id]; return setMeta('notifSnooze', cur); };
+
+/** Toutes les notifications de l'utilisateur connecté, avec l'heure de rappel si elles sont reportées. */
+export function useNotifications() {
+  const can = useCan();
+  const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); const recs = useTable<Recurring>('recurring');
+  const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts');
+  const snoozes = useMeta<Snoozes>('notifSnooze', {});
+  const lastFile = useMeta<string | null>('lastFileBackup', null); const lastCloud = useMeta<string | null>('lastCloudBackup', null);
+  // Le temps passe : les charges « à telle heure » apparaissent sans autre changement (rafraîchi chaque minute par le composant).
+  const minute = Math.floor(Date.now() / 60000);
+  const list = useMemo(() => {
+    const out: Notif[] = [];
+    if (can('expenses.manage')) {
+      // Une seule notification par charge fixe (la plus ancienne échéance non payée), même s'il y en a plusieurs.
+      const byRec = new Map<string, ReturnType<typeof dueRecurring>>();
+      for (const d of dueRecurring()) { if (!byRec.has(d.r.id)) byRec.set(d.r.id, []); byRec.get(d.r.id)!.push(d); }
+      for (const [rid, ds] of byRec) {
+        const d = ds[0];
+        out.push({ id: `due:${rid}:${d.period}`, level: 'urgent', title: `${d.r.label} ${d.r.kind === 'income' ? 'à encaisser' : 'à payer'} : ${fmtAr(d.r.amount)}`, text: `Échéance du ${new Date(d.date + 'T12:00:00').toLocaleDateString('fr-FR')}${d.r.time ? ` à ${d.r.time}` : ''}${ds.length > 1 ? ` · ${ds.length} échéances en attente` : ''}`, href: '#/depenses', due: d });
+      }
+    }
+    if (can('deliveries.manage')) {
+      const ch = orders.filter((o) => hasPendingChoice(o));
+      if (ch.length) out.push({ id: 'choix', level: 'urgent', title: `${ch.length} livraison(s) avec un choix à préciser`, text: ch.slice(0, 4).map((o) => o.number).join(', '), href: '#/livraisons/retour' });
+    }
+    if (can('payout.validate')) {
+      const w = unpaidWeeks(today(), mondayOf);
+      if (w.length) out.push({ id: 'versement', level: 'important', title: `${w.length} semaine(s) terminée(s) pas encore versée(s) au patron`, text: `Dernière : ${fmtAr(w[0].expected)} à verser`, href: '#/recapitulatif' });
+    }
+    if (can('catalog.view')) {
+      const act = products.filter((p) => p.active !== false);
+      let out0 = 0, low = 0;
+      for (const p of act) { const s = productStock(p.id); if (s <= 0) out0++; else if (s <= (p.alertQty ?? 3)) low++; }
+      if (out0 + low) out.push({ id: 'stock', level: 'important', title: `Stock : ${low ? `${low} article(s) presque épuisé(s)` : ''}${low && out0 ? ', ' : ''}${out0 ? `${out0} en rupture` : ''}`, href: '#/stock' });
+    }
+    if (can('users.manage')) {
+      const open = conflicts.filter((c) => !c.resolved).length;
+      if (open) out.push({ id: 'conflits', level: 'important', title: `${open} conflit(s) de synchronisation à vérifier`, href: '#/parametres/cloud' });
+    }
+    if (can('backup.manage')) {
+      const last = [lastFile, lastCloud].filter(Boolean).sort().pop();
+      if (!last || Date.now() - new Date(last).getTime() > 7 * 86400_000) out.push({ id: 'sauvegarde', level: 'info', title: last ? 'Pas de sauvegarde depuis plus de 7 jours' : 'Aucune sauvegarde faite', href: '#/parametres/sauvegarde' });
+    }
+    const rank: Record<Level, number> = { urgent: 0, important: 1, info: 2 };
+    return out.sort((a, b) => rank[a.level] - rank[b.level]);
+  }, [orders, moves, recs, products, sm, conflicts, payouts, lastFile, lastCloud, minute]);
+  const now = new Date().toISOString();
+  return list.map((n) => ({ ...n, until: snoozes[n.id] && snoozes[n.id] > now ? snoozes[n.id] : undefined }));
+}
