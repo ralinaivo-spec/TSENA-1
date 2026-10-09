@@ -261,6 +261,7 @@ function ExpenseList() {
   const [q, setQ] = useState('');
   const [del, setDel] = useState<CashMove | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [allCats, setAllCats] = useState(false);
   const name = (id?: string) => cats.find((c) => c.id === id)?.name ?? '—';
   const typeOf = (m: CashMove) => m.typeId ?? (m.recurringId ? 'et-fixe' : 'et-courante');
   const list = useMemo(() => moves.filter((m) => m.type === 'expense' && inPeriod(m.at, period) && (!cat || m.categoryId === cat) && (!type || typeOf(m) === type)
@@ -292,9 +293,9 @@ function ExpenseList() {
           <div className="card stat stat-strong"><span className="small muted">Total des dépenses ({list.length})</span><strong className="stat-value num">{fmtAr(total)}</strong></div>
           {byType.slice(0, 3).map(([n, v]) => <div key={n} className="card stat"><span className="small muted">{n}</span><strong className="stat-value num">{fmtAr(v)}</strong></div>)}
         </div>
-        {byCat.length > 0 && <div className="bars">{byCat.map(([n, v]) => (
+        {byCat.length > 0 && <div className="bars">{(allCats ? byCat : byCat.slice(0, 5)).map(([n, v]) => (
           <div key={n} className="bar-row"><span className="bar-label">{n}</span><span className="bar-track"><span className="bar-fill" style={{ width: `${Math.max(2, (v / byCat[0][1]) * 100)}%` }} /></span><strong className="num">{fmtAr(v)}</strong></div>
-        ))}</div>}
+        ))}{byCat.length > 5 && <button type="button" className="link-btn" style={{ paddingLeft: 0, justifySelf: 'start' }} onClick={() => setAllCats(!allCats)}>{allCats ? 'Voir moins' : `Voir les ${byCat.length - 5} autres catégories`}</button>}</div>}
       </div>
       <div className="card card-flush">
         <div className="card-pad row-between"><h2>Liste des dépenses</h2>

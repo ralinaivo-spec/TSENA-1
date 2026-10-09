@@ -253,7 +253,7 @@ Chaque phase est mise en ligne et testée avec vous avant de passer à la suivan
 
 ---
 
-## 15. Clients à suivre (prospects) — *ajout du 09/10/2026, à valider*
+## 15. Clients à suivre (prospects) — *réalisé le 09/10/2026 (saisie séparée de la commande, nom Facebook obligatoire, groupes par date + tris)*
 
 **Votre besoin.** En répondant aux messages privés de la page, le vendeur repère des clients qui vont probablement acheter mais pas tout de suite. Ils attendent une confirmation, une information (taille, couleur, quantité, prix, photo), un paiement, ou autre chose. Ce n'est pas encore une commande, car il manque des informations essentielles. On veut pourtant les noter tout de suite, les suivre, puis les transformer en commande en un clic dès que tout est complet.
 

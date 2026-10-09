@@ -42,23 +42,20 @@ const OPTIONS: { key: PeriodKey; label: string }[] = [
   { key: 'custom', label: 'Dates…' },
 ];
 
+/** Période : une seule liste déroulante (compacte sur téléphone), et les deux dates si « Dates… ». */
 export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
   return (
-    <div className="stack-s">
-      <div className="segmented" role="group" aria-label="Période">
-        {OPTIONS.map((o) => (
-          <button key={o.key} type="button" aria-pressed={value.key === o.key}
-            onClick={() => onChange(o.key === 'custom' ? { key: 'custom', from: value.from ?? ymd(new Date()), to: value.to ?? ymd(new Date()) } : defaultPeriod(o.key))}>
-            {o.label}
-          </button>
-        ))}
+    <div className="period-picker">
+      <div className="field">
+        <label htmlFor="p-key">Période</label>
+        <select id="p-key" aria-label="Période" value={value.key} onChange={(e) => { const k = e.target.value as PeriodKey; onChange(k === 'custom' ? { key: 'custom', from: value.from ?? ymd(new Date()), to: value.to ?? ymd(new Date()) } : defaultPeriod(k)); }}>
+          {OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
       </div>
-      {value.key === 'custom' && (
-        <div className="row">
-          <div className="field"><label htmlFor="p-from">Du</label><input id="p-from" type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} /></div>
-          <div className="field"><label htmlFor="p-to">Au</label><input id="p-to" type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} /></div>
-        </div>
-      )}
+      {value.key === 'custom' && <>
+        <div className="field"><label htmlFor="p-from">Du</label><input id="p-from" type="date" value={value.from} onChange={(e) => onChange({ ...value, from: e.target.value })} /></div>
+        <div className="field"><label htmlFor="p-to">Au</label><input id="p-to" type="date" value={value.to} onChange={(e) => onChange({ ...value, to: e.target.value })} /></div>
+      </>}
     </div>
   );
 }

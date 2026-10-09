@@ -19,6 +19,8 @@ import { Thumb } from './Products';
 import { siblingsOf } from '../lib/attrs';
 import { deliveryNoteDoc, parcelLabelDoc, ticketDoc } from '../lib/print';
 import { PrintButton, type DocChoice } from '../ui/print';
+import { ProspectForm, ProspectList } from './Prospects';
+import { bucketOf, type Prospect } from '../lib/prospects';
 
 const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
   { key: 'enregistrees', label: 'Enregistrées', statuses: ['new', 'confirmed'] },
@@ -32,7 +34,7 @@ export function OrdersPage() {
   const route = useRoute();
   const raw = route.split('/')[2]?.split('?')[0];
   const seg = raw && ({ confirmer: 'enregistrees', preparer: 'enregistrees', pretes: 'attente' } as Record<string, string>)[raw] || raw;
-  if (seg && !TABS.some((t) => t.key === seg)) return <OrderDetail id={seg} />;
+  if (seg && seg !== 'suivre' && !TABS.some((t) => t.key === seg)) return <OrderDetail id={seg} />;
   return <OrderList tabKey={seg} />;
 }
 
@@ -51,6 +53,8 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   useTable<Courier>('couriers');
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
+  const [following, setFollowing] = useState(false);
+  const prospects = useTable<Prospect>('prospects');
   const [period, setPeriod] = useState<Period>(defaultPeriod('30d'));
   const scope = useMyScope();
   const tab = TABS.find((t) => t.key === tabKey) ?? TABS.find((t) => orders.some((o) => !isWalkIn(o) && t.statuses.includes(o.status) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status))) ?? TABS[0];
@@ -68,14 +72,16 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   return (
     <>
       <PageHead title="Commandes" subtitle="Commandes Facebook, téléphone et autres, jusqu’à la livraison."
-        actions={can('orders.create') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button>} />
+        actions={can('orders.create') && <><Button variant="ghost" icon="users" onClick={() => setFollowing(true)}>Client à suivre</Button><Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button></>} />
       <ScopeBar scope={scope} mineLabel="Mes commandes" text="Vous voyez les commandes que vous avez enregistrées. Les livraisons du jour restent visibles par tous dans Livraisons." />
       <div className="tabs" role="tablist">
+        {(() => { const n = prospects.filter((x) => x.status === 'open' && scope.mine({ createdBy: x.ownerId, createdByName: x.ownerName }) && bucketOf(x) !== 'later').length; return <button role="tab" aria-selected={tabKey === 'suivre'} onClick={() => navigate('/commandes/suivre')}>À suivre{n ? <span className="tab-count tab-count-hot">{n}</span> : null}</button>; })()}
         {TABS.map((t) => {
           const n = orders.filter((o) => !isWalkIn(o) && scope.mine(o) && t.statuses.includes(o.status)).length;
-          return <button key={t.key} role="tab" aria-selected={tab.key === t.key} onClick={() => navigate('/commandes/' + t.key)}>{t.label}{!['terminees', 'annulees'].includes(t.key) && n ? <span className="tab-count">{n}</span> : null}</button>;
+          return <button key={t.key} role="tab" aria-selected={tabKey !== 'suivre' && tab.key === t.key} onClick={() => navigate('/commandes/' + t.key)}>{t.label}{!['terminees', 'annulees'].includes(t.key) && n ? <span className="tab-count">{n}</span> : null}</button>;
         })}
       </div>
+      {tabKey === 'suivre' ? <ProspectList /> : <>
       <div className="card stack">
         <div className="field"><input aria-label="Rechercher" placeholder="Rechercher un téléphone, un nom, un n° de commande, un lieu…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         {done && !q && <PeriodPicker value={period} onChange={setPeriod} />}
@@ -85,7 +91,9 @@ function OrderList({ tabKey }: { tabKey?: string }) {
           <ul className="list">{list.map((o) => <OrderRow key={o.id} o={o} />)}</ul>
         )}
       </div>
+      </>}
       {creating && <OrderForm onClose={() => setCreating(false)} onSaved={(o) => navigate('/commandes/' + o.id)} />}
+      {following && <ProspectForm onClose={() => setFollowing(false)} onSaved={() => navigate('/commandes/suivre')} />}
     </>
   );
 }
@@ -121,28 +129,30 @@ export function OrderRow({ o }: { o: Order }) {
 }
 
 // ---------- Saisie d'une commande ----------
-export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Order; exchangeOf?: { parent: Order; returnLines: { variantId: string; qty: number; unitPrice: number }[] }; onClose: () => void; onSaved?: (o: Order) => void }) {
+/** Données reprises d'un client à suivre au moment de le transformer en commande. */
+export interface OrderPrefill { phone?: string; name?: string; zoneId?: string; place?: string; lines?: { variantId: string; qty: number }[]; notes?: string; prepay?: { amount: number; method: PayMethod; ref?: string } }
+export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }: { order?: Order; exchangeOf?: { parent: Order; returnLines: { variantId: string; qty: number; unitPrice: number }[] }; onClose: () => void; onSaved?: (o: Order) => void; prefill?: OrderPrefill }) {
   const company = useCompany();
   const zones = useTable<Zone>('zones').filter((z) => z.active !== false).sort((a, b) => (a.order ?? 99) - (b.order ?? 99) || a.name.localeCompare(b.name));
   useCatalog();
   const base = exchangeOf?.parent;
-  const [phone, setPhone] = useState(order?.phone ?? base?.phone ?? '');
-  const [name, setName] = useState(order?.name ?? base?.name ?? '');
+  const [phone, setPhone] = useState(order?.phone ?? base?.phone ?? pre?.phone ?? '');
+  const [name, setName] = useState(order?.name ?? base?.name ?? pre?.name ?? '');
   const [channel, setChannel] = useState<Order['channel']>(order?.channel ?? base?.channel ?? 'facebook');
-  const [zoneId, setZoneId] = useState(order?.zoneId ?? base?.zoneId ?? '');
-  const [place, setPlace] = useState(order?.place ?? base?.place ?? '');
+  const [zoneId, setZoneId] = useState(order?.zoneId ?? base?.zoneId ?? pre?.zoneId ?? '');
+  const [place, setPlace] = useState(order?.place ?? base?.place ?? pre?.place ?? '');
   const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false);
-  const [courierId, setCourierId] = useState(order?.courierId ?? '');
+  const [courierId, setCourierId] = useState(order?.courierId ?? (pre?.zoneId && !isPickupZone(pre.zoneId) ? couriers.find((x) => x.zoneIds?.includes(pre.zoneId!))?.id : undefined) ?? '');
   const [newCourier, setNewCourier] = useState('');
-  const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : '')));
+  const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : pre?.zoneId ? (isPickupZone(pre.zoneId) ? 0 : get<Zone>('zones', pre.zoneId)?.fee ?? '') : '')));
   const [wantedDate, setWantedDate] = useState(order?.wantedDate ?? '');
-  const [lines, setLines] = useState<OrderLine[]>(order?.lines ?? []);
+  const [lines, setLines] = useState<OrderLine[]>(order?.lines ?? (pre?.lines ?? []).map((l) => ({ id: newId(), variantId: l.variantId, qty: l.qty, unitPrice: linePrice(l.variantId, false) })));
   const [wholesale, setWholesale] = useState<Order['wholesale']>(order?.wholesale ?? 'auto');
   const [discount, setDiscount] = useState(order?.discount ? String(order.discount) : '');
-  const [notes, setNotes] = useState(order?.notes ?? '');
-  const [prepay, setPrepay] = useState('');
-  const [prepayMethod, setPrepayMethod] = useState<PayMethod>('mvola');
-  const [prepayRef, setPrepayRef] = useState('');
+  const [notes, setNotes] = useState(order?.notes ?? pre?.notes ?? '');
+  const [prepay, setPrepay] = useState(pre?.prepay?.amount ? String(pre.prepay.amount) : '');
+  const [prepayMethod, setPrepayMethod] = useState<PayMethod>(pre?.prepay?.method ?? 'mvola');
+  const [prepayRef, setPrepayRef] = useState(pre?.prepay?.ref ?? '');
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -328,13 +338,14 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved }: { order?: Ord
 }
 
 /** Choisir des articles : recherche, puis quantité par taille/couleur avec le stock disponible. */
-export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialProduct }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; noChoice?: boolean; initialProduct?: Product }) {
+export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialProduct, unknownQty }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; noChoice?: boolean; initialProduct?: Product; unknownQty?: boolean }) {
   const { products } = useCatalog();
   const reserved = useMemo(() => reservedIndex(excludeOrderId), [excludeOrderId]);
   const [q, setQ] = useState('');
   const [prod, setProd] = useState<Product | null>(initialProduct ?? null);
   const [qty, setQty] = useState<Record<string, string>>({});
   const [choice, setChoice] = useState<Record<string, string>>({});
+  const [want, setWant] = useState<Record<string, boolean>>({});
   const scope = useMyScope();
   const n = q.trim().toLowerCase();
   const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
@@ -344,10 +355,11 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
   const picked = variants.flatMap((v) => [
     ...(parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(qty[v.id])! }] : []),
     ...(parseNum(choice[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(choice[v.id])!, isChoice: true }] : []),
+    ...(unknownQty && want[v.id] && !parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: 0 }] : []),
   ]);
   return (
     <Modal title={prod ? prod.name : 'Ajouter un article'} onClose={onClose} wide
-      footer={prod ? <><Button variant="ghost" onClick={() => { setProd(null); setQty({}); setChoice({}); }}>Autre article</Button><Button disabled={!picked.length} onClick={() => { onAdd(picked); onClose(); }}>Ajouter</Button></> : undefined}>
+      footer={prod ? <><Button variant="ghost" onClick={() => { setProd(null); setQty({}); setChoice({}); setWant({}); }}>Autre article</Button><Button disabled={!picked.length} onClick={() => { onAdd(picked); onClose(); }}>Ajouter</Button></> : undefined}>
       {!prod ? (
         <div className="stack">
           <ScopeBar scope={scope} />
@@ -379,6 +391,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
                   {variants.some((x) => x.photo) && <Thumb src={photoOf(v)} size={84} zoom alt={`${prod.code} ${variantLabel(v)}`} />}
                   <span className="small"><strong>{cellLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
                   <label className="small">{noChoice ? 'Quantité' : 'Vendu'}<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
+                  {unknownQty && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={!!want[v.id] || !!parseNum(qty[v.id] ?? '')} onChange={(e) => setWant({ ...want, [v.id]: e.target.checked })} /> Intéressé (quantité pas encore connue)</label>}
                   {!noChoice && <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>}
                 </div>
               );

@@ -512,3 +512,20 @@ Menu **Ventes → Boosts pub** (droits « Saisir les résultats des boosts » po
 | **8** | Sauvegardes, restauration, réinitialisation, journal d'audit, outils de réparation | Sécuriser les données |
 
 Chaque étape est mise en ligne et testée avec vous avant de passer à la suivante.
+
+## 9 ter. Clients à suivre *(refonte v4 — point 15, 09/10/2026)*
+
+**Commandes clients → onglet « À suivre »** (premier onglet ; pastille rouge = nombre de relances en retard ou du jour).
+
+- **Saisie séparée de la commande** : bouton « Client à suivre » à côté de « Nouvelle commande » (les deux ne sont pas mélangés).
+- **Fiche** : seul le **nom Facebook** est obligatoire. Le reste se note quand on le sait : téléphone, page, priorité (haute, normale, basse), ce qui l'intéresse (article du catalogue, avec ou sans quantité, ou texte libre « pyjama lapin, taille à voir »), **ce qu'il attend** (sa confirmation, une information, son paiement, arrivage/stock, autre ; proposé automatiquement selon ce qui manque), précision, lieu de livraison, notes, **date de relance** (demain 9 h par défaut ; raccourcis : dans 2 h, ce soir 18 h, demain 9 h, dans 3 jours, dans 1 semaine).
+- **Liste** : trois groupes bien séparés et colorés, par date de relance par défaut : **À relancer maintenant (en retard)** en rouge, **Aujourd'hui**, **Plus tard**. Tri au choix dans chaque groupe : date de relance, priorité, montant estimé, ajoutés récemment, nom. Filtres : statut (en cours, transformés, abandonnés) et motif d'attente ; recherche. Chaque ligne montre la priorité, le motif, le montant estimé, la prochaine relance et **ce qui manque**.
+- **Relancé** : une ligne sur ce qui s'est passé (raccourcis : pas de réponse, attend encore…), nouveau motif si besoin, prochaine relance. Tout est gardé dans l'historique.
+- **Notification** « N client(s) à relancer » quand l'heure de relance est passée (ses propres suivis ; le gérant voit tout).
+- **Transformer en commande** : possible seulement quand tout est coché : téléphone, lieu (zone + lieu précis, ou retrait en boutique), article précis du catalogue, quantité de chaque article, réponse attendue reçue (« Le client a répondu », ou « Paiement reçu… » pour un paiement). La commande s'ouvre **préremplie** (client, articles, quantités, lieu, frais, livreur de la zone, paiement déjà reçu, notes) ; une fois enregistrée, le suivi passe en « Transformé » avec le lien vers la commande. Le paiement noté sur le suivi n'entre en caisse qu'à la création de la commande (jamais compté deux fois).
+- **Abandonner** (raison : pas de réponse, trop cher, a acheté ailleurs, article indisponible, autre) ; proposé quand il n'y a pas de nouvelles depuis **7 jours** (le vendeur décide). Un suivi abandonné peut être rouvert.
+- Le suivi **ne réserve pas le stock**.
+
+## 9 quater. Listes longues *(règle commune, 09/10/2026)*
+
+Une liste de choix ne doit pas prendre toute la place : peu d'options → boutons côte à côte ; beaucoup d'options → **liste déroulante** (choix unique) ou **liste déroulante à cases** avec recherche (choix multiple). Appliqué : période des tableaux et rapports, pages de la vente sur place, choix du livreur au retour, pages attribuées à un vendeur, axes d'un livreur ; dans Dépenses, les catégories du graphique sont limitées aux 5 premières (« Voir les autres »).

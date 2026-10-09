@@ -4,7 +4,7 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
 import { choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
 import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
@@ -307,7 +307,7 @@ function CourierForm({ courier, onClose }: { courier?: Courier; onClose: () => v
         <TextField label="Nom" value={name} onChange={setName} autoFocus />
         <TextField label="Téléphone" value={phone} onChange={setPhone} type="tel" inputMode="tel" />
         <div className="stack-s"><strong className="small">Axes habituels</strong>
-          <div className="row" style={{ gap: 6 }}>{zones.map((z) => <button key={z.id} type="button" className="chip" aria-pressed={zoneIds.includes(z.id)} onClick={() => setZoneIds(zoneIds.includes(z.id) ? zoneIds.filter((x) => x !== z.id) : [...zoneIds, z.id])}>{z.name}</button>)}</div>
+          <MultiPick label="Axes habituels" values={zoneIds} onChange={setZoneIds} empty="Aucun axe" options={zones.map((z) => ({ value: z.id, label: z.name }))} />
         </div>
         <TextField label="Notes" value={notes} onChange={setNotes} />
         {courier && <Toggle checked={active} onChange={setActive} label="Livreur actif" />}

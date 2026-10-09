@@ -138,7 +138,7 @@ export async function deleteCloudBackup(id: string, label: string) {
 
 // ---------- Effacer les données de test (en gardant paramètres, comptes et rôles) ----------
 export const DATA_GROUPS: { key: string; label: string; tables: TableName[]; needs?: string[]; default?: boolean }[] = [
-  { key: 'sales', label: 'Ventes, commandes et livraisons', tables: ['orders'], default: true },
+  { key: 'sales', label: 'Ventes, commandes, livraisons et clients à suivre', tables: ['orders', 'prospects'], default: true },
   { key: 'customers', label: 'Clients', tables: ['customers'], default: true },
   { key: 'money', label: 'Trésorerie : dépenses, revenus, virements, versements des livreurs et au patron', tables: ['cashMoves', 'courierSettlements', 'closings', 'payouts'], default: true },
   { key: 'stock', label: 'Mouvements de stock (le stock de chaque article revient à 0)', tables: ['stockMoves'], default: true },

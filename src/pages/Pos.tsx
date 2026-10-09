@@ -10,7 +10,7 @@ import {
   type Order, type OrderLine, type PayMethod,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Button, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
+import { Badge, Choice, Button, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ItemPicker } from './Orders';
 import { defaultTarget, printTo, ticketDoc } from '../lib/print';
@@ -101,10 +101,7 @@ export function PosPage() {
       <div className="pos-layout">
         <section className="pos-catalog card stack">
           <div className="field"><input aria-label="Rechercher un article" placeholder="Rechercher ou scanner un code (Entrée pour ajouter)…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }} autoFocus /></div>
-          {pages.length > 1 && <div className="chips-scroll" role="group" aria-label="Pages">
-            <button type="button" className="chip" aria-pressed={!cat} onClick={() => setCat('')}>Toutes</button>
-            {pages.map((c) => <button key={c.id} type="button" className="chip" aria-pressed={cat === c.id} onClick={() => setCat(cat === c.id ? '' : c.id)}>{c.name}</button>)}
-          </div>}
+          {pages.length > 1 && <Choice label="Page" hideLabel value={cat} onChange={setCat} max={5} options={[{ value: '', label: pages.length + 1 > 5 ? 'Toutes les pages' : 'Toutes' }, ...pages.map((c) => ({ value: c.id, label: c.name }))]} />}
           {found.length === 0 ? <Empty icon="search" title="Aucun article trouvé" /> : (
             <div className="pos-grid">
               {found.map(({ p, avail }) => (

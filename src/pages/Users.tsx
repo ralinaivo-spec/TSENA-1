@@ -4,7 +4,7 @@ import { audit, normUsername, roleOf, setPassword, SUPERADMIN_ID, useCurrentUser
 import { hashSecret } from '../lib/crypto';
 import { save, useTable } from '../lib/db';
 import { ADMIN_ROLE, SUPERADMIN_ROLE } from '../lib/permissions';
-import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordField, SelectField, TextField, Toggle, timeAgo, toast } from '../ui/kit';
+import { Badge, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordField, SelectField, TextField, Toggle, timeAgo, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { pageNames, userPages } from '../lib/scope';
 import type { Category } from '../lib/catalog';
@@ -190,9 +190,7 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
           <strong>Pages attribuées (catégories)</strong>
           <p className="small muted">Le vendeur verra d’abord le stock, les articles, ses commandes et ses clients de ces pages. Les livraisons restent visibles par tous. Ne cochez rien pour qu’il voie tout.</p>
           {pages.length === 0 ? <p className="small muted">Créez d’abord les catégories (une par page) dans Articles.</p> : (
-            <div className="row" style={{ gap: 6 }}>
-              {pages.map((c) => <button key={c.id} type="button" className="chip" aria-pressed={pageIds.includes(c.id)} onClick={() => setPageIds(pageIds.includes(c.id) ? pageIds.filter((x) => x !== c.id) : [...pageIds, c.id])}>{c.name}</button>)}
-            </div>
+            <MultiPick label="Pages attribuées" values={pageIds} onChange={setPageIds} empty="Aucune page (voit tout)" options={pages.map((c) => ({ value: c.id, label: c.name }))} />
           )}
         </div>}
         {user && !isSelf && !isSuper && <Toggle checked={active} onChange={setActive} label="Compte actif (décochez pour bloquer l'accès)" />}

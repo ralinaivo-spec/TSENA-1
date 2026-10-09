@@ -8,6 +8,8 @@ import { productStock, type Product } from './catalog';
 import { hasPendingChoice, type Order } from './orders';
 import { dueRecurring, mondayOf, today, type Recurring } from './money';
 import { unpaidWeeks } from './payouts';
+import { dueProspects } from './prospects';
+import { currentUser } from './auth';
 import { fmtAr } from './catalog';
 
 export type Level = 'urgent' | 'important' | 'info';
@@ -29,7 +31,7 @@ export const unsnooze = (id: string) => { const cur = { ...getMeta<Snoozes>('not
 export function useNotifications() {
   const can = useCan();
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); const recs = useTable<Recurring>('recurring');
-  const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts');
+  const products = useTable<Product>('products'); const sm = useTable('stockMoves'); const conflicts = useTable<any>('syncConflicts'); const payouts = useTable('payouts'); const prospects = useTable('prospects');
   const snoozes = useMeta<Snoozes>('notifSnooze', {});
   const lastFile = useMeta<string | null>('lastFileBackup', null); const lastCloud = useMeta<string | null>('lastCloudBackup', null);
   // Le temps passe : les charges « à telle heure » apparaissent sans autre changement (rafraîchi chaque minute par le composant).
@@ -48,6 +50,11 @@ export function useNotifications() {
     if (can('deliveries.manage')) {
       const ch = orders.filter((o) => hasPendingChoice(o));
       if (ch.length) out.push({ id: 'choix', level: 'urgent', title: `${ch.length} livraison(s) avec un choix à préciser`, text: ch.slice(0, 4).map((o) => o.number).join(', '), href: '#/livraisons/retour' });
+    }
+    if (can('orders.create')) {
+      // Clients à suivre dont l'heure de relance est passée (les siens ; le gérant voit tout).
+      const due = dueProspects(can('users.manage') ? undefined : currentUser()?.id);
+      if (due.length) out.push({ id: 'suivre', level: 'important', title: `${due.length} client(s) à relancer`, text: due.slice(0, 4).map((p) => p.fbName).join(', '), href: '#/commandes/suivre' });
     }
     if (can('payout.validate')) {
       const w = unpaidWeeks(today(), mondayOf);
@@ -69,7 +76,7 @@ export function useNotifications() {
     }
     const rank: Record<Level, number> = { urgent: 0, important: 1, info: 2 };
     return out.sort((a, b) => rank[a.level] - rank[b.level]);
-  }, [orders, moves, recs, products, sm, conflicts, payouts, lastFile, lastCloud, minute]);
+  }, [orders, moves, recs, products, sm, conflicts, payouts, prospects, lastFile, lastCloud, minute]);
   const now = new Date().toISOString();
   return list.map((n) => ({ ...n, until: snoozes[n.id] && snoozes[n.id] > now ? snoozes[n.id] : undefined }));
 }

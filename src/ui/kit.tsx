@@ -92,6 +92,54 @@ export function SelectField({ label, hint, value, onChange, options }: { label: 
     </Field>
   );
 }
+/**
+ * Choix unique : boutons côte à côte quand il y a peu d'options (≤ max), sinon liste déroulante
+ * (règle commune à toute l'application : une longue liste ne doit pas prendre toute la place).
+ */
+export function Choice({ label, value, onChange, options, max = 4, hideLabel }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; max?: number; hideLabel?: boolean }) {
+  if (options.length <= max) return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map((o) => <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>)}
+    </div>
+  );
+  const sel = <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+  return hideLabel ? <div className="field choice-select">{sel}</div> : <div className="field choice-select"><label>{label}</label>{sel}</div>;
+}
+
+/**
+ * Choix multiple : pastilles quand il y a peu d'options (≤ max), sinon une liste déroulante à cases à cocher,
+ * avec recherche quand la liste est longue.
+ */
+export function MultiPick({ label, values, onChange, options, max = 6, empty = 'Aucun' }: { label: string; values: string[]; onChange: (v: string[]) => void; options: { value: string; label: string }[]; max?: number; empty?: string }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const toggle = (v: string) => onChange(values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
+  if (options.length <= max) return (
+    <div className="row" style={{ gap: 6 }} role="group" aria-label={label}>
+      {options.map((o) => <button key={o.value} type="button" className="chip" aria-pressed={values.includes(o.value)} onClick={() => toggle(o.value)}>{o.label}</button>)}
+    </div>
+  );
+  const chosen = options.filter((o) => values.includes(o.value));
+  const n = q.trim().toLowerCase();
+  const shown = options.filter((o) => !n || o.label.toLowerCase().includes(n));
+  return (
+    <div className="multipick">
+      <button type="button" className="multipick-btn" aria-expanded={open} aria-label={label} onClick={() => setOpen(!open)}>
+        <span>{chosen.length === 0 ? empty : chosen.length <= 2 ? chosen.map((o) => o.label).join(', ') : `${chosen.length} choisis : ${chosen.slice(0, 2).map((o) => o.label).join(', ')}…`}</span>
+        <Icon name="chevronDown" size={16} />
+      </button>
+      {open && (
+        <div className="multipick-pop">
+          {options.length > 8 && <input autoFocus className="cell-input" placeholder="Rechercher…" aria-label={`Rechercher dans ${label}`} value={q} onChange={(e) => setQ(e.target.value)} />}
+          <div className="multipick-list">
+            {shown.map((o) => <label key={o.value} className="multipick-item"><input type="checkbox" checked={values.includes(o.value)} onChange={() => toggle(o.value)} /> {o.label}</label>)}
+          </div>
+          <div className="row-between"><button type="button" className="link-btn" style={{ paddingLeft: 0 }} onClick={() => onChange(values.length ? [] : options.map((o) => o.value))}>{values.length ? 'Tout décocher' : 'Tout cocher'}</button><button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>OK</button></div>
+        </div>
+      )}
+    </div>
+  );
+}
 export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <label className={`toggle ${disabled ? 'is-disabled' : ''}`}>
