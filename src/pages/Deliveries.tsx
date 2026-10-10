@@ -4,7 +4,7 @@ import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
 import { orderText, choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
-import { Badge, FilterSelect, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Help, Badge, FilterSelect, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { matchQuery } from '../lib/catalog';
@@ -182,7 +182,7 @@ function Couriers() {
   return (
     <>
       <div className="card stack">
-        <div className="row-between"><p className="small muted">Un livreur peut avoir son propre accès (Utilisateurs → rôle « Livreur ») pour voir seulement ses colis et son compte. Sans accès, ajoutez simplement sa fiche ici. Touchez un livreur pour voir ses livraisons et l’état de ses frais.</p>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
+        <div className="row-between"><Help>Un livreur peut avoir son propre accès (Utilisateurs → rôle « Livreur ») pour voir seulement ses colis et son compte. Sans accès, ajoutez simplement sa fiche ici. Touchez un livreur pour voir ses livraisons et l’état de ses frais.</Help>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
       </div>
       <DelivFilters f={f} dateLabel="les livraisons (colonnes « Livrées », « Encaissé », « Frais », « Solde période »)" searchHint="Rechercher un livreur (nom, téléphone)…" />
       <div className="card card-flush">
@@ -213,7 +213,7 @@ function Couriers() {
           </div>
         )}
       </div>
-      <p className="small muted">Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « Solde à verser » : argent encaissé pour la boutique sur toutes les livraisons pas encore versées (sans les frais du livreur), moins les frais à lui reverser, plus le reste des versements précédents. « Ticket » imprime la liste à remettre au livreur. Les règlements se font dans la commande (« Retour du livreur », quand elle passe de En livraison à Terminée) ou, pour plusieurs colis à la fois, dans « Retour livreur » (bouton « Régler »).</p>
+      <Help>Solde = argent encaissé auprès des clients − frais de livraison gagnés. « Rend » : le livreur doit cette somme à la boutique. « À lui verser » : la boutique lui doit ses frais (ex. client qui a tout payé par MVola à la boutique). « Solde à verser » : argent encaissé pour la boutique sur toutes les livraisons pas encore versées (sans les frais du livreur), moins les frais à lui reverser, plus le reste des versements précédents. « Ticket » imprime la liste à remettre au livreur. Les règlements se font dans la commande (« Retour du livreur », quand elle passe de En livraison à Terminée) ou, pour plusieurs colis à la fois, dans « Retour livreur » (bouton « Régler »).</Help>
       {edit && <CourierForm courier={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
       {open && <CourierOrders courier={open} onClose={() => setOpen(null)} />}
       {settle && <SettleModal courier={settle} onClose={() => setSettle(null)} />}

@@ -77,7 +77,7 @@ function ProfitLoss({ from, to }: { from: string; to: string }) {
   const prev = previousPeriod(from, to);
   const kp = kpis(salesLedger(prev.from, prev.to), prev.from, prev.to);
   const { byCat } = moneyOut(from, to);
-  const bucket = bucketFor(from, to);
+  const b0 = bucketFor(from, to); const bucket = b0 === 'hour' ? 'day' : b0; // au minimum par jour
   const pts = series(lines, from, to, bucket);
   const [metric, setMetric] = useState<'net' | 'revenue' | 'gross'>(cost ? 'net' : 'revenue');
   type Row = { label: string; cur: number; prev: number; strong?: boolean; sub?: boolean; pct?: boolean };

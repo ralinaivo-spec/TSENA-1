@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, getMeta, save, useMeta, useTable, type BaseRecord, type TableName } from '../lib/db';
 import type { DeviceRec } from '../lib/sync';
-import { Badge, Button, Empty, fmtDateTime, timeAgo, toast } from '../ui/kit';
+import { Help, Badge, Button, Empty, fmtDateTime, timeAgo, toast } from '../ui/kit';
 
 const TABLES: Record<string, string> = {
   orders: 'Commande', customers: 'Client', products: 'Article', variants: 'Variante', categories: 'Catégorie', couriers: 'Livreur', zones: 'Zone',
@@ -69,7 +69,7 @@ export function ConflictsCard() {
     <div className="card card-flush">
       <div className="card-pad row-between">
         <div><h3>Conflits de synchronisation {open.length > 0 && <Badge tone="warn">{open.length} à vérifier</Badge>}</h3>
-          <p className="small muted">Quand la même information est modifiée sur deux appareils avant la synchronisation, la modification la plus récente est gardée partout. L’autre valeur n’est pas perdue : elle est notée ici et peut être rétablie.</p></div>
+          <Help>Quand la même information est modifiée sur deux appareils avant la synchronisation, la modification la plus récente est gardée partout. L’autre valeur n’est pas perdue : elle est notée ici et peut être rétablie.</Help></div>
         {done.length > 0 && <Button variant="quiet" onClick={() => setShowAll(!showAll)}>{showAll ? 'Masquer les conflits réglés' : 'Voir aussi les conflits réglés'}</Button>}
       </div>
       {list.length === 0 ? <Empty icon="check" title="Aucun conflit à vérifier">Toutes les modifications ont été fusionnées sans conflit.</Empty> : (

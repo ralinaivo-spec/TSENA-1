@@ -5,7 +5,7 @@ import { currentUser, useCan } from '../lib/auth';
 import { get, save, useTable, workDate, type WorkDateRec } from '../lib/db';
 import { audit } from '../lib/auth';
 import { DATA_GROUPS, KEPT_LABEL, checkData, clearData, exportAllExcel, optimizePhotos, photoStats, tableCounts, type Issue } from '../lib/maintenance';
-import { Badge, Button, Confirm, TextField, toast } from '../ui/kit';
+import { Help, Badge, Button, Confirm, TextField, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const TABLE_LABELS: Record<string, string> = {
@@ -32,7 +32,7 @@ export function ToolsTab() {
       <WorkDateCard />
       <div className="card stack">
         <div className="row-between">
-          <div><h3>Vérifier les données</h3><p className="small muted">Recalcule le stock à partir de tous les mouvements et cherche les incohérences (stock négatif, commandes sans livreur, trop-perçus…). Rien n’est modifié sans votre accord.</p></div>
+          <div><h3>Vérifier les données</h3><Help>Recalcule le stock à partir de tous les mouvements et cherche les incohérences (stock négatif, commandes sans livreur, trop-perçus…). Rien n’est modifié sans votre accord.</Help></div>
           <Button icon="search" onClick={run}>{issues ? 'Vérifier à nouveau' : 'Lancer la vérification'}</Button>
         </div>
         {issues && <p><Badge tone={problems ? 'warn' : 'ok'}>{problems ? `${problems} point(s) à regarder` : 'Tout est en ordre'}</Badge> <span className="small muted">Stock recalculé à partir de {m.length.toLocaleString('fr-FR')} mouvement(s).</span></p>}
@@ -57,7 +57,7 @@ export function ToolsTab() {
 
       {can('backup.manage') && (
         <div className="card stack">
-          <div><h3>Exporter toutes les données en Excel</h3><p className="small muted">Un classeur avec une feuille par type de données (articles, commandes, trésorerie…), pour vos archives ou votre comptable. Les mots de passe et les photos ne sont pas exportés.</p></div>
+          <div><h3>Exporter toutes les données en Excel</h3><Help>Un classeur avec une feuille par type de données (articles, commandes, trésorerie…), pour vos archives ou votre comptable. Les mots de passe et les photos ne sont pas exportés.</Help></div>
           <div><Button variant="ghost" icon="download" busy={busy === 'xls'} onClick={async () => { setBusy('xls'); try { await exportAllExcel(); } finally { setBusy(''); } }}>Exporter en Excel</Button></div>
         </div>
       )}
@@ -84,7 +84,7 @@ export function ClearDataCard() {
   };
   return (
     <div className="card stack" style={{ borderColor: 'var(--gold)' }}>
-      <div><h3>Effacer les données de test</h3><p className="small muted">Pour repartir de zéro après les essais, sans refaire les réglages. Une sauvegarde est faite juste avant (fichier + cloud). L’effacement est envoyé à tous les appareils reliés.</p></div>
+      <div><h3>Effacer les données de test</h3><Help>Pour repartir de zéro après les essais, sans refaire les réglages. Une sauvegarde est faite juste avant (fichier + cloud). L’effacement est envoyé à tous les appareils reliés.</Help></div>
       <div className="stack-s">
         {DATA_GROUPS.map((g) => (
           <label key={g.key} className="row" style={{ gap: 10, alignItems: 'center' }}>
@@ -159,7 +159,7 @@ function PhotosCard() {
   return (
     <div className="card stack">
       <div><h3>Photos des articles</h3>
-        <p className="small muted">Chaque photo ajoutée (fiche article, import Excel, commande Chine) est automatiquement redimensionnée (480 px), convertie en JPEG et compressée à environ 40 Ko avant d’être enregistrée. Ce bouton applique le même traitement aux photos plus anciennes.</p></div>
+        <Help>Chaque photo ajoutée (fiche article, import Excel, commande Chine) est automatiquement redimensionnée (480 px), convertie en JPEG et compressée à environ 40 Ko avant d’être enregistrée. Ce bouton applique le même traitement aux photos plus anciennes.</Help></div>
       <p className="small">{st.count} photo(s) · {ko(st.bytes)} au total{st.count ? ` · moyenne ${ko(st.bytes / st.count)}` : ''}{st.heavy ? ` · ${st.heavy} à optimiser` : ' · toutes optimisées'}</p>
       <div className="row" style={{ alignItems: 'center' }}>
         <Button variant="ghost" icon="refresh" disabled={!st.heavy || !!prog} onClick={async () => {

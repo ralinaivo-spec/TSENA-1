@@ -13,7 +13,7 @@ import {
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, feeState, payDeferredFees, settleCourier, type AccountId } from '../lib/money';
-import { DiscountField, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Help, DiscountField, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
@@ -340,7 +340,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
         {!order && (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>
             <strong className="small">Paiement déjà reçu (facultatif)</strong>
-            <p className="small muted">Par défaut, le client paie tout à la livraison. S’il a déjà payé (tout ou une partie) par Mobile Money, indiquez-le : le livreur n’encaissera que le reste.</p>
+            <Help>Par défaut, le client paie tout à la livraison. S’il a déjà payé (tout ou une partie) par Mobile Money, indiquez-le : le livreur n’encaissera que le reste.</Help>
             <div className="row" style={{ gap: 6 }}>
               <button type="button" className="chip" onClick={() => setPrepay(String(Math.max(0, total - draft.deliveryFee)))}>Articles payés</button>
               {draft.deliveryFee > 0 && <button type="button" className="chip" onClick={() => setPrepay(String(Math.max(0, total)))}>Tout payé (articles + frais)</button>}
@@ -780,7 +780,7 @@ function EditPaymentModal({ order: o, payment: p, onClose }: { order: Order; pay
           <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         </div>
         <TextField label="Motif" value={reason} onChange={setReason} />
-        <p className="small muted">L’ancien montant, le nouveau, la date et votre nom restent visibles sous le paiement et dans le journal d’activité. Le reste à payer et le compte du livreur se recalculent tout seuls.</p>
+        <Help>L’ancien montant, le nouveau, la date et votre nom restent visibles sous le paiement et dans le journal d’activité. Le reste à payer et le compte du livreur se recalculent tout seuls.</Help>
       </div>
     </Modal>
   );
@@ -830,7 +830,7 @@ function ExchangeStart({ order: o, onClose }: { order: Order; onClose: () => voi
     <Modal title={`Retour / échange — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!returnLines.length} onClick={() => setNext(returnLines)}>Continuer</Button></>}>
       <div className="stack">
-        <p className="small muted">Indiquez ce que le client rend. À l’étape suivante, ajoutez les articles qu’il prend à la place (ou aucun pour un simple retour). La différence de prix est calculée automatiquement.</p>
+        <Help>Indiquez ce que le client rend. À l’étape suivante, ajoutez les articles qu’il prend à la place (ou aucun pour un simple retour). La différence de prix est calculée automatiquement.</Help>
         {keptLines.map((l) => {
           const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId);
           return (

@@ -206,6 +206,13 @@ export function DiscountField({ value, unit, onChange, onUnit, amount }: { value
     </Field>
   );
 }
+/** Texte d'aide : 2 lignes, puis « Voir plus » pour lire la suite (ne prend plus toute la place). */
+export function Help({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const long = typeof children === 'string' ? children.length > 110 : true;
+  if (!long) return <p className="small muted help">{children}</p>;
+  return <div className={`small muted help ${open ? '' : 'is-closed'}`}><span className="help-text">{children}</span> <button type="button" className="link-btn" onClick={() => setOpen(!open)}>{open ? 'Voir moins' : 'Voir plus'}</button></div>;
+}
 export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <label className={`toggle ${disabled ? 'is-disabled' : ''}`}>

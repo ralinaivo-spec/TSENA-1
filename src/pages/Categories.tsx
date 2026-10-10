@@ -10,7 +10,7 @@ import {
   makeAttr, saveArticles, shortId, suggestCatCode, suggestCode, usageOf, type Selection,
 } from '../lib/attrs';
 import { downloadBlob } from '../lib/xlsx';
-import { Button, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, navigate, toast } from '../ui/kit';
+import { Help, Button, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, navigate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 
 const fileName = (c: Category) => `Tresor-en-ligne-${(c.code || suggestCatCode(c.name)).toLowerCase()}-articles.xlsx`;
@@ -131,7 +131,7 @@ function CategoryEditor({ cat, onClose }: { cat?: Category; onClose: () => void 
 
         <div className="stack-s">
           <div className="row-between"><h3 style={{ margin: 0 }}>Variantes de la page ({attrs.filter((a) => a.active !== false).length})</h3></div>
-          <p className="small muted">Autant de variantes que nécessaire, dans l’ordre du nom de l’article. Chaque valeur a un libellé complet et un code court qui forme le nom (LP1 B22 7W).</p>
+          <Help>Autant de variantes que nécessaire, dans l’ordre du nom de l’article. Chaque valeur a un libellé complet et un code court qui forme le nom (LP1 B22 7W).</Help>
           {attrs.map((a, i) => <AttrCard key={a.id} a={a} index={i} total={attrs.length} usedAttr={used(a)} usedValue={(v) => used(a, v)}
             onChange={(p) => setAttr(a.id, p)} onMove={(d) => move(i, d)} onRemove={() => setAttrs(attrs.filter((x) => x.id !== a.id))} />)}
           <div className="row" style={{ gap: 6, alignItems: 'center' }}>
@@ -262,7 +262,7 @@ export function ArticleBuilder({ cat: initial, onClose }: { cat?: Category; onCl
         {!initial && <SelectField label="Page (catégorie)" required value={catId} onChange={(v) => { setCatId(v); setPicked({}); setEdits({}); }} options={[{ value: '', label: 'Choisir la page…' }, ...cats.map((c) => ({ value: c.id, label: categoryPath(c.id) + (activeAttrs(c).length ? '' : ' (sans variantes)') }))]} />}
         {cat && !attrs.length && <div className="notice"><Icon name="alert" /><span>Cette page n’a pas encore de variantes. Définissez-les d’abord dans <a href="#/pages">Pages et variantes</a>.</span></div>}
         {cat && attrs.length > 0 && <>
-          <p className="small muted">1. Cochez une ou plusieurs valeurs par variante : un article est proposé pour chaque combinaison. 2. Décochez celles qui n’existent pas, saisissez les prix et le stock.</p>
+          <Help>1. Cochez une ou plusieurs valeurs par variante : un article est proposé pour chaque combinaison. 2. Décochez celles qui n’existent pas, saisissez les prix et le stock.</Help>
           {attrs.map((a) => (
             <div key={a.id} className="stack-s">
               <strong className="small">{a.name}{a.required === false ? ' (facultatif)' : <Req />}</strong>

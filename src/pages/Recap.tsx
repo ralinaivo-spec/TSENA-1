@@ -11,7 +11,7 @@ import { ACCOUNTS, MOVE_TYPES, addDays, mondayOf, report, today, type AccountId,
 import { dayText, daySections, longDate, sectionsDoc, totals, weekDays, weekSections, weekText, type Section } from '../lib/recap';
 import { get } from '../lib/db';
 import { daySynthesis } from '../lib/synthesis';
-import { Badge, Button, Empty, IconButton, PageHead, fmtDate, toast } from '../ui/kit';
+import { Help, Badge, Button, Empty, IconButton, PageHead, fmtDate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PrintDialog } from '../ui/print';
 import { PayoutCard, PayoutHistory, WeekGrid } from './WeekBoard';
@@ -126,7 +126,7 @@ function DayTables({ r }: { r: Report }) {
 function CourierTable({ r, week }: { r: Report; week?: boolean }) {
   return (
     <div className="card card-flush">
-      <div className="card-pad"><h2>Comptes livreurs{week ? ' de la semaine' : ''}</h2><p className="small muted">« À encaisser » = ce que le livreur encaisse pour la boutique (articles, sans ses frais). Les frais et le total payé par les clients sont indiqués pour information. « Frais à reverser » = frais déjà payés à la boutique (Mobile Money), à lui rendre en espèces. « Compte à ce jour » comprend aussi les livraisons non versées des jours précédents.</p></div>
+      <div className="card-pad"><h2>Comptes livreurs{week ? ' de la semaine' : ''}</h2><Help>« À encaisser » = ce que le livreur encaisse pour la boutique (articles, sans ses frais). Les frais et le total payé par les clients sont indiqués pour information. « Frais à reverser » = frais déjà payés à la boutique (Mobile Money), à lui rendre en espèces. « Compte à ce jour » comprend aussi les livraisons non versées des jours précédents.</Help></div>
       {r.couriers.length === 0 ? <p className="card-pad small muted">Aucun livreur concerné.</p> : (
         <div className="table-wrap"><table className="table">
           <thead><tr><th>Livreur</th><th className="t-num">Livraisons</th><th className="t-num">À encaisser</th><th className="t-num muted">Frais livreur</th><th className="t-num muted">Total clients</th><th className="t-num">Frais à reverser</th><th className="t-num">Déjà versé</th><th className="t-num">Compte à ce jour</th></tr></thead>
@@ -246,7 +246,7 @@ function SynthesisCard({ date }: { date: string }) {
     <div className="card card-flush synth">
       <div className="card-pad row-between">
         <div><h2>Synthèse de la journée</h2>
-          <p className="small muted">« Sans retour » : tout ce qui est vendu ou parti en livraison ce jour-là. « Avec retour » : corrigé par les retours constatés au versement des livreurs, même les jours suivants.</p></div>
+          <Help>« Sans retour » : tout ce qui est vendu ou parti en livraison ce jour-là. « Avec retour » : corrigé par les retours constatés au versement des livreurs, même les jours suivants.</Help></div>
         {s.corrected ? <Badge tone="warn">Corrigé le {new Date(s.lastUpdate!).toLocaleDateString('fr-FR')}</Badge> : s.deliv.pending ? <Badge>{s.deliv.pending} livraison(s) à confirmer</Badge> : <Badge tone="ok">À jour</Badge>}
       </div>
       <div className="table-wrap"><table className="table synth-table">

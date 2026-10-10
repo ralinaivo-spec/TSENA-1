@@ -32,6 +32,7 @@ export function PosPage() {
   const [name, setName] = useState('');
   const [picking, setPicking] = useState<Product | null>(null);
   const [browse, setBrowse] = useState(false);
+  const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
   const [paying, setPaying] = useState(false);
   const [last, setLast] = useState<Order | null>(null);
   const [printFor, setPrintFor] = useState<Order | null>(null);
@@ -143,7 +144,9 @@ export function PosPage() {
                       {!internal && <div className="line-opts"><label><input type="checkbox" checked={!!l.wholesale} onChange={(e) => setLine(l.id, { wholesale: e.target.checked, priceManual: false })} /> Prix de gros</label></div>}
                       <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: internal ? 'wrap' : 'nowrap' }}>
                         <IconButton icon="x" label="Retirer un" onClick={() => setLine(l.id, { qty: l.qty - 1 })} />
-                        <span className="num" style={{ minWidth: 24, textAlign: 'center', fontWeight: 700 }}>{l.qty}</span>
+                        <input className="cell-input qty-input" inputMode="numeric" aria-label="Quantité" value={qtyDraft[l.id] ?? String(l.qty)} onFocus={(e) => e.target.select()}
+                          onChange={(e) => { const v = e.target.value.replace(/\D/g, ''); setQtyDraft({ ...qtyDraft, [l.id]: v }); if (v && Number(v) > 0) setLines(lines.map((x) => (x.id === l.id ? { ...x, qty: Number(v) } : x))); }}
+                          onBlur={() => { const { [l.id]: _, ...rest } = qtyDraft; setQtyDraft(rest); }} />
                         <IconButton icon="plus" label="Ajouter un" onClick={() => setLine(l.id, { qty: l.qty + 1 })} />
                         {internal
                           ? <span className="small muted">{l.unitPrice ? `${fmtAr(l.unitPrice)} (revient ${fmtAr(Math.round((v?.costAvg ?? 0) * 100) / 100)})` : <span className="neg">prix de revient manquant</span>}</span>

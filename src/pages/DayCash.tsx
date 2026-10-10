@@ -11,7 +11,7 @@ import { catName, dayRecap, dayRecapText, dayReview } from '../lib/payouts';
 import { closedBy } from '../lib/closed';
 import { fmtPhone, normPhone } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, toast } from '../ui/kit';
+import { Help, Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import type { CashMove } from '../lib/money';
 
@@ -145,7 +145,7 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
     <>
       <div className="card card-flush">
         <div className="card-pad"><h2>1. Aperçu des ventes du jour <Badge>{rows.length} opération(s)</Badge></h2>
-          <p className="small muted">Toutes les ventes enregistrées par tous les vendeurs : ventes sur place, colis remis aux livreurs et retours. Vérifiez qu’il ne manque rien et que les montants sont justes.</p></div>
+          <Help>Toutes les ventes enregistrées par tous les vendeurs : ventes sur place, colis remis aux livreurs et retours. Vérifiez qu’il ne manque rien et que les montants sont justes.</Help></div>
         {rows.length === 0 ? <p className="card-pad small muted">Aucune vente enregistrée ce jour.</p> : (
           <div className="table-wrap"><table className="table review-table">
             <thead><tr><th>Heure</th><th>N°</th><th>Type</th><th>Client</th><th>Page</th><th>Articles</th><th>Vendeur</th><th className="t-num">Montant</th></tr></thead>

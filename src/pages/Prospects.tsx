@@ -11,7 +11,7 @@ import {
   type Bucket, type Priority, type Prospect, type ProspectItem, type WaitFor,
 } from '../lib/prospects';
 import { useMyScope } from '../lib/scope';
-import { Badge, Button, Choice, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, navigate, toast } from '../ui/kit';
+import { Help, Badge, Button, Choice, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, navigate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ItemPicker, OrderForm } from './Orders';
 
@@ -82,7 +82,7 @@ export function ProspectList() {
   return (
     <>
       <div className="card stack-s">
-        <p className="small muted">Clients repérés dans les messages qui vont probablement acheter, mais attendent encore quelque chose (confirmation, information, paiement…). Notez ce que vous savez, relancez à la date prévue, puis transformez en commande quand tout est complet.</p>
+        <Help>Clients repérés dans les messages qui vont probablement acheter, mais attendent encore quelque chose (confirmation, information, paiement…). Notez ce que vous savez, relancez à la date prévue, puis transformez en commande quand tout est complet.</Help>
         <div className="row">
           <div className="field" style={{ flex: '2 1 220px' }}><input aria-label="Rechercher un client à suivre" placeholder="Rechercher (nom Facebook, téléphone, article, note)…" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="field" style={{ flex: '1 1 150px' }}><select aria-label="Statut" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}><option value="open">En cours</option><option value="converted">Transformés en commande</option><option value="abandoned">Abandonnés</option></select></div>

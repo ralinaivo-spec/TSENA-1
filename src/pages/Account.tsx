@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { checkPasswordStrength, logout, managesOwnPassword, roleOf, SECRET_QUESTIONS, setPassword, setSecretQuestion, audit, useCurrentUser, useMe } from '../lib/auth';
 import { verifySecret } from '../lib/crypto';
 import { PERMISSIONS, SUPERADMIN_ROLE } from '../lib/permissions';
-import { Badge, Button, PageHead, PasswordField, SelectField, TextField, toast } from '../ui/kit';
+import { Help, Badge, Button, PageHead, PasswordField, SelectField, TextField, toast } from '../ui/kit';
 import { ThemePicker } from './Settings';
 import { useMeta } from '../lib/db';
 import { setPin } from '../lib/maintenance';
@@ -119,7 +119,7 @@ function PinCard() {
   return (
     <div className="card stack-s">
       <div className="row-between"><h3>Code PIN (cet appareil)</h3>{has && <Badge tone="ok">Activé</Badge>}</div>
-      <p className="small muted">Après un verrouillage automatique, déverrouillez avec 4 à 6 chiffres au lieu du mot de passe. Le code ne vaut que sur cet appareil. Après 5 erreurs, le mot de passe est demandé.</p>
+      <Help>Après un verrouillage automatique, déverrouillez avec 4 à 6 chiffres au lieu du mot de passe. Le code ne vaut que sur cet appareil. Après 5 erreurs, le mot de passe est demandé.</Help>
       {edit ? (
         <form className="stack-s" onSubmit={async (e) => { e.preventDefault(); if (!ok) return; await setPin(me.id, pin); setEdit(false); setPinV(''); setPin2(''); toast('Code PIN enregistré sur cet appareil'); }}>
           <div className="grid-2">

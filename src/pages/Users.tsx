@@ -4,7 +4,7 @@ import { audit, normUsername, roleOf, setPassword, SUPERADMIN_ID, useCurrentUser
 import { hashSecret } from '../lib/crypto';
 import { save, useTable } from '../lib/db';
 import { ADMIN_ROLE, SUPERADMIN_ROLE } from '../lib/permissions';
-import { Badge, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordField, SelectField, TextField, Toggle, timeAgo, toast } from '../ui/kit';
+import { Help, Badge, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, PasswordField, SelectField, TextField, Toggle, timeAgo, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { pageNames, userPages } from '../lib/scope';
 import type { Category } from '../lib/catalog';
@@ -188,7 +188,7 @@ function UserForm({ user, me, roles, users, onClose, onCreated }: { user: User |
         )}
         {!isCourier && <div className="card stack-s" style={{ background: 'var(--surface-2)' }}>
           <strong>Pages attribuées (catégories)</strong>
-          <p className="small muted">Le vendeur verra d’abord le stock, les articles, ses commandes et ses clients de ces pages. Les livraisons restent visibles par tous. Ne cochez rien pour qu’il voie tout.</p>
+          <Help>Le vendeur verra d’abord le stock, les articles, ses commandes et ses clients de ces pages. Les livraisons restent visibles par tous. Ne cochez rien pour qu’il voie tout.</Help>
           {pages.length === 0 ? <p className="small muted">Créez d’abord les catégories (une par page) dans Articles.</p> : (
             <MultiPick label="Pages attribuées" values={pageIds} onChange={setPageIds} empty="Aucune page (voit tout)" options={pages.map((c) => ({ value: c.id, label: c.name }))} />
           )}

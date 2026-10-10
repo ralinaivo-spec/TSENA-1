@@ -5,7 +5,7 @@ import { getMeta, requeueAll, save, setMeta, useMeta, useTable, type BaseRecord 
 import { BRAND_SWATCHES, DEFAULT_COMPANY, resizeImage, useCompany, type ThemeMode } from '../lib/settings';
 import { disconnectCloud, connectCloud, getCloud, syncNow, useSyncStatus, type SyncLogLine } from '../lib/sync';
 import { backupFolderName, backupKey, canPickFolder, canShareFile, pickBackupFolder, saveBackupFile, setBackupPassword, unlockBackupPassword, type SavedBackup, cloudBackup, downloadBackup, factoryReset, fetchCloudBackup, listCloudBackups, readBackup, restoreBackup } from '../lib/backup';
-import { Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, Req, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
+import { Help, Badge, Button, Confirm, Empty, Modal, PageHead, PasswordField, Req, SelectField, TextField, fmtDateTime, timeAgo, toast, useRoute, navigate , IconButton } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { CloudFields } from './Auth';
 import { Zones } from './Deliveries';
@@ -97,7 +97,7 @@ function CompanyTab() {
       <SelectField label="Verrouillage automatique après inactivité" value={String(form.autoLockMinutes)} onChange={(v) => setForm({ ...form, autoLockMinutes: Number(v) })}
         options={[5, 10, 15, 30, 60, 120, 0].map((m) => ({ value: String(m), label: m ? `${m} minutes` : 'Jamais' }))} />
       <div className="card stack" style={{ background: 'var(--surface-2)' }}>
-        <div><h3>Horaires d'ouverture</h3><p className="small muted">Les commandes reçues en dehors de ces horaires sont marquées « hors heures » et attendent l'ouverture pour être préparées. Les commandes sont acceptées tous les jours.</p></div>
+        <div><h3>Horaires d'ouverture</h3><Help>Les commandes reçues en dehors de ces horaires sont marquées « hors heures » et attendent l'ouverture pour être préparées. Les commandes sont acceptées tous les jours.</Help></div>
         {[1, 2, 3, 4, 5, 6, 0].map((d) => {
           const h = (form.hours ?? DEFAULT_COMPANY.hours!)[String(d)];
           const setH = (v: { open: string; close: string } | null) => setForm({ ...form, hours: { ...(form.hours ?? DEFAULT_COMPANY.hours!), [String(d)]: v } });
@@ -206,7 +206,7 @@ function CloudTab() {
           </>
         ) : (
           <>
-            <p className="small muted">Sans cloud, les données restent uniquement sur cet appareil. Reliez-le pour partager les données entre tous les téléphones et ordinateurs, et les mettre à l'abri.</p>
+            <Help>Sans cloud, les données restent uniquement sur cet appareil. Reliez-le pour partager les données entre tous les téléphones et ordinateurs, et les mettre à l'abri.</Help>
             <form className="stack" onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
@@ -270,7 +270,7 @@ function FileBackupCard() {
         {canPickFolder() && <Button variant="ghost" icon="inbox" onClick={async () => { try { const n = await pickBackupFolder(); toast(`Les sauvegardes iront dans « ${n} »`); } catch (e: any) { if (e?.name !== 'AbortError') toast(e?.message ?? 'Dossier non choisi', 'error'); } }}>{folder ? 'Changer de dossier' : 'Choisir le dossier'}</Button>}
         {can('backup.manage') && <Button variant="ghost" icon="key" onClick={() => setSetting(true)}>{key ? 'Changer le mot de passe des sauvegardes' : 'Définir le mot de passe des sauvegardes'}</Button>}
       </div>
-      {!canPickFolder() && <p className="small muted">Sur téléphone, le fichier va dans « Téléchargements » ; le bouton « Partager » permet ensuite de l’envoyer sur Google Drive, WhatsApp ou par e-mail.</p>}
+      {!canPickFolder() && <Help>Sur téléphone, le fichier va dans « Téléchargements » ; le bouton « Partager » permet ensuite de l’envoyer sur Google Drive, WhatsApp ou par e-mail.</Help>}
       {saved && <div className="notice notice-ok" style={{ flexWrap: 'wrap', alignItems: 'center' }}><Icon name="check" /><span style={{ flex: '1 1 220px' }}>{saved.where === 'folder' ? <>Enregistré dans le dossier <strong>{saved.folder}</strong> : {saved.name}</> : <>Enregistré dans <strong>Téléchargements</strong> : {saved.name}</>}</span>
         {canShareFile(saved.file) && <Button variant="ghost" icon="share" onClick={() => (navigator as any).share({ files: [saved.file], title: saved.name }).catch(() => {})}>Partager</Button>}</div>}
       {doing && <DoBackupModal onClose={() => setDoing(false)} onDone={(r) => { setDoing(false); setSaved(r); }} />}
@@ -489,7 +489,7 @@ function VersionAndResync() {
         </div>
       </div>
       <div className="card stack">
-        <div><h3>Réparer la synchronisation</h3><p className="small muted">Retélécharge toutes les données du cloud et renvoie toutes celles de cet appareil. À utiliser si un appareil semble ne pas avoir les mêmes données que les autres.</p></div>
+        <div><h3>Réparer la synchronisation</h3><Help>Retélécharge toutes les données du cloud et renvoie toutes celles de cet appareil. À utiliser si un appareil semble ne pas avoir les mêmes données que les autres.</Help></div>
         <div><Button variant="ghost" icon="refresh" onClick={() => setResyncOpen(true)}>Tout resynchroniser</Button></div>
       </div>
       {resyncOpen && <Confirm title="Tout resynchroniser" confirmLabel="Lancer" onClose={() => setResyncOpen(false)}
@@ -513,7 +513,7 @@ function SystemTab() {
       <VersionAndResync />
       <ClearDataCard />
       <div className="card stack" style={{ borderColor: 'var(--danger)' }}>
-        <div><h3>Remettre à l'état d'origine</h3><p className="small muted">Efface toutes les données et tous les comptes sur tous les appareils, et remet le compte super-admin avec son mot de passe d'origine. Une sauvegarde est faite juste avant.</p></div>
+        <div><h3>Remettre à l'état d'origine</h3><Help>Efface toutes les données et tous les comptes sur tous les appareils, et remet le compte super-admin avec son mot de passe d'origine. Une sauvegarde est faite juste avant.</Help></div>
         <div><Button variant="danger" icon="trash" onClick={() => setResetOpen(true)}>Remettre à l'état d'origine</Button></div>
       </div>
       {resetOpen && <Confirm title="Remettre à l'état d'origine" danger confirmLabel="Tout effacer" typeToConfirm="EFFACER" onClose={() => setResetOpen(false)}

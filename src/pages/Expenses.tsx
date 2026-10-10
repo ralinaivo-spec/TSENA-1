@@ -11,7 +11,7 @@ import {
   type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring, type Rhythm,
 } from '../lib/money';
 import { closedBy } from '../lib/closed';
-import { Badge, Button, FilterSelect, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { Help, Badge, Button, FilterSelect, Confirm, Empty, IconButton, Modal, PageHead, Req, SelectField, TextField, Toggle, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { SortTable, exportTables, type Col } from '../ui/table';
@@ -319,7 +319,7 @@ function FixedCharges() {
   return (
     <>
       <div className="card row-between">
-        <p className="small muted" style={{ flex: '1 1 300px' }}>Loyer, salaires, JIRAMA, internet… Définissez-les une fois : le jour (et l’heure) venu, une notification « à payer » apparaît avec « Payer » ou « Plus tard ».</p>
+        <Help>Loyer, salaires, JIRAMA, internet… Définissez-les une fois : le jour (et l’heure) venu, une notification « à payer » apparaît avec « Payer » ou « Plus tard ».</Help>
         {can('expenses.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter une charge fixe</Button>}
       </div>
       <div className="card card-flush">
@@ -405,7 +405,7 @@ function CatsAndTypes() {
           </div>
         ))}
       </div>
-      <p className="small muted">Les catégories et types peuvent aussi être ajoutés directement pendant la saisie d’une dépense (« + Nouvelle catégorie… »). Une catégorie n’est jamais supprimée : on la désactive, l’historique reste juste. Les catégories d’autres revenus sont dans Trésorerie.</p>
+      <Help>Les catégories et types peuvent aussi être ajoutés directement pendant la saisie d’une dépense (« + Nouvelle catégorie… »). Une catégorie n’est jamais supprimée : on la désactive, l’historique reste juste. Les catégories d’autres revenus sont dans Trésorerie.</Help>
       {edit && <CatForm cat={edit} onClose={() => setEdit(null)} />}
     </>
   );

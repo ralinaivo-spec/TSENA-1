@@ -2,7 +2,7 @@
 import './polyfills';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
-import { getMeta, newId, openDb, setMeta } from './lib/db';
+import { DB_VERSION, getMeta, newId, openDb, setMeta } from './lib/db';
 import { seedAccounts } from './lib/auth';
 import { seedZones } from './lib/orders';
 import { seedFinance } from './lib/money';
@@ -31,7 +31,10 @@ function guessDeviceName() {
 async function boot() {
   try {
     await openDb();
-  await setMeta('dashPeriod', null); // le tableau de bord rouvre toujours sur « Aujourd'hui »
+    await setMeta('dashPeriod', null); // le tableau de bord rouvre toujours sur « Aujourd'hui »
+    // Nouvelle version avec de nouvelles tables (ex. clients à suivre) : une ancienne version a pu recevoir
+    // ces données sans savoir les garder. On reprend donc la synchronisation depuis le début, une fois.
+    if (getMeta<number>('schemaVersion', 0) < DB_VERSION) { await setMeta('lastRev', 0); await setMeta('schemaVersion', DB_VERSION); }
     await consumeEmailLink(); // retour depuis le lien « mot de passe oublié » reçu par e-mail
     window.addEventListener('hashchange', () => { if (/access_token=|error_description=/.test(location.hash)) consumeEmailLink(); });
     if (!getMeta('deviceId')) {

@@ -12,7 +12,7 @@ import {
   type Courier, type Order, type Zone,
 } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
-import { Badge, Choice, Button, Confirm, Empty, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
+import { Help, Badge, Choice, Button, Confirm, Empty, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ReturnModal } from './Orders';
 
@@ -38,7 +38,7 @@ export function CourierReturn() {
   return (
     <>
       <div className="card stack-s">
-        <p className="small muted">Le livreur revient avec ses colis et l’argent : indiquez pour chaque colis ce qui s’est passé, vérifiez les montants (articles et frais séparés), puis validez ce qu’il vous remet.</p>
+        <Help>Le livreur revient avec ses colis et l’argent : indiquez pour chaque colis ce qui s’est passé, vérifiez les montants (articles et frais séparés), puis validez ce qu’il vous remet.</Help>
         {withWork.length === 0 ? <Empty icon="truck" title="Aucun livreur à recevoir">Les colis remis aux livreurs apparaîtront ici.</Empty> : (
           <Choice label="Livreur" value={courier?.id ?? ''} onChange={setCid} max={4} options={[...(courier ? [] : [{ value: '', label: '— Choisir le livreur —' }]), ...withWork.map((c) => ({ value: c.id, label: `${c.name} · ${courierBalance(c.id).pending.length} colis` }))]} />
         )}

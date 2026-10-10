@@ -594,3 +594,14 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 - **Vente sur place** : plus de liste de tous les articles ; recherche (ou code scanné) → résultats compacts (photo, prix, stock) ; « Parcourir le catalogue » ouvre la fenêtre de choix ; le panier reste visible.
 - **Accueil** : Résumé en une carte claire (période et lien « Rapport au patron » sur la même ligne ; CA, Dépenses, Reste, Bénéfice net), sans signes − et =.
 - **Boutons et pastilles** plus sobres et proportionnés : hauteur 40 px (34 px dans les tableaux, listes et cartes), contour fin, sans ombre épaisse ; pastilles sans contour noir ; sur téléphone, les boutons d'en-tête se partagent la ligne.
+
+## 9 octies. Caisse, aides repliables, groupes de boutons, synchronisation après mise à jour *(10/10/2026)*
+
+| Point | Règle |
+|---|---|
+| Quantité à la vente sur place | La quantité de chaque ligne se tape directement au clavier (ex. 102) ; les boutons − / + restent pour les petits ajustements. Le contrôle du stock s'applique à la quantité tapée. |
+| Longues explications | Toute explication de plus de 2 lignes est repliée : on voit le début, puis « Voir plus » pour tout lire (« Voir moins » pour replier). |
+| Groupes de boutons (Jour / Semaine / Mois / Année / Période, filtres de stock, onglets de graphique…) | Toujours sur **une seule ligne**, même sur téléphone. S'il manque de place, le groupe glisse horizontalement avec le doigt ; il ne pousse plus la page hors de l'écran. Les titres longs passent à la ligne. |
+| Graphique Bénéfice et perte | Au minimum par jour (le détail par heure n'est plus affiché), comme le tableau de bord. |
+| Mêmes menus sur ordinateur et téléphone | Le menu est identique ; sur téléphone, les entrées sont dans la barre du bas + « Menu ». |
+| Synchronisation après mise à jour | Quand une nouvelle version ajoute un type de données (ex. clients à suivre), l'appareil retélécharge automatiquement tout le cloud une fois. Corrige le cas d'un téléphone resté sur une ancienne version qui avait reçu ces données sans les garder. |
