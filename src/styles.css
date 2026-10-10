@@ -1036,3 +1036,7 @@ tr.row-error td { background: var(--danger-soft); }
   .lines-table td:first-child { grid-column: 1 / -1; }
   .lines-table td .cell-input { width: 100%; }
 }
+@media (max-width: 600px) {
+  .return-lines tr { grid-template-columns: 1fr 1.4fr 1fr; }
+  .return-lines td[data-label]::before { content: attr(data-label); display: block; font-size: .72rem; color: var(--muted); text-align: left; }
+}

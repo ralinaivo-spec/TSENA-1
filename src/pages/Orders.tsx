@@ -12,6 +12,7 @@ import {
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
+import { ACCOUNTS, ACCOUNT_IDS, settleCourier, type AccountId } from '../lib/money';
 import { DiscountField, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
@@ -639,15 +640,42 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const [busy, setBusy] = useState(false);
   const [toShop, setToShop] = useState(false);
   const amountVal = amount == null ? toCollect : parseNum(amount) ?? 0;
+  // Règlement avec le livreur, directement ici (en livraison → terminée) : lignes a → g.
+  const can = useCan();
+  const courier = o.courierId ? get<Courier>('couriers', o.courierId) : undefined;
+  const canSettleHere = !!courier && o.status === 'out' && !isPickupZone(o.zoneId) && can('couriers.settle');
+  const [settleNow, setSettleNow] = useState(true);
+  const [feeChoice, setFeeChoice] = useState('retenue');
+  const [given, setGiven] = useState<string | null>(null);
+  const [account, setAccount] = useState<AccountId>('cash');
+  const simPaid = { ...sim, payments: [...(o.payments || []), ...(amountVal ? [{ id: 'sim', at: '', amount: amountVal, method, receivedBy: 'courier' as const, courierId: o.courierId }] : [])] } as Order;
+  const x = courierSplit(simPaid);
+  const c = o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim);
+  const prepaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
+  const paidHow = [...new Set((o.payments || []).filter((p) => p.receivedBy === 'shop').map((p) => `${PAY_METHODS[p.method]}${p.ref ? ' réf. ' + p.ref : ''}`))].join(', ');
+  const eDue = x.toCollect + x.feeKept;                          // ce que le livreur a encaissé (frais compris)
+  const mode = feeChoice === 'retenue' ? 'retenue' : feeChoice === 'plustard' ? 'plustard' : 'apart';
+  const feeAccount = (mode === 'apart' ? feeChoice.slice(6) : 'cash') as AccountId;
+  const expected = Math.max(0, mode === 'retenue' ? x.toCollect - x.feeOwed : eDue);
+  const givenVal = given == null ? expected : parseNum(given) ?? 0;
+  const gap = givenVal - expected;
+  const doSettle = canSettleHere && settleNow && choiceMissing.length === 0;
   return (
     <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0} onClick={async () => {
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0 || (doSettle && gap !== 0 && !note.trim())} onClick={async () => {
         setBusy(true);
-        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }); } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
-        toast(hasChoice ? 'Choix du client enregistré' : 'Retour enregistré'); setBusy(false); onClose();
-      }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : hasChoice ? 'Valider le choix et le retour' : 'Valider le retour'}</Button></>}>
+        try {
+          await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined });
+          if (doSettle && courier) {
+            const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? `frais payés à part (${ACCOUNTS[feeAccount]})` : 'frais différés (compte du livreur)';
+            await settleCourier(courier, [o.id], givenVal, account, [`Retour ${o.number}`, label, note.trim()].filter(Boolean).join(' · '));
+            if (mode === 'apart' && x.fee > 0) await settleCourier(courier, [], -x.fee, feeAccount, `Frais de livraison ${o.number} payés au livreur`);
+          }
+        } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
+        toast(hasChoice ? 'Choix du client enregistré' : doSettle ? `Commande terminée et réglée avec ${courier?.name}` : 'Retour enregistré'); setBusy(false); onClose();
+      }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : doSettle ? 'Terminer et régler avec le livreur' : hasChoice ? 'Valider le choix et le retour' : 'Valider le retour'}</Button></>}>
       <div className="stack">
-        {hasChoice && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues). Le versement du livreur pour cette livraison n’est possible qu’après cette étape.</span></div>}
+        {hasChoice && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues). Le règlement avec le livreur se fait juste après.</span></div>}
         <div className="row">
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>{hasChoice ? 'Tout livré, choix tous rendus' : 'Tout livré'}</Button>
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, '0'])))}>Tout refusé</Button>
@@ -656,7 +684,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         {toShop && <Confirm title="Livraison annulée : retrait en boutique" confirmLabel="Annuler la livraison" message={<div className="stack-s"><p>Le livreur rapporte le colis : les articles reviennent en boutique, <strong>réservés pour ce client</strong>.</p><p>Pas de frais de livraison pour le client, pas de dédommagement pour le livreur. Quand le client passera, ouvrez la commande et touchez « Remise au client en boutique » : elle sera comptée comme <strong>vente sur place</strong>.</p></div>}
           onClose={() => setToShop(false)} onConfirm={async () => { await cancelDeliveryToShop(o); toast('Livraison annulée : la commande attend le client en boutique'); onClose(); }} />}
         <div className="table-wrap">
-          <table className="table">
+          <table className="table lines-table return-lines">
             <thead><tr><th>Article</th><th className="t-num">Parti</th><th style={{ width: 110 }}>Gardé par le client</th><th className="t-num">Revient en stock</th></tr></thead>
             <tbody>
               {o.lines.map((l) => {
@@ -664,22 +692,51 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
                 return (
                   <tr key={l.id} className={l.isChoice ? 'is-choice' : ''}>
                     <td><strong>{p?.code}</strong> {variantLabel(v)} {l.isChoice && <Badge tone="warn">choix</Badge>}<div className="small muted">{fmtAr(l.unitPrice)}</div></td>
-                    <td className="t-num num">{l.qty}</td>
-                    <td><input className="cell-input" inputMode="numeric" aria-label="Gardé" placeholder={l.isChoice ? 'à préciser' : ''} aria-invalid={l.isChoice && (kept[l.id] ?? '').trim() === ''} value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td>
-                    <td className="t-num num">{l.qty - keptNum[l.id]}</td>
+                    <td className="t-num num" data-label="Parti">{l.qty}</td>
+                    <td data-label="Gardé par le client"><input className="cell-input" inputMode="numeric" aria-label="Gardé" placeholder={l.isChoice ? 'à préciser' : ''} aria-invalid={l.isChoice && (kept[l.id] ?? '').trim() === ''} value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td>
+                    <td className="t-num num" data-label="Revient en stock">{l.qty - keptNum[l.id]}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
-        <div className="grid-2">
-          <TextField label="Frais de livraison facturés (Ar)" value={fee ?? String(feeVal)} onChange={setFee} inputMode="numeric" hint={!anyKept ? 'Commande refusée : mettez les frais si le client les a quand même payés.' : 'Ces frais reviennent au livreur.'} />
-          <TextField label="Argent encaissé par le livreur (Ar)" value={amount ?? String(amountVal)} onChange={setAmount} inputMode="numeric" hint={`À encaisser selon la commande : ${fmtAr(toCollect)}`} />
-          <SelectField label="Moyen de paiement" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
-          {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
+
+        <div className="card stack-s settle-box">
+          <h3>Ce que la boutique doit recevoir</h3>
+          <div className="money-lines">
+            <div><span>a. Articles (après le choix du client)</span><strong className="num">{fmtAr(c - feeVal)}</strong></div>
+            <div><span>b. Frais de livraison</span><input className="cell-input num-input" inputMode="numeric" aria-label="Frais de livraison facturés (Ar)" value={fee ?? String(feeVal)} onChange={(e) => setFee(e.target.value)} /></div>
+            {!anyKept && <div className="small muted"><span>Commande refusée : mettez les frais seulement si le client les a payés.</span></div>}
+            <div className="ml-total"><span>= À payer par le client (a + b)</span><strong className="num">{fmtAr(c)}</strong></div>
+            <div><span>c. Déjà payé à la boutique{paidHow ? ` (${paidHow})` : ''}</span><strong className="num">{prepaid ? '− ' + fmtAr(prepaid) : '—'}</strong></div>
+            <div className="ml-strong"><span>e. Reste à verser par le livreur (frais compris)</span><strong className="num">{fmtAr(eDue)}</strong></div>
+          </div>
+          <div className="grid-2">
+            <TextField label="Encaissé par le livreur auprès du client (Ar)" value={amount ?? String(amountVal)} onChange={setAmount} inputMode="numeric" hint={amountVal !== toCollect ? `Prévu : ${fmtAr(toCollect)}` : 'Normalement : le reste à payer par le client.'} />
+            <SelectField label="Le client a payé le livreur en" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
+            {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
+          </div>
+          {canSettleHere && <>
+            <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={settleNow} onChange={(e) => setSettleNow(e.target.checked)} /> <strong>Régler maintenant avec {courier!.name}</strong></label>
+            {settleNow && <>
+              <SelectField label={`g. Frais du livreur (${fmtAr(x.fee)}) payés…`} required value={feeChoice} onChange={(v) => { setFeeChoice(v); setGiven(null); }} options={[
+                { value: 'retenue', label: 'Gardés par le livreur sur l’argent versé' },
+                ...ACCOUNT_IDS.filter((a) => a !== 'bank').map((a) => ({ value: 'apart:' + a, label: `Payés à part — ${ACCOUNTS[a]}` })),
+                { value: 'plustard', label: 'Différés (à payer au plus vite)' },
+              ]} />
+              <div className="ml-expected"><span>Le livreur doit vous remettre</span><strong className="num">{fmtAr(expected)}</strong></div>
+              <div className="grid-2">
+                <TextField label="f. Montant versé par le livreur (Ar)" required value={given ?? String(expected)} onChange={setGiven} inputMode="numeric" />
+                <SelectField label="Reçu sur" value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
+              </div>
+              {gap !== 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Écart de {gap > 0 ? '+' : '−'} {fmtAr(Math.abs(gap))} : expliquez-le dans la remarque. {gap < 0 ? 'Le reste sera à verser par le livreur au prochain retour.' : ''}</span></div>}
+              {mode === 'plustard' && x.fee > 0 && <p className="small muted">La boutique devra {fmtAr(x.fee)} de frais à {courier!.name} : rappel jusqu’au paiement.</p>}
+            </>}
+            {!settleNow && <p className="small muted">Le règlement se fera plus tard dans Livraisons → Retour livreur.</p>}
+          </>}
         </div>
-        <TextField label="Remarque (motif de refus, etc.)" value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
+        <TextField label={doSettle && gap !== 0 ? 'Remarque (écart, motif de refus…)' : 'Remarque (motif de refus, etc.)'} required={doSettle && gap !== 0} value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
       </div>
     </Modal>
   );
