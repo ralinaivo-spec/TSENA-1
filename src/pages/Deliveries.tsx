@@ -3,24 +3,48 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum } from '../lib/catalog';
-import { choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
-import { Badge, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
+import { orderText, choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { Badge, FilterSelect, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
-import { PeriodPicker, defaultPeriod, type Period } from '../ui/period';
+import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
+import { matchQuery } from '../lib/catalog';
 import { DispatchModal, ReassignModal, ReturnModal, OrderRow } from './Orders';
 import { CourierReturn } from './CourierReturn';
 import { useCompany } from '../lib/settings';
 import { deliveryNoteDoc, joinDocs, parcelLabelDoc, routeSheetDoc } from '../lib/print';
 import { PrintButton } from '../ui/print';
-import { ACCOUNTS, ACCOUNT_IDS, courierBalance, deliveryNet, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, courierBalance, deliveryNet, feeState, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 
 const TABS = [
+  { key: 'livreurs', label: 'Comptes livreurs', perm: 'couriers.view' },
   { key: 'a-livrer', label: 'En attente de livraison', perm: 'orders.dispatch' },
   { key: 'en-cours', label: 'En livraison', perm: 'deliveries.manage' },
   { key: 'retour', label: 'Retour livreur', perm: 'deliveries.manage' },
-  { key: 'livreurs', label: 'Comptes livreurs', perm: 'couriers.view' },
   { key: 'zones', label: 'Zones et frais', perm: 'couriers.view' },
 ];
+
+/** Filtres communs : livreur, période, recherche (tout le contenu de la commande). */
+function useDelivFilters(initial: Period['key'] = 'all') {
+  const [courierId, setCourierId] = useState('');
+  const [period, setPeriod] = useState<Period>(defaultPeriod(initial));
+  const [q, setQ] = useState('');
+  return { courierId, setCourierId, period, setPeriod, q, setQ };
+}
+type DF = ReturnType<typeof useDelivFilters>;
+function DelivFilters({ f, dateLabel, searchHint }: { f: DF; dateLabel: string; searchHint?: string }) {
+  const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  return (
+    <div className="card stack-s deliv-filters">
+      <div className="row">
+        <div className="field" style={{ flex: '1 1 180px' }}><label htmlFor="df-c">Livreur</label><FilterSelect label="Livreur" value={f.courierId} onChange={f.setCourierId} options={[{ value: '', label: 'Tous les livreurs' }, ...couriers.map((c) => ({ value: c.id, label: c.name }))]} /></div>
+        <div style={{ flex: '2 1 260px' }}><PeriodPicker value={f.period} onChange={f.setPeriod} /></div>
+      </div>
+      <div className="field"><input aria-label="Rechercher" placeholder={searchHint ?? 'Rechercher : n°, client, téléphone, lieu, article, montant…'} value={f.q} onChange={(e) => f.setQ(e.target.value)} /></div>
+      <p className="small muted" style={{ margin: 0 }}>Période sur {dateLabel}.</p>
+    </div>
+  );
+}
+const passes = (o: Order, f: DF, date?: string) => (!f.courierId || o.courierId === f.courierId) && (f.period.key === 'all' || inPeriod(date, f.period)) && (!f.q.trim() || matchQuery(orderText(o), f.q));
 
 export function DeliveriesPage() {
   const can = useCan();
@@ -47,16 +71,18 @@ function ToDeliver() {
   const zones = useTable<Zone>('zones');
   const [sel, setSel] = useState<string[]>([]);
   const [dispatch, setDispatch] = useState(false);
-  const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId));
+  const f = useDelivFilters('all');
+  const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId) && passes(o, f, o.createdAt));
   const preparing = orders.filter((o) => ['new', 'confirmed'].includes(o.status) && o.channel !== 'shop').length;
   const groups = useMemo(() => {
     const m = new Map<string, Order[]>();
     for (const o of ready) { const k = o.zoneId || ''; if (!m.has(k)) m.set(k, []); m.get(k)!.push(o); }
     return [...m.entries()].sort((a, b) => (get<Zone>('zones', a[0])?.order ?? 99) - (get<Zone>('zones', b[0])?.order ?? 99));
-  }, [orders, zones]);
+  }, [orders, zones, f.courierId, f.period, f.q]);
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
   return (
     <>
+      <DelivFilters f={f} dateLabel="la date de la commande ; livreur = livreur prévu" />
       <div className="card row-between">
         <p className="small">{ready.length} commande(s) en attente de livraison{preparing ? ` · ${preparing} enregistrée(s), pas encore préparée(s)` : ''}. Imprimez les étiquettes, cochez les commandes d’un même axe puis remettez-les au livreur.</p>
         <div className="row" style={{ gap: 6 }}>
@@ -96,11 +122,13 @@ function OutNow() {
   useTable<Zone>('zones');
   const [ret, setRet] = useState<Order | null>(null);
   const [move, setMove] = useState<Order | null>(null);
-  const out = orders.filter((o) => o.status === 'out');
+  const f = useDelivFilters('all');
+  const out = orders.filter((o) => o.status === 'out' && passes(o, f, o.dispatchedAt));
   const byCourier = new Map<string, Order[]>();
   for (const o of out) { const k = o.courierId || ''; if (!byCourier.has(k)) byCourier.set(k, []); byCourier.get(k)!.push(o); }
   return (
     <>
+      <DelivFilters f={f} dateLabel="la date de départ chez le livreur" />
       {out.length === 0 ? <div className="card"><Empty icon="truck" title="Aucune livraison en cours" /></div> : [...byCourier.entries()].map(([cid, list]) => {
         const c = couriers.find((x) => x.id === cid);
         return (
@@ -144,18 +172,19 @@ function Couriers() {
   const couriers = useTable<Courier>('couriers');
   useTable<Order>('orders');
   const zones = useTable<Zone>('zones');
-  const [period, setPeriod] = useState<Period>(defaultPeriod('today'));
+  const f = useDelivFilters('today');
+  const period = f.period;
   const [edit, setEdit] = useState<Courier | 'new' | null>(null);
   const [open, setOpen] = useState<Courier | null>(null);
   const [settle, setSettle] = useState<Courier | null>(null);
   useTable<CourierSettlement>('courierSettlements');
-  const sorted = [...couriers].sort((a, b) => Number(b.active !== false) - Number(a.active !== false) || a.name.localeCompare(b.name));
+  const sorted = [...couriers].filter((c) => (!f.courierId || c.id === f.courierId) && (!f.q.trim() || matchQuery(`${c.name} ${c.phone ?? ''} ${c.notes ?? ''}`, f.q))).sort((a, b) => Number(b.active !== false) - Number(a.active !== false) || a.name.localeCompare(b.name));
   return (
     <>
       <div className="card stack">
-        <div className="row-between"><p className="small muted">Un livreur peut avoir son propre accès (Utilisateurs → rôle « Livreur ») pour voir seulement ses colis et son compte. Sans accès, ajoutez simplement sa fiche ici.</p>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
-        <PeriodPicker value={period} onChange={setPeriod} />
+        <div className="row-between"><p className="small muted">Un livreur peut avoir son propre accès (Utilisateurs → rôle « Livreur ») pour voir seulement ses colis et son compte. Sans accès, ajoutez simplement sa fiche ici. Touchez un livreur pour voir ses livraisons et l’état de ses frais.</p>{can('couriers.manage') && <Button icon="plus" onClick={() => setEdit('new')}>Ajouter un livreur</Button>}</div>
       </div>
+      <DelivFilters f={f} dateLabel="les livraisons (colonnes « Livrées », « Encaissé », « Frais », « Solde période »)" searchHint="Rechercher un livreur (nom, téléphone)…" />
       <div className="card card-flush">
         {sorted.length === 0 ? <Empty icon="truck" title="Aucun livreur" /> : (
           <div className="table-wrap">
@@ -281,10 +310,41 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
 }
 
 function CourierOrders({ courier, onClose }: { courier: Courier; onClose: () => void }) {
-  const orders = useTable<Order>('orders').filter((o) => o.courierId === courier.id).sort((a, b) => (b.dispatchedAt || '').localeCompare(a.dispatchedAt || '')).slice(0, 60);
+  const can = useCan();
+  useTable('courierSettlements');
+  const all = useTable<Order>('orders').filter((o) => o.courierId === courier.id && o.dispatchedAt).sort((a, b) => (b.dispatchedAt || '').localeCompare(a.dispatchedAt || ''));
+  const [show, setShow] = useState<'all' | 'deferred'>('all');
+  const [pay, setPay] = useState<Order | 'all' | null>(null);
+  const deferred = all.filter((o) => feeState(o) === 'deferred');
+  const deferredSum = deferred.reduce((t, o) => t + courierSplit(o).fee, 0);
+  const list = (show === 'deferred' ? deferred : all).slice(0, 80);
+  const [acc, setAcc] = useState<AccountId>('cash');
   return (
     <Modal title={`Livraisons de ${courier.name}`} onClose={onClose} wide>
-      {orders.length === 0 ? <Empty icon="truck" title="Aucune livraison" /> : <ul className="list">{orders.map((o) => <OrderRow key={o.id} o={o} />)}</ul>}
+      <div className="stack">
+        <div className="stat-grid">
+          <div className="card stat"><span className="small muted">Livraisons</span><strong className="stat-value num">{all.length}</strong></div>
+          <div className="card stat"><span className="small muted">Frais gagnés (livraisons terminées)</span><strong className="stat-value num">{fmtAr(all.filter((o) => ['delivered', 'partial', 'refused'].includes(o.status)).reduce((t, o) => t + courierSplit(o).fee, 0))}</strong></div>
+          <div className={`card stat ${deferredSum ? 'stat-hot' : ''}`}><span className="small muted">Frais différés à lui payer</span><strong className="stat-value num">{fmtAr(deferredSum)}</strong>{deferredSum > 0 && can('couriers.settle') && <Button onClick={() => setPay('all')}>Tout payer</Button>}</div>
+        </div>
+        <div className="segmented" role="group" aria-label="Afficher"><button type="button" aria-pressed={show === 'all'} onClick={() => setShow('all')}>Toutes</button><button type="button" aria-pressed={show === 'deferred'} onClick={() => setShow('deferred')}>Frais différés ({deferred.length})</button></div>
+        {list.length === 0 ? <Empty icon="truck" title="Aucune livraison" /> : (
+          <ul className="list">{list.map((o) => { const fs = feeState(o); const fee = courierSplit(o).fee; return (
+            <li key={o.id} className="list-item">
+              <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                <span className="list-item-title">{o.number} · {orderLabel(o)}</span>
+                <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · parti le {fmtDateTime(o.dispatchedAt)} · {o.status === 'out' ? 'en livraison' : o.status === 'refused' ? 'refusée' : 'livrée'}</p>
+              </a>
+              <div className="list-item-side"><strong className="num">Frais {fmtAr(fee)}</strong><Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge>{fs === 'paid' && o.feePaidAt && <span className="small muted">{fmtDateTime(o.feePaidAt)}</span>}</div>
+              {fs === 'deferred' && can('couriers.settle') && <Button variant="ghost" onClick={() => setPay(o)}>Payer</Button>}
+            </li>
+          ); })}</ul>
+        )}
+      </div>
+      {pay && <Confirm title={`Payer les frais de ${courier.name}`} confirmLabel="Enregistrer le paiement" onClose={() => setPay(null)}
+        onConfirm={async () => { const os = pay === 'all' ? deferred : [pay]; const amt = os.reduce((t, o) => t + courierSplit(o).fee, 0); await payDeferredFees(courier, amt, acc, os); toast(`${fmtAr(amt)} de frais payés à ${courier.name}`); }}
+        message={<div className="stack-s"><p>{pay === 'all' ? `${deferred.length} livraison(s) : ${fmtAr(deferredSum)} de frais différés.` : `Frais de ${pay.number} : ${fmtAr(courierSplit(pay).fee)}.`}</p>
+          <SelectField label="Payé depuis" value={acc} onChange={(v) => setAcc(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} /></div>} />}
     </Modal>
   );
 }

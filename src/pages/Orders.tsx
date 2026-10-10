@@ -12,7 +12,7 @@ import {
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
-import { ACCOUNTS, ACCOUNT_IDS, settleCourier, type AccountId } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, feeState, payDeferredFees, settleCourier, type AccountId } from '../lib/money';
 import { DiscountField, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
@@ -467,6 +467,7 @@ function OrderDetail({ id }: { id: string }) {
   const o = orders.find((x) => x.id === id);
   const [editPay, setEditPay] = useState<Payment | null>(null);
   const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign'>('');
+  const [payFee, setPayFee] = useState(false);
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
   const courier = couriers.find((c) => c.id === o.courierId);
@@ -554,6 +555,15 @@ function OrderDetail({ id }: { id: string }) {
           ); })()}
         </div>
       </div>
+
+      {(() => { const fs = feeState(o); if (fs === 'none' || fs === 'pending' && o.status === 'out') return null; const fc = get<Courier>('couriers', o.courierId || ''); const f = courierSplit(o).fee; return (
+        <div className={`card row-between fee-card fee-${fs}`}>
+          <div><h3>Frais de livraison du livreur{fc ? ` (${fc.name})` : ''} : {fmtAr(f)}</h3>
+            <p className="small"><Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge>{fs === 'paid' && o.feePaidAt ? ` le ${fmtDateTime(o.feePaidAt)}${o.feePaidHow ? ` (${o.feePaidHow})` : ''}` : ''}{fs === 'pending' ? ' — à régler au retour du livreur.' : ''}</p></div>
+          {fs === 'deferred' && fc && can('couriers.settle') && <Button onClick={() => setPayFee(true)}>Payer les frais</Button>}
+          {payFee && fc && <PayFeeModal order={o} courier={fc} amount={f} onClose={() => setPayFee(false)} />}
+        </div>
+      ); })()}
 
       {(o.payments || []).length > 0 && (
         <div className="card stack-s">
@@ -670,6 +680,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
             const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? `frais payés à part (${ACCOUNTS[feeAccount]})` : 'frais différés (compte du livreur)';
             await settleCourier(courier, [o.id], givenVal, account, [`Retour ${o.number}`, label, note.trim()].filter(Boolean).join(' · '));
             if (mode === 'apart' && x.fee > 0) await settleCourier(courier, [], -x.fee, feeAccount, `Frais de livraison ${o.number} payés au livreur`);
+            if (x.fee > 0) await save('orders', { id: o.id, feeStatus: mode === 'retenue' ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: bizNow(), feePaidHow: ACCOUNTS[feeAccount] } : {}) });
           }
         } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast(hasChoice ? 'Choix du client enregistré' : doSettle ? `Commande terminée et réglée avec ${courier?.name}` : 'Retour enregistré'); setBusy(false); onClose();
@@ -739,6 +750,17 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         <TextField label={doSettle && gap !== 0 ? 'Remarque (écart, motif de refus…)' : 'Remarque (motif de refus, etc.)'} required={doSettle && gap !== 0} value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
       </div>
     </Modal>
+  );
+}
+
+/** Payer les frais différés d'une commande au livreur (aussi possible depuis son compte). */
+export function PayFeeModal({ order, courier, amount, onClose }: { order: Order; courier: Courier; amount: number; onClose: () => void }) {
+  const [acc, setAcc] = useState<AccountId>('cash');
+  return (
+    <Confirm title={`Payer les frais de ${courier.name}`} confirmLabel="Enregistrer le paiement" onClose={onClose}
+      onConfirm={async () => { await payDeferredFees(courier, amount, acc, [order]); toast(`Frais de ${order.number} payés à ${courier.name}`); }}
+      message={<div className="stack-s"><p>Frais de livraison de la commande <strong>{order.number}</strong> : <strong>{fmtAr(amount)}</strong>, différés au retour du livreur.</p>
+        <SelectField label="Payé depuis" value={acc} onChange={(v) => setAcc(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} /></div>} />
   );
 }
 

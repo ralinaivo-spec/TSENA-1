@@ -11,7 +11,7 @@ import {
   cancelDeliveryToShop, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
   type Courier, type Order, type Zone,
 } from '../lib/orders';
-import { ACCOUNTS, ACCOUNT_IDS, courierBalance, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, courierBalance, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 import { Badge, Choice, Button, Confirm, Empty, SelectField, TextField, fmtDateTime, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ReturnModal } from './Orders';
@@ -54,7 +54,7 @@ function PayOwedModal({ courier, amount, onClose }: { courier: Courier; amount: 
   const [val, setVal] = useState(String(amount));
   return (
     <Confirm title={`Payer les frais de ${courier.name}`} confirmLabel="Enregistrer le paiement" onClose={onClose}
-      onConfirm={async () => { const v = parseNum(val) || 0; if (v <= 0) throw new Error('Montant à saisir.'); await settleCourier(courier, [], -v, acc, 'Frais de livraison différés payés'); await save('couriers', { id: courier.id, feeClaimAt: null as unknown as undefined }); toast(`${fmtAr(v)} payés à ${courier.name}`); }}
+      onConfirm={async () => { const v = parseNum(val) || 0; if (v <= 0) throw new Error('Montant à saisir.'); await payDeferredFees(courier, v, acc); await save('couriers', { id: courier.id, feeClaimAt: null as unknown as undefined }); toast(`${fmtAr(v)} payés à ${courier.name}`); }}
       message={<div className="stack-s"><p>La boutique doit <strong>{fmtAr(amount)}</strong> de frais de livraison à {courier.name}.</p>
         <div className="grid-2"><TextField label="Montant payé (Ar)" required value={val} onChange={setVal} inputMode="numeric" /><SelectField label="Payé depuis" value={acc} onChange={(v) => setAcc(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} /></div></div>} />
   );
@@ -114,6 +114,7 @@ function CourierSheet({ courier, canSettle }: { courier: Courier; canSettle: boo
       const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? 'frais payés à part' : 'frais à payer plus tard (compte du livreur)';
       await settleCourier(courier, on.map((r) => r.o.id), n, account, [note.trim(), label].filter(Boolean).join(' · '));
       if (payFees > 0) await settleCourier(courier, [], -payFees, feeAccount, 'Frais de livraison payés au livreur');
+      for (const r of on) if (r.fee > 0) await save('orders', { id: r.o.id, feeStatus: mode === 'retenue' ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: new Date().toISOString(), feePaidHow: ACCOUNTS[feeAccount] } : {}) });
       toast(`Retour de ${courier.name} enregistré`);
       setDec({}); setFees({}); setOff({}); setAmount(null); setNote('');
     } catch (e: any) { toast(e?.message ?? String(e), 'error'); }

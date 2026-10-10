@@ -411,3 +411,31 @@ export function mondayOf(ymd: string) {
   return dayOf(d.toISOString());
 }
 export function addDays(ymd: string, n: number) { const d = new Date(`${ymd}T12:00:00`); d.setDate(d.getDate() + n); return dayOf(d.toISOString()); }
+
+// ---------- Frais de livraison du livreur, commande par commande ----------
+export type FeeState = 'none' | 'pending' | 'kept' | 'paid' | 'deferred';
+export const FEE_STATE: Record<FeeState, { label: string; tone: 'neutral' | 'ok' | 'warn' | 'danger' }> = {
+  none: { label: 'Pas de frais', tone: 'neutral' }, pending: { label: 'Pas encore réglés', tone: 'warn' }, kept: { label: 'Gardés par le livreur', tone: 'ok' },
+  paid: { label: 'Payés au livreur', tone: 'ok' }, deferred: { label: 'Différés : à payer', tone: 'danger' },
+};
+/** État des frais du livreur pour une commande (les anciennes commandes sont retrouvées par la note du versement). */
+export function feeState(o: Order): FeeState {
+  if (!o.courierId || isPickupZone(o.zoneId) || !o.dispatchedAt) return 'none';
+  if (!courierSplit(o).fee) return 'none';
+  if (o.feeStatus) return o.feeStatus;
+  if (!o.courierSettledAt) return 'pending';
+  const s = all<CourierSettlement>('courierSettlements').find((x) => x.orderIds?.includes(o.id));
+  const n = (s?.note || '').toLowerCase();
+  return /différ|plus tard/.test(n) ? 'deferred' : /payés à part/.test(n) ? 'paid' : 'kept';
+}
+/** Payer des frais différés au livreur : enregistre le paiement et marque les commandes concernées (les plus anciennes d'abord). */
+export async function payDeferredFees(c: Courier, amount: number, account: AccountId, only?: Order[]) {
+  const list = (only ?? all<Order>('orders').filter((o) => o.courierId === c.id && feeState(o) === 'deferred')).sort((a, b) => (a.courierSettledAt || '').localeCompare(b.courierSettledAt || ''));
+  await settleCourier(c, [], -amount, account, `Frais de livraison différés payés${list.length ? ' : ' + list.map((o) => o.number).join(', ') : ''}`);
+  let left = amount; const at = bizNow();
+  for (const o of list) {
+    const f = courierSplit(o).fee; if (left + 0.5 < f) break;
+    left -= f;
+    await save('orders', { id: o.id, feeStatus: 'paid', feePaidAt: at, feePaidHow: ACCOUNTS[account] });
+  }
+}

@@ -70,6 +70,8 @@ export interface Order extends BaseRecord {
   returnedAt?: string;
   cashGiven?: number;             // espèces données par le client (vente sur place), pour la monnaie sur le ticket
   courierSettledAt?: string;      // versement du livreur validé (étape 6) : plus de changement de livreur
+  feeStatus?: 'kept' | 'paid' | 'deferred'; // frais du livreur : gardés sur le versement, payés à part, ou différés
+  feePaidAt?: string; feePaidHow?: string;
   events?: { at: string; text: string; user?: string }[];
   createdBy?: string;
   createdByName?: string;

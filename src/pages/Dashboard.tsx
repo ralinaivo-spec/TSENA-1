@@ -75,7 +75,7 @@ function Board() {
         </div>
       )}
 
-      {(can('reports.view') || can('treasury.view')) ? <><ManagerSales /><SalesExtras /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
+      {(can('reports.view') || can('treasury.view')) ? <><ManagerSummary /><ManagerSales /><SalesExtras /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
       {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
         <div className="card row-between daycash-shortcut">
@@ -158,13 +158,14 @@ function usePeriod() {
 }
 
 /** 1. Ventes de la période (en premier). */
+function ManagerSummary() { return <ManagerBoard part="summary" />; }
 function ManagerSales() { return <ManagerBoard part="sales" />; }
 function ManagerMoney() { return <ManagerBoard part="money" />; }
 function ManagerChart() { return <ManagerBoard part="chart" />; }
 /** 4. Dépenses, bénéfice, évolution par jour, trésorerie, stock, meilleurs articles. */
 function ManagerMore() { return <ManagerBoard part="more" />; }
 
-function ManagerBoard({ part }: { part: 'sales' | 'money' | 'chart' | 'more' }) {
+function ManagerBoard({ part }: { part: 'summary' | 'sales' | 'money' | 'chart' | 'more' }) {
   const can = useCan();
   const cost = can('costs.view');
   const orders = useTable<Order>('orders'); const moves = useTable('cashMoves'); useTable('variants'); useTable('stockMoves'); useTable('purchases'); useTable('courierSettlements');
@@ -179,6 +180,7 @@ function ManagerBoard({ part }: { part: 'sales' | 'money' | 'chart' | 'more' }) 
   const bucket = b0 === 'hour' ? 'day' : b0; // au minimum par jour (le détail par heure n'est plus affiché)
   const pts = series(lines, from, to, bucket);
   const top = groupBy(lines, (l) => l.productId, productLabel).slice(0, 5);
+  const byPage = groupBy(lines, (l) => rootOf(l.categoryId) || '_', (id) => ({ label: id === '_' ? 'Sans page' : get<Category>('categories', id)?.name ?? '?' })).filter((g) => Math.round(g.revenue) !== 0).sort((a, b) => b.revenue - a.revenue);
   const bal = balances();
   const stock = stockValue();
   const purchases = pendingPurchases();
@@ -196,10 +198,23 @@ function ManagerBoard({ part }: { part: 'sales' | 'money' | 'chart' | 'more' }) 
     { label: 'Taux de marge', value: pct(k.margin), cur: k.margin, prev: kp.margin, show: cost, isPct: true, part: 'more' },
   ] as { label: string; value: string; cur: number; prev: number; show: boolean; part: string; strong?: boolean; isPct?: boolean; invert?: boolean }[];
   const tiles = all.filter((t) => t.show && t.part === (part === 'money' ? 'more' : part));
+  if (part === 'summary') return (
+    <>
+      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports/patron">Rapport au patron</a>}</div>
+      <h2 className="dash-title">Résumé</h2>
+      <div className="summary-strip">
+        <div className="card stat"><span className="small muted">Chiffre d’affaires</span><strong className="stat-value num">{fmtAr(k.revenue)}</strong><span className="small muted"><Delta cur={k.revenue} prev={kp.revenue} /></span></div>
+        <div className="op">−</div>
+        <div className="card stat"><span className="small muted">Dépenses</span><strong className="stat-value num">{fmtAr(k.expenses)}</strong><span className="small muted"><Delta cur={k.expenses} prev={kp.expenses} invert /></span></div>
+        <div className="op">=</div>
+        <div className="card stat"><span className="small muted">Reste</span><strong className={`stat-value num ${k.revenue - k.expenses < 0 ? 'neg' : ''}`}>{fmtAr(k.revenue - k.expenses)}</strong><span className="small muted"><Delta cur={k.revenue - k.expenses} prev={kp.revenue - kp.expenses} /></span></div>
+        {cost && <div className="card stat stat-strong"><span className="small muted">{k.net >= 0 ? 'Bénéfice net' : 'Perte nette'}</span><strong className="stat-value num">{fmtAr(k.net)}</strong><span className="small muted">après coût des articles ({fmtAr(k.cost)})</span></div>}
+      </div>
+    </>
+  );
   if (part === 'sales') return (
     <>
       <h2 className="dash-title">Ventes</h2>
-      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports">Tous les rapports</a>}</div>
       <div className="stat-grid">
         {tiles.map((t) => (
           <div key={t.label} className={`card stat ${t.strong ? 'stat-strong' : ''}`}>
@@ -209,6 +224,12 @@ function ManagerBoard({ part }: { part: 'sales' | 'money' | 'chart' | 'more' }) 
           </div>
         ))}
       </div>
+      {byPage.length > 0 && <div className="card card-flush">
+        <div className="card-pad"><h2>Chiffre d’affaires par page</h2></div>
+        <div className="table-wrap"><table className="table"><thead><tr><th>Page</th><th className="t-num">CA</th><th className="t-num">Part</th><th className="t-num">Pièces</th><th className="t-num">Ventes</th>{cost && <th className="t-num">Bénéfice brut</th>}</tr></thead>
+          <tbody>{byPage.map((g) => <tr key={g.key}><td><strong>{g.label}</strong><div className="bar-track mini"><span className="bar-fill" style={{ width: `${k.revenue ? Math.max(2, (g.revenue / k.revenue) * 100) : 0}%` }} /></div></td><td className="t-num">{fmtAr(g.revenue)}</td><td className="t-num">{pct(k.revenue ? g.revenue / k.revenue : 0)}</td><td className="t-num">{g.qty}</td><td className="t-num">{g.orders}</td>{cost && <td className="t-num">{fmtAr(g.gross)}</td>}</tr>)}</tbody>
+          <tfoot><tr className="t-total"><td>Total</td><td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.revenue, 0))}</td><td className="t-num">100 %</td><td className="t-num">{byPage.reduce((t, g) => t + g.qty, 0)}</td><td className="t-num">{k.orders}</td>{cost && <td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.gross, 0))}</td>}</tr></tfoot></table></div>
+      </div>}
     </>
   );
   if (part === 'money') return (
