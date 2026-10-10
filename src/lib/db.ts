@@ -69,7 +69,11 @@ export async function openDb(): Promise<void> {
   keys.forEach((k, i) => metaCache.set(String(k), vals[i]));
 }
 
+let dataVer = 0;
+/** Compteur de modifications (toutes tables) : sert à invalider les petits caches de calcul. */
+export const dataVersion = () => dataVer;
 function notify(table: string) {
+  dataVer++;
   snapshots.delete(table);
   listeners.get(table)?.forEach((l) => l());
 }

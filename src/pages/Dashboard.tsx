@@ -199,18 +199,18 @@ function ManagerBoard({ part }: { part: 'summary' | 'sales' | 'money' | 'chart' 
   ] as { label: string; value: string; cur: number; prev: number; show: boolean; part: string; strong?: boolean; isPct?: boolean; invert?: boolean }[];
   const tiles = all.filter((t) => t.show && t.part === (part === 'money' ? 'more' : part));
   if (part === 'summary') return (
-    <>
-      <div className="card row-between"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="btn btn-ghost" href="#/rapports/patron">Rapport au patron</a>}</div>
-      <h2 className="dash-title">Résumé</h2>
-      <div className="summary-strip">
-        <div className="card stat"><span className="small muted">Chiffre d’affaires</span><strong className="stat-value num">{fmtAr(k.revenue)}</strong><span className="small muted"><Delta cur={k.revenue} prev={kp.revenue} /></span></div>
-        <div className="op">−</div>
-        <div className="card stat"><span className="small muted">Dépenses</span><strong className="stat-value num">{fmtAr(k.expenses)}</strong><span className="small muted"><Delta cur={k.expenses} prev={kp.expenses} invert /></span></div>
-        <div className="op">=</div>
-        <div className="card stat"><span className="small muted">Reste</span><strong className={`stat-value num ${k.revenue - k.expenses < 0 ? 'neg' : ''}`}>{fmtAr(k.revenue - k.expenses)}</strong><span className="small muted"><Delta cur={k.revenue - k.expenses} prev={kp.revenue - kp.expenses} /></span></div>
-        {cost && <div className="card stat stat-strong"><span className="small muted">{k.net >= 0 ? 'Bénéfice net' : 'Perte nette'}</span><strong className="stat-value num">{fmtAr(k.net)}</strong><span className="small muted">après coût des articles ({fmtAr(k.cost)})</span></div>}
+    <section className="card summary-hero">
+      <div className="summary-head">
+        <div><h2>Résumé</h2><p className="small muted">{period.key === 'today' ? "Aujourd'hui" : period.from && period.to ? (period.from === period.to ? new Date(`${period.from}T12:00:00`).toLocaleDateString('fr-FR') : `Du ${new Date(`${period.from}T12:00:00`).toLocaleDateString('fr-FR')} au ${new Date(`${period.to}T12:00:00`).toLocaleDateString('fr-FR')}`) : 'Toute la période'}</p></div>
+        <div className="summary-tools"><PeriodPicker value={period} onChange={setPeriod} />{can('reports.view') && <a className="link-btn summary-link" href="#/rapports/patron">Rapport au patron ›</a>}</div>
       </div>
-    </>
+      <div className="summary-grid">
+        <div className="sm-cell"><span className="sm-label">Chiffre d’affaires</span><strong className="sm-value num">{fmtAr(k.revenue)}</strong><span className="sm-delta"><Delta cur={k.revenue} prev={kp.revenue} /></span></div>
+        <div className="sm-cell"><span className="sm-label">Dépenses</span><strong className="sm-value num">{fmtAr(k.expenses)}</strong><span className="sm-delta"><Delta cur={k.expenses} prev={kp.expenses} invert /></span></div>
+        <div className="sm-cell"><span className="sm-label">Reste <span className="muted">(CA − dépenses)</span></span><strong className={`sm-value num ${k.revenue - k.expenses < 0 ? 'neg' : ''}`}>{fmtAr(k.revenue - k.expenses)}</strong><span className="sm-delta"><Delta cur={k.revenue - k.expenses} prev={kp.revenue - kp.expenses} /></span></div>
+        {cost && <div className="sm-cell sm-strong"><span className="sm-label">{k.net >= 0 ? 'Bénéfice net' : 'Perte nette'}</span><strong className="sm-value num">{fmtAr(k.net)}</strong><span className="sm-delta">après coût des articles ({fmtAr(k.cost)})</span></div>}
+      </div>
+    </section>
   );
   if (part === 'sales') return (
     <>

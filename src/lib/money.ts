@@ -1,6 +1,6 @@
 // Trésorerie : comptes (caisse, mobile money, banque), mouvements, dépenses et revenus, règlements des
 // livreurs, chiffres d'une journée et clôture (« Z de caisse »).
-import { all, applyRemote, bizNow, get, newId, nowIso, remove, save, workDate, type BaseRecord } from './db';
+import { all, applyRemote, bizNow, dataVersion, get, newId, nowIso, remove, save, workDate, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { assertOpenAt } from './closed';
 import { variantCost, type Variant } from './catalog';
@@ -413,13 +413,13 @@ export function mondayOf(ymd: string) {
 export function addDays(ymd: string, n: number) { const d = new Date(`${ymd}T12:00:00`); d.setDate(d.getDate() + n); return dayOf(d.toISOString()); }
 
 // ---------- Frais de livraison du livreur, commande par commande ----------
-export type FeeState = 'none' | 'pending' | 'kept' | 'paid' | 'deferred';
+export type FeeState = 'none' | 'pending' | 'kept' | 'paid' | 'deferred' | 'settled';
 export const FEE_STATE: Record<FeeState, { label: string; tone: 'neutral' | 'ok' | 'warn' | 'danger' }> = {
   none: { label: 'Pas de frais', tone: 'neutral' }, pending: { label: 'Pas encore réglés', tone: 'warn' }, kept: { label: 'Gardés par le livreur', tone: 'ok' },
-  paid: { label: 'Payés au livreur', tone: 'ok' }, deferred: { label: 'Différés : à payer', tone: 'danger' },
+  paid: { label: 'Payés au livreur', tone: 'ok' }, deferred: { label: 'Différés : à payer', tone: 'danger' }, settled: { label: 'Réglés', tone: 'ok' },
 };
-/** État des frais du livreur pour une commande (les anciennes commandes sont retrouvées par la note du versement). */
-export function feeState(o: Order): FeeState {
+/** État noté sur la commande (anciennes commandes : retrouvé par la note du versement). */
+function rawFeeState(o: Order): FeeState {
   if (!o.courierId || isPickupZone(o.zoneId) || !o.dispatchedAt) return 'none';
   if (!courierSplit(o).fee) return 'none';
   if (o.feeStatus) return o.feeStatus;
@@ -428,9 +428,35 @@ export function feeState(o: Order): FeeState {
   const n = (s?.note || '').toLowerCase();
   return /différ|plus tard/.test(n) ? 'deferred' : /payés à part/.test(n) ? 'paid' : 'kept';
 }
+/**
+ * Commandes dont les frais sont vraiment encore dus au livreur : on part de ce que la boutique lui doit réellement
+ * (solde de son compte) et on l'attribue aux frais notés « différés », des plus récents aux plus anciens.
+ * Ainsi l'état affiché ne contredit jamais le compte (ex. livreur qui a finalement gardé ses frais).
+ */
+const defCache = new Map<string, { v: number; list: Order[] }>();
+export function deferredOrders(courierId: string): Order[] {
+  const c = defCache.get(courierId);
+  if (c && c.v === dataVersion()) return c.list;
+  const list = computeDeferred(courierId);
+  defCache.set(courierId, { v: dataVersion(), list });
+  return list;
+}
+function computeDeferred(courierId: string): Order[] {
+  const owed = Math.max(0, -courierBalance(courierId).carry);
+  const flagged = all<Order>('orders').filter((o) => o.courierId === courierId && rawFeeState(o) === 'deferred').sort((a, b) => (b.courierSettledAt || '').localeCompare(a.courierSettledAt || ''));
+  const out: Order[] = []; let left = owed;
+  for (const o of flagged) { const f = courierSplit(o).fee; if (f <= left + 0.5) { out.push(o); left -= f; } }
+  return out;
+}
+export const deferredTotal = (courierId: string) => deferredOrders(courierId).reduce((t, o) => t + courierSplit(o).fee, 0);
+export function feeState(o: Order): FeeState {
+  const r = rawFeeState(o);
+  if (r !== 'deferred') return r;
+  return deferredOrders(o.courierId!).some((x) => x.id === o.id) ? 'deferred' : 'settled';
+}
 /** Payer des frais différés au livreur : enregistre le paiement et marque les commandes concernées (les plus anciennes d'abord). */
 export async function payDeferredFees(c: Courier, amount: number, account: AccountId, only?: Order[]) {
-  const list = (only ?? all<Order>('orders').filter((o) => o.courierId === c.id && feeState(o) === 'deferred')).sort((a, b) => (a.courierSettledAt || '').localeCompare(b.courierSettledAt || ''));
+  const list = (only ?? deferredOrders(c.id)).sort((a, b) => (a.courierSettledAt || '').localeCompare(b.courierSettledAt || ''));
   await settleCourier(c, [], -amount, account, `Frais de livraison différés payés${list.length ? ' : ' + list.map((o) => o.number).join(', ') : ''}`);
   let left = amount; const at = bizNow();
   for (const o of list) {

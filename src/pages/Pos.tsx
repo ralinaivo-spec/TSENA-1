@@ -31,6 +31,7 @@ export function PosPage() {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [picking, setPicking] = useState<Product | null>(null);
+  const [browse, setBrowse] = useState(false);
   const [paying, setPaying] = useState(false);
   const [last, setLast] = useState<Order | null>(null);
   const [printFor, setPrintFor] = useState<Order | null>(null);
@@ -100,21 +101,23 @@ export function PosPage() {
         <div className="notice notice-ok"><Icon name="check" /><span style={{ flex: 1 }}><strong>Vente {last.number} enregistrée</strong> — {fmtAr(Math.max(0, keptTotal(last) - (last.discount || 0)))}. Le stock est mis à jour.</span><PrintButton label="Ticket" docs={[{ key: 'ticket', label: 'Ticket de caisse', build: () => ticketDoc(get<Order>('orders', last.id) ?? last, company) }]} /></div>
       )}
       <div className="pos-layout">
-        <section className="pos-catalog card stack">
+        <section className="pos-catalog card stack-s">
+          <div className="row-between"><h2>Ajouter un article</h2><Button variant="ghost" className="btn-sm" icon="search" onClick={() => setBrowse(true)}>Parcourir le catalogue</Button></div>
           <div className="field"><input aria-label="Rechercher un article" placeholder="Rechercher ou scanner un code (Entrée pour ajouter)…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEnter(); } }} autoFocus /></div>
-          {pages.length > 1 && <Choice label="Page" hideLabel value={cat} onChange={setCat} max={5} options={[{ value: '', label: pages.length + 1 > 5 ? 'Toutes les pages' : 'Toutes' }, ...pages.map((c) => ({ value: c.id, label: c.name }))]} />}
-          {found.length === 0 ? <Empty icon="search" title="Aucun article trouvé" /> : (
-            <div className="pos-grid">
-              {found.map(({ p, avail }) => (
-                <button key={p.id} className={`pos-tile ${avail <= 0 ? 'is-out' : ''}`} onClick={() => pick(p)}>
-                  <Thumb src={p.photo} size={140} />
-                  <span className="pos-tile-name">{p.name}</span>
-                  <span className="small muted pos-tile-sub">{p.attrs ? attrSummary(p, ', ') : p.code}</span>
-                  <span className="pos-tile-foot"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span></span>
-                </button>
+          {n && pages.length > 1 && <Choice label="Page" hideLabel value={cat} onChange={setCat} max={5} options={[{ value: '', label: pages.length + 1 > 5 ? 'Toutes les pages' : 'Toutes' }, ...pages.map((c) => ({ value: c.id, label: c.name }))]} />}
+          {n && (found.length === 0 ? <p className="small muted">Aucun article trouvé.</p> : (
+            <ul className="list pos-results">
+              {found.slice(0, 8).map(({ p, avail }) => (
+                <li key={p.id}><button type="button" className={`list-item list-link btn-reset ${avail <= 0 ? 'is-out' : ''}`} onClick={() => { pick(p); setQ(''); }}>
+                  <Thumb src={p.photo} size={44} />
+                  <div className="list-item-main"><span className="list-item-title">{p.name}</span><p className="small muted">{p.attrs ? attrSummary(p, ', ') : p.code}</p></div>
+                  <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} en stock</span></div>
+                </button></li>
               ))}
-            </div>
-          )}
+              {found.length > 8 && <li className="small muted" style={{ padding: '8px 14px' }}>+ {found.length - 8} autre(s) : précisez la recherche ou parcourez le catalogue.</li>}
+            </ul>
+          ))}
+          {!n && <p className="small muted" style={{ margin: 0 }}>Tapez un nom ou un code (ou scannez) : les articles correspondants s’affichent ici. Touchez-en un pour l’ajouter au panier.</p>}
         </section>
 
         <aside className="pos-cart card stack" id="pos-cart">
@@ -196,6 +199,7 @@ export function PosPage() {
       </div>
 
       {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} />}
+      {browse && <ItemPicker noChoice onClose={() => setBrowse(false)} onAdd={add} />}
       {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments, cashGiven) => {
         const o = await createWalkInSale({ lines: priced, discount: discAr, wholesale: undefined, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
         setLast(o); reset(); setPaying(false); toast(`Vente ${o.number} enregistrée`);

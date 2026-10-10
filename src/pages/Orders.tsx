@@ -119,6 +119,7 @@ export function OrderRow({ o }: { o: Order }) {
           </div>
           <p className="small muted">{o.number}{o.phone ? ` · ${fmtPhone(o.phone)}` : ''} · {zone?.name || 'Zone ?'}{o.place ? ` — ${o.place}` : ''}</p>
           <p className="small muted">{fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ` + ${o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0)} en choix` : ''}{courier ? ` · ${courier.name}` : ''} · {fmtDateTime(o.createdAt)}</p>
+          {['delivered', 'partial', 'refused'].includes(o.status) && (() => { const fs = feeState(o); return fs !== 'none' ? <p className="small fee-line">Frais livreur {fmtAr(courierSplit(o).fee)} · <Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge></p> : null; })()}
         </div>
         <div className="list-item-side">
           <strong className="num">{fmtAr(o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o))}</strong>
@@ -680,7 +681,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
             const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? `frais payés à part (${ACCOUNTS[feeAccount]})` : 'frais différés (compte du livreur)';
             await settleCourier(courier, [o.id], givenVal, account, [`Retour ${o.number}`, label, note.trim()].filter(Boolean).join(' · '));
             if (mode === 'apart' && x.fee > 0) await settleCourier(courier, [], -x.fee, feeAccount, `Frais de livraison ${o.number} payés au livreur`);
-            if (x.fee > 0) await save('orders', { id: o.id, feeStatus: mode === 'retenue' ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: bizNow(), feePaidHow: ACCOUNTS[feeAccount] } : {}) });
+            if (x.fee > 0) await save('orders', { id: o.id, feeStatus: mode === 'retenue' || (mode === 'plustard' && gap <= -x.fee + 1) ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: bizNow(), feePaidHow: ACCOUNTS[feeAccount] } : {}) });
           }
         } catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast(hasChoice ? 'Choix du client enregistré' : doSettle ? `Commande terminée et réglée avec ${courier?.name}` : 'Retour enregistré'); setBusy(false); onClose();

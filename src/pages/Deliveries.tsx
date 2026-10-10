@@ -13,7 +13,7 @@ import { CourierReturn } from './CourierReturn';
 import { useCompany } from '../lib/settings';
 import { deliveryNoteDoc, joinDocs, parcelLabelDoc, routeSheetDoc } from '../lib/print';
 import { PrintButton } from '../ui/print';
-import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, courierBalance, deliveryNet, feeState, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, courierBalance, deferredOrders, deliveryNet, feeState, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 
 const TABS = [
   { key: 'livreurs', label: 'Comptes livreurs', perm: 'couriers.view' },
@@ -189,7 +189,7 @@ function Couriers() {
         {sorted.length === 0 ? <Empty icon="truck" title="Aucun livreur" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">Solde à verser</th><th></th></tr></thead>
+              <thead><tr><th>Livreur</th><th className="t-num">En cours</th><th className="t-num">Livrées</th><th className="t-num">Encaissé</th><th className="t-num">Frais gagnés</th><th className="t-num">Solde période</th><th className="t-num">Solde à verser</th><th className="t-num">Frais différés</th><th></th></tr></thead>
               <tbody>
                 {sorted.map((c) => {
                   const a = courierAccount(c.id, period.from, period.to);
@@ -203,7 +203,8 @@ function Couriers() {
                       <td className="t-num">{fmtAr(a.fees)}</td>
                       <td className={`t-num ${a.due > 0 ? '' : a.due < 0 ? 'neg' : ''}`}><strong>{a.due > 0 ? `rend ${fmtAr(a.due)}` : a.due < 0 ? `à lui verser ${fmtAr(-a.due)}` : '—'}</strong></td>
                       <td className={`t-num ${bal < 0 ? 'neg' : ''}`}><strong>{bal > 0 ? `doit ${fmtAr(bal)}` : bal < 0 ? `à lui verser ${fmtAr(-bal)}` : '✓ à jour'}</strong></td>
-                      <td className="t-actions"><div className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}><span onClick={(e) => e.stopPropagation()}><PrintButton variant="quiet" label="Ticket" docs={[{ key: 'liste', label: 'Livraisons à verser', build: () => routeSheetDoc(c, courierBalance(c.id).pending, company, 'LIVRAISONS À VERSER') }]} /></span>{can('couriers.settle') && <Button variant="ghost" onClick={(e) => { e.stopPropagation(); navigate('/livraisons/retour'); }}>Régler</Button>}{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</div></td>
+                      <td className="t-num">{(() => { const d = deferredOrders(c.id); const t = d.reduce((x, o) => x + courierSplit(o).fee, 0); return t ? <Badge tone="danger">{fmtAr(t)} à payer ({d.length})</Badge> : <span className="muted small">aucun</span>; })()}</td>
+                      <td className="t-actions"><div className="row" style={{ gap: 4, flexWrap: 'nowrap', justifyContent: 'flex-end' }}><span onClick={(e) => e.stopPropagation()}><PrintButton variant="quiet" label="Ticket" docs={[{ key: 'liste', label: 'Livraisons à verser', build: () => routeSheetDoc(c, courierBalance(c.id).pending, company, 'LIVRAISONS À VERSER') }]} /></span>{can('couriers.settle') && <Button variant="ghost" className="btn-sm" onClick={(e) => { e.stopPropagation(); navigate('/livraisons/retour'); }}>Régler</Button>}{can('couriers.manage') && <IconButton icon="edit" label="Modifier" onClick={(e) => { e.stopPropagation(); setEdit(c); }} />}</div></td>
                     </tr>
                   );
                 })}
@@ -315,7 +316,7 @@ function CourierOrders({ courier, onClose }: { courier: Courier; onClose: () => 
   const all = useTable<Order>('orders').filter((o) => o.courierId === courier.id && o.dispatchedAt).sort((a, b) => (b.dispatchedAt || '').localeCompare(a.dispatchedAt || ''));
   const [show, setShow] = useState<'all' | 'deferred'>('all');
   const [pay, setPay] = useState<Order | 'all' | null>(null);
-  const deferred = all.filter((o) => feeState(o) === 'deferred');
+  const deferred = deferredOrders(courier.id);
   const deferredSum = deferred.reduce((t, o) => t + courierSplit(o).fee, 0);
   const list = (show === 'deferred' ? deferred : all).slice(0, 80);
   const [acc, setAcc] = useState<AccountId>('cash');
@@ -325,7 +326,7 @@ function CourierOrders({ courier, onClose }: { courier: Courier; onClose: () => 
         <div className="stat-grid">
           <div className="card stat"><span className="small muted">Livraisons</span><strong className="stat-value num">{all.length}</strong></div>
           <div className="card stat"><span className="small muted">Frais gagnés (livraisons terminées)</span><strong className="stat-value num">{fmtAr(all.filter((o) => ['delivered', 'partial', 'refused'].includes(o.status)).reduce((t, o) => t + courierSplit(o).fee, 0))}</strong></div>
-          <div className={`card stat ${deferredSum ? 'stat-hot' : ''}`}><span className="small muted">Frais différés à lui payer</span><strong className="stat-value num">{fmtAr(deferredSum)}</strong>{deferredSum > 0 && can('couriers.settle') && <Button onClick={() => setPay('all')}>Tout payer</Button>}</div>
+          <div className={`card stat ${deferredSum ? 'stat-hot' : ''}`}><span className="small muted">Frais différés à lui payer</span><strong className="stat-value num">{fmtAr(deferredSum)}</strong>{deferredSum > 0 && can('couriers.settle') && <Button className="btn-sm" onClick={() => setPay('all')}>Tout payer</Button>}</div>
         </div>
         <div className="segmented" role="group" aria-label="Afficher"><button type="button" aria-pressed={show === 'all'} onClick={() => setShow('all')}>Toutes</button><button type="button" aria-pressed={show === 'deferred'} onClick={() => setShow('deferred')}>Frais différés ({deferred.length})</button></div>
         {list.length === 0 ? <Empty icon="truck" title="Aucune livraison" /> : (
@@ -336,7 +337,7 @@ function CourierOrders({ courier, onClose }: { courier: Courier; onClose: () => 
                 <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · parti le {fmtDateTime(o.dispatchedAt)} · {o.status === 'out' ? 'en livraison' : o.status === 'refused' ? 'refusée' : 'livrée'}</p>
               </a>
               <div className="list-item-side"><strong className="num">Frais {fmtAr(fee)}</strong><Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge>{fs === 'paid' && o.feePaidAt && <span className="small muted">{fmtDateTime(o.feePaidAt)}</span>}</div>
-              {fs === 'deferred' && can('couriers.settle') && <Button variant="ghost" onClick={() => setPay(o)}>Payer</Button>}
+              {fs === 'deferred' && can('couriers.settle') && <Button variant="ghost" className="btn-sm" onClick={() => setPay(o)}>Payer</Button>}
             </li>
           ); })}</ul>
         )}

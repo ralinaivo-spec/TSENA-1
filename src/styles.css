@@ -1044,3 +1044,45 @@ tr.row-error td { background: var(--danger-soft); }
 .summary-strip .op { display: grid; place-items: center; font-size: 1.6rem; font-weight: 800; color: var(--muted); }
 @media (max-width: 760px) { .summary-strip { grid-template-columns: 1fr 1fr; } .summary-strip .op { display: none; } }
 .bar-track.mini { display: block; height: 5px; margin-top: 4px; max-width: 180px; }
+
+/* ===== Finitions 10/10 : boutons, pastilles et résumé plus sobres et proportionnés ===== */
+.btn { min-height: 40px; padding: 0 16px; font-size: .92rem; gap: 7px; }
+.btn-ghost { border: 1.5px solid var(--line-strong); color: var(--ink); box-shadow: none; background: var(--surface); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.btn-ghost:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.btn-primary { box-shadow: 0 6px 14px -10px var(--brand); }
+.btn-sm, .t-actions .btn, .list-item .btn, .list-item-side .btn, .notif-actions .btn, .card-pad .btn, .row-between .btn-ghost, .stat .btn { min-height: 34px; padding: 0 12px; font-size: .85rem; }
+.btn-sm svg, .t-actions .btn svg, .list-item .btn svg { width: 16px; height: 16px; }
+.page-head .btn { min-height: 42px; }
+.badge { border: 0; box-shadow: none; padding: 3px 10px; font-size: .78rem; font-weight: 700; }
+.chip { border: 1.5px solid var(--line-strong); box-shadow: none; }
+.chip[aria-pressed='true'] { background: var(--brand-soft); color: var(--brand); border-color: var(--brand); }
+.segmented button[aria-pressed='true'] { box-shadow: 0 1px 4px rgba(20, 16, 40, .18); color: var(--brand); }
+.icon-btn { width: 40px; height: 40px; }
+@media (max-width: 600px) {
+  .btn { min-height: 40px; padding: 0 14px; font-size: .9rem; }
+  .page-head { gap: 10px; }
+  .page-head .page-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+  .page-head .page-actions .btn { flex: 1 1 auto; }
+}
+
+/* Résumé de l'accueil */
+.summary-hero { padding: 18px 20px; display: grid; gap: 14px; }
+.summary-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.summary-head h2 { margin: 0; }
+.summary-tools { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.summary-tools .period-picker { flex-wrap: nowrap; }
+.summary-tools .period-picker .field { min-width: 150px; }
+.summary-link { padding: 0 0 10px; white-space: nowrap; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.sm-cell { display: grid; gap: 4px; padding: 14px 16px; border-radius: 16px; background: var(--surface-2); min-width: 0; }
+.sm-label { font-size: .82rem; font-weight: 700; color: var(--muted); }
+.sm-value { font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.sm-delta { font-size: .8rem; color: var(--muted); }
+.sm-strong { background: linear-gradient(140deg, var(--nav-bg-2, var(--brand)), var(--nav-bg, var(--brand))); color: #fff; }
+.sm-strong .sm-label, .sm-strong .sm-delta { color: rgba(255,255,255,.8); }
+@media (max-width: 760px) { .summary-grid { grid-template-columns: 1fr 1fr; } .sm-value { font-size: 1.25rem; } .summary-tools { width: 100%; justify-content: space-between; } }
+/* Recherche de la caisse */
+.pos-results .list-item { padding: 10px 12px; }
+.pos-results .is-out { opacity: .55; }
+.fee-line { margin: 2px 0 0; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; color: var(--muted); }
