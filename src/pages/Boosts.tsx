@@ -1,43 +1,42 @@
-// Boosts publicitaires : saisie quotidienne (résultats théoriques Meta + messages réels), suivi par semaine
-// (lundi → dimanche) et analyse des performances de chaque boost pour décider lesquels garder ou arrêter.
-import { Fragment, useMemo, useState } from 'react';
+// Boosts publicitaires : un tableau par page et par semaine (ou période) où l'on remplit chaque jour les conversations
+// cumulées de chaque boost ; nouvelles conversations du jour, total, CA de la page et CA par conversation ;
+// pause / reprise / suppression des boosts, ordre par glisser-déposer ; analyse des performances.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { setMeta, useMeta, useTable } from '../lib/db';
-import { fmtNum, parseNum, todayYmd } from '../lib/catalog';
+import { fmtAr, fmtNum, parseNum, todayYmd } from '../lib/catalog';
 import { addDays, mondayOf } from '../lib/money';
-import { useMyScope } from '../lib/scope';
+import { rootOf, useMyScope } from '../lib/scope';
+import { salesLedger } from '../lib/analytics';
 import {
-  STOP_REASONS, VERDICT, activeBoosts, allPages, boostName, boostPerformance, boostsOf, checkReading, createBoost, dayStats, nextSlot,
-  pageName, prevReading, readingOn, realOn, restartBoost, saveDay, stopBoost, updateBoost, weekDates, type Boost, type BoostPerf,
+  STOP_REASONS, VERDICT, activeBoosts, activeOn, allPages, boostName, boostPerformance, createBoost, dayStats, deleteBoost, isPaused, orderedBoosts,
+  pageName, pauseBoost, prevReading, readingOn, readingsOf, reorderBoosts, resumeBoost, saveReading, saveReal, updateBoost, type Boost, type BoostPerf,
 } from '../lib/boosts';
-import { Badge, Button, Empty, IconButton, Modal, PageHead, SelectField, TextField, navigate, toast, useRoute } from '../ui/kit';
+import { Badge, Button, Confirm, Empty, Help, IconButton, Modal, PageHead, SelectField, TextField, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { SortTable, exportTables, type Col } from '../ui/table';
 
 const TABS = [
-  { key: 'saisie', label: 'Saisie du jour', perm: 'boosts.enter' },
-  { key: 'semaine', label: 'Semaine', perm: 'boosts.view' },
+  { key: 'suivi', label: 'Saisie et suivi', perm: 'boosts.view' },
   { key: 'performance', label: 'Performance des boosts', perm: 'boosts.view' },
 ];
 const usd = (n?: number | null, d = 2) => (n == null || !isFinite(n) ? '—' : `${n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d })} $`);
 const dd = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-const dayLong = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 const dayShort = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
 const signed = (n?: number) => (n == null ? '—' : n > 0 ? `+${fmtNum(n)}` : fmtNum(n));
 
 export function BoostsPage() {
   const can = useCan();
   const route = useRoute();
-  const tabs = TABS.filter((t) => can(t.perm));
+  const tabs = TABS.filter((t) => can(t.perm) || (t.key === 'suivi' && can('boosts.enter')));
   const cur = tabs.find((t) => route.endsWith('/' + t.key)) ?? tabs[0];
   useTable('boosts'); useTable('boostReadings'); useTable('pageMessages'); useTable('categories'); useTable('orders');
   if (!cur) return <Empty icon="lock" title="Accès réservé" />;
   return (
     <>
-      <PageHead title="Boosts publicitaires" subtitle="Résultats théoriques (Meta) comparés aux messages réellement reçus, par page et par boost" />
+      <PageHead title="Boosts publicitaires" subtitle="Conversations des boosts par page, et ce qu’elles rapportent en chiffre d’affaires" />
       <div className="tabs" role="tablist">{tabs.map((t) => <button key={t.key} role="tab" aria-selected={cur.key === t.key} onClick={() => navigate('/boosts/' + t.key)}>{t.label}</button>)}</div>
-      {cur.key === 'saisie' && <DayEntry />}
-      {cur.key === 'semaine' && <WeekView />}
+      {cur.key === 'suivi' && <Tracking />}
       {cur.key === 'performance' && <Performance />}
     </>
   );
@@ -53,303 +52,320 @@ function usePage(allowAll = false) {
   return { pageId: value, set: (v: string) => setMeta('boostPage', v), options, scope, pages };
 }
 
-function DateNav({ date, setDate, step = 1, label }: { date: string; setDate: (d: string) => void; step?: number; label: string }) {
+/** Période commune : « Semaine » (lundi → dimanche, avec ‹ ›) ou « Période » (du … au …). */
+function usePeriodBar() {
   const today = todayYmd();
-  return (
-    <div className="row" style={{ alignItems: 'center', gap: 6 }}>
-      <IconButton icon="chevronLeft" label="Précédent" onClick={() => setDate(addDays(date, -step))} />
-      <strong style={{ minWidth: 170, textAlign: 'center' }}>{label}</strong>
-      <IconButton icon="chevronRight" label="Suivant" disabled={addDays(date, step) > today && step === 1} onClick={() => setDate(addDays(date, step))} />
-      <input type="date" className="cell-input" style={{ maxWidth: 160 }} value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Choisir une date" />
-      {date !== today && <Button variant="quiet" onClick={() => setDate(today)}>Aujourd’hui</Button>}
+  const [mode, setMode] = useState<'week' | 'range'>('week');
+  const [anchor, setAnchor] = useState(today);
+  const [from, setFrom] = useState(addDays(today, -13));
+  const [to, setTo] = useState(today);
+  const mon = mondayOf(anchor);
+  const f = mode === 'week' ? mon : from <= to ? from : to;
+  const t = mode === 'week' ? addDays(mon, 6) : from <= to ? to : from;
+  const days: string[] = [];
+  for (let d = f; d <= t && days.length < 62; d = addDays(d, 1)) days.push(d);
+  const label = mode === 'week' ? `Semaine du ${dd(mon)} au ${dd(addDays(mon, 6))}` : `Du ${dd(f)} au ${dd(days[days.length - 1])}`;
+  const bar = (
+    <div className="boost-period">
+      <div className="segmented" role="group" aria-label="Période">
+        <button type="button" aria-pressed={mode === 'week'} onClick={() => setMode('week')}>Semaine</button>
+        <button type="button" aria-pressed={mode === 'range'} onClick={() => setMode('range')}>Période</button>
+      </div>
+      {mode === 'week' ? (
+        <div className="bw-period-nav">
+          <IconButton icon="chevronLeft" label="Semaine précédente" onClick={() => setAnchor(addDays(anchor, -7))} />
+          <strong>{label}</strong>
+          <IconButton icon="chevronRight" label="Semaine suivante" disabled={addDays(mon, 7) > today} onClick={() => setAnchor(addDays(anchor, 7))} />
+          {mon !== mondayOf(today) && <Button variant="quiet" className="btn-sm" onClick={() => setAnchor(today)}>Cette semaine</Button>}
+        </div>
+      ) : (
+        <div className="bw-period-range">
+          <TextField label="Du" type="date" value={from} max={today} onChange={(v) => v && setFrom(v)} />
+          <TextField label="Au" type="date" value={to} max={today} onChange={(v) => v && setTo(v)} />
+        </div>
+      )}
     </div>
   );
+  return { days, from: f, to: t, label, bar, mode };
 }
 
-// ---------------------------------------------------------------- Saisie du jour
-function DayEntry() {
-  const pg = usePage();
-  const [date, setDate] = useState(todayYmd());
+/** CA des ventes par page et par jour (même règle que le tableau de bord). */
+function useRevenue(from: string, to: string) {
+  const orders = useTable('orders');
+  return useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    for (const l of salesLedger(from, to)) {
+      const pid = rootOf(l.categoryId) || '_';
+      if (!m.has(pid)) m.set(pid, new Map());
+      const d = m.get(pid)!; d.set(l.day, (d.get(l.day) ?? 0) + l.amount);
+    }
+    return m;
+  }, [from, to, orders]);
+}
+
+// ---------------------------------------------------------------- Saisie et suivi
+function Tracking() {
+  const pg = usePage(true);
+  const per = usePeriodBar();
   if (!pg.pages.length) return <div className="card"><Empty icon="tag" title="Aucune page">Créez d’abord les catégories principales (une par page Facebook) dans Articles.</Empty></div>;
   return (
     <div className="stack">
-      <div className="card row" style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <div style={{ minWidth: 220 }}><SelectField label="Page" value={pg.pageId} onChange={pg.set} options={pg.options} /></div>
-        <DateNav date={date} setDate={setDate} label={dayLong(date)} />
+      <div className="card boost-filters">
+        <div className="boost-page-field"><SelectField label="Page" value={pg.pageId} onChange={pg.set} options={pg.options} /></div>
+        {per.bar}
       </div>
-      <DayForm key={`${pg.pageId}|${date}`} pageId={pg.pageId} date={date} />
+      {pg.pageId ? <PageTable key={pg.pageId} pageId={pg.pageId} days={per.days} /> : <AllPagesTable pageIds={pg.pages.map((p) => p.id)} days={per.days} onPick={pg.set} />}
     </div>
   );
 }
 
-function DayForm({ pageId, date }: { pageId: string; date: string }) {
-  const boosts = activeBoosts(pageId, date);
-  const [vals, setVals] = useState<Record<string, { spend: string; messages: string }>>(() => Object.fromEntries(boosts.map((b) => {
-    const r = readingOn(b.id, date);
-    return [b.id, { spend: r ? String(r.spend).replace('.', ',') : '', messages: r ? String(r.messages) : '' }];
-  })));
-  const savedReal = realOn(pageId, date);
-  const [real, setReal] = useState(savedReal ? String(savedReal.count) : '');
-  const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<Boost | 'new' | null>(null);
-  const [stop, setStop] = useState<Boost | null>(null);
-  const [tried, setTried] = useState(false);
-  const already = boosts.some((b) => readingOn(b.id, date)) || !!savedReal;
+/** Case du tableau : on tape la valeur, elle est enregistrée en quittant la case (ou avec Entrée). */
+function CellInput({ value, placeholder, label, decimal, today, missing, onCommit }: { value?: number; placeholder?: string; label: string; decimal?: boolean; today?: boolean; missing?: boolean; onCommit: (v: number | undefined) => Promise<void> }) {
+  const show = value == null ? '' : decimal ? String(value).replace('.', ',') : String(value);
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = async () => {
+    if (draft == null) return;
+    const raw = draft.trim();
+    if (raw === show) { setDraft(null); return; }
+    const n = raw === '' ? undefined : parseNum(raw);
+    if (raw !== '' && n == null) { toast('Nombre attendu.', 'error'); setDraft(null); return; }
+    try { await onCommit(n); setDraft(null); } catch (e: any) { toast(e?.message ?? String(e), 'error'); setDraft(null); }
+  };
+  return <input className={`cell-input boost-cell ${today ? 'is-today' : ''} ${missing ? 'is-missing' : ''}`} inputMode={decimal ? 'decimal' : 'numeric'} aria-label={label} placeholder={placeholder}
+    value={draft ?? show} onFocus={(e) => e.target.select()} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />;
+}
 
-  const rows = boosts.map((b) => {
-    const v = vals[b.id] ?? { spend: '', messages: '' };
-    const spend = parseNum(v.spend), messages = parseNum(v.messages);
-    const prev = prevReading(b.id, date);
-    const filled = v.spend.trim() !== '' || v.messages.trim() !== '';
-    const errors = filled || tried ? checkReading(b.id, date, spend, messages) : [];
-    const newMsgs = messages != null ? messages - (prev?.messages ?? 0) : undefined;
-    const newSpend = spend != null ? spend - (prev?.spend ?? 0) : undefined;
-    return { b, v, spend, messages, prev, errors, newMsgs, newSpend, filled };
-  });
-  const theo = rows.reduce((t, r) => t + (r.errors.length || r.newMsgs == null ? 0 : Math.max(0, r.newMsgs)), 0);
-  const spendDay = rows.reduce((t, r) => t + (r.errors.length || r.newSpend == null ? 0 : Math.max(0, r.newSpend)), 0);
-  const realN = parseNum(real);
-  const gap = realN != null ? realN - theo : undefined;
-  const orders = dayStats(pageId, date).orders;
-  const nErr = rows.filter((r) => r.errors.length).length;
-  const set = (id: string, k: 'spend' | 'messages', s: string) => setVals({ ...vals, [id]: { ...vals[id], [k]: s } });
+function PageTable({ pageId, days }: { pageId: string; days: string[] }) {
+  const can = useCan();
+  const edit = can('boosts.enter');
+  const today = todayYmd();
+  const [metric, setMetric] = useState<'msg' | 'spend'>('msg');
+  const [showPaused, setShowPaused] = useState(false);
+  const [form, setForm] = useState<Boost | 'new' | null>(null);
+  const [pause, setPause] = useState<Boost | null>(null);
+  const [del, setDel] = useState<Boost | null>(null);
+  const [drag, setDrag] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const shownDays = days;
+  const wrapRef = useRef<HTMLDivElement>(null);
+  // Sur téléphone, le tableau s'ouvre directement sur la colonne d'aujourd'hui.
+  useEffect(() => {
+    const w = wrapRef.current; const th = w?.querySelector<HTMLElement>('th.is-today');
+    if (w && th && w.scrollWidth > w.clientWidth) w.scrollLeft = Math.max(0, th.offsetLeft + th.offsetWidth - w.clientWidth + 170);
+  }, [days.join()]);
+  const last = shownDays.filter((d) => d <= today).pop() ?? shownDays[0];
+  const all = orderedBoosts(pageId);
+  const inPeriod = (b: Boost) => shownDays.some((d) => readingOn(b.id, d)) || shownDays.some((d) => activeOn(b, d));
+  const boosts = all.filter((b) => b.startDate <= shownDays[shownDays.length - 1] && (showPaused ? true : !isPaused(b) || inPeriod(b)));
+  const hiddenPaused = all.filter((b) => isPaused(b) && !boosts.includes(b)).length;
+  const stats = shownDays.map((d) => dayStats(pageId, d));
+  const rev = useRevenue(shownDays[0], last).get(pageId) ?? new Map<string, number>();
+  const revW = shownDays.reduce((t, d) => t + (rev.get(d) ?? 0), 0);
+  const msgW = stats.reduce((t, s) => t + s.theo, 0);
+  const spendW = stats.reduce((t, s) => t + s.spend, 0);
+  const realW = stats.reduce((t, s) => t + (s.real ?? 0), 0);
+  const ordersW = stats.reduce((t, s) => t + s.orders, 0);
+  const isToday = (d: string) => d === today;
+  const move = async (id: string, to: string | number) => {
+    const ids = all.map((b) => b.id).filter((x) => x !== id);
+    const idx = typeof to === 'number' ? Math.max(0, Math.min(ids.length, to)) : ids.indexOf(to);
+    ids.splice(idx < 0 ? ids.length : idx, 0, id);
+    await reorderBoosts(pageId, ids);
+  };
+  const exp = () => exportTables(`boosts_${pageName(pageId)}_${shownDays[0]}.xlsx`, [{
+    name: 'Boosts',
+    cols: [{ key: 'l', label: 'Boost', value: (r: any) => r.l, width: 30 }, ...shownDays.map((d, i) => ({ key: d, label: dayShort(d), value: (r: any) => r.v[i] ?? '', width: 12 })), { key: 't', label: 'Total', value: (r: any) => r.t, width: 14 }],
+    rows: [
+      ...boosts.map((b) => ({ l: `${b.slot}. ${b.label || 'Boost'} (cumul)`, v: shownDays.map((d) => readingOn(b.id, d)?.messages), t: '' })),
+      ...boosts.map((b) => ({ l: `${b.slot}. ${b.label || 'Boost'} (nouveaux)`, v: stats.map((s) => s.perBoost.get(b.id)), t: stats.reduce((t, s) => t + (s.perBoost.get(b.id) ?? 0), 0) })),
+      { l: 'Total nouvelles conversations', v: stats.map((s) => s.theo), t: msgW },
+      { l: 'Messages réels comptés', v: stats.map((s) => s.real), t: realW },
+      { l: "Chiffre d'affaires (Ar)", v: shownDays.map((d) => Math.round(rev.get(d) ?? 0)), t: Math.round(revW) },
+      { l: 'Commandes en ligne', v: stats.map((s) => s.orders), t: ordersW },
+      { l: 'Dépense ($)', v: stats.map((s) => Math.round(s.spend * 100) / 100), t: Math.round(spendW * 100) / 100 },
+    ],
+  }]);
 
   return (
     <>
+      <div className="stat-grid">
+        <div className="card stat stat-strong"><span className="small muted">Nouvelles conversations</span><strong className="stat-value num">{fmtNum(msgW)}</strong><span className="small muted">{boosts.filter((b) => !isPaused(b)).length} boost(s) actif(s)</span></div>
+        <div className="card stat"><span className="small muted">Chiffre d’affaires de la page</span><strong className="stat-value num">{fmtAr(revW)}</strong><span className="small muted">{msgW ? `${fmtAr(revW / msgW)} par conversation` : '—'}</span></div>
+        <div className="card stat"><span className="small muted">Commandes en ligne</span><strong className="stat-value num">{fmtNum(ordersW)}</strong><span className="small muted">{msgW ? `${Math.round((ordersW / msgW) * 100)} % des conversations` : '—'}</span></div>
+        <div className="card stat"><span className="small muted">Dépense</span><strong className="stat-value num">{usd(spendW)}</strong><span className="small muted">{msgW ? `${usd(spendW / msgW)} par conversation` : '—'}</span></div>
+      </div>
       <div className="card card-flush">
-        <div className="card-pad row-between">
-          <div><h2>Boosts actifs — {pageName(pageId)}</h2>
-            <p className="small muted">Recopiez pour chaque boost actif, dans l’ordre de l’Espace Pubs, la <strong>dépense</strong> et le nombre de <strong>conversations</strong> affichés (valeurs cumulées depuis le lancement). Si rien n’a bougé, touchez « = » pour reprendre la valeur précédente.</p></div>
-          <Button icon="plus" variant="ghost" onClick={() => setForm('new')}>Nouveau boost</Button>
+        <div className="card-pad stack-s">
+          <div className="row-between">
+            <h2>{pageName(pageId)}</h2>
+            <div className="row" style={{ gap: 6 }}>
+              <Button variant="ghost" className="btn-sm" icon="download" onClick={exp}>Excel</Button>
+              {edit && <Button className="btn-sm" icon="plus" onClick={() => setForm('new')}>Nouveau boost</Button>}
+            </div>
+          </div>
+          <div className="row-between">
+            <div className="segmented" role="group" aria-label="Valeur saisie">
+              <button type="button" aria-pressed={metric === 'msg'} onClick={() => setMetric('msg')}>Conversations</button>
+              <button type="button" aria-pressed={metric === 'spend'} onClick={() => setMetric('spend')}>Dépense ($)</button>
+            </div>
+            {(hiddenPaused > 0 || showPaused) && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={showPaused} onChange={(e) => setShowPaused(e.target.checked)} /> Afficher les boosts en pause{hiddenPaused ? ` (${hiddenPaused})` : ''}</label>}
+          </div>
+          <Help>{metric === 'msg'
+            ? 'Recopiez chaque jour, dans la case du jour, les conversations cumulées affichées par Meta (depuis le lancement du boost). Les jours précédents sont déjà remplis ; le chiffre vert sous chaque case = nouvelles conversations de ce jour (jour − veille). L’enregistrement se fait en quittant la case. Glissez la poignée ⋮⋮ (ou les flèches sur téléphone) pour changer l’ordre des boosts.'
+            : 'Dépense cumulée ($) affichée par Meta pour chaque boost (facultatif). Sert à calculer le coût par conversation.'}</Help>
         </div>
-        {boosts.length === 0 ? <Empty icon="megaphone" title="Aucun boost actif ce jour-là"><Button icon="plus" onClick={() => setForm('new')}>Ajouter le boost n° 1</Button></Empty> : (
-          <div className="table-wrap"><table className="table boost-table">
-            <thead><tr><th style={{ width: 44 }}>N°</th><th>Boost</th><th className="t-num">Saisie précédente</th><th style={{ width: 130 }}>Dépense cumulée ($)</th><th style={{ width: 130 }}>Conversations cumulées</th><th className="t-num">Messages du jour</th><th></th></tr></thead>
-            <tbody>{rows.map((r) => (
-              <Fragment key={r.b.id}>
-                <tr className={r.errors.length ? 'is-choice' : ''}>
-                  <td><span className="slot-badge">{r.b.slot}</span></td>
-                  <td><strong>{r.b.label || `Boost ${r.b.slot}`}</strong><div className="small muted">lancé le {dd(r.b.startDate)}{r.b.dailyBudget ? ` · ${usd(r.b.dailyBudget)} / jour` : ''}</div></td>
-                  <td className="t-num small">{r.prev ? <>{usd(r.prev.spend)} · <strong>{r.prev.messages}</strong> msg<div className="muted">le {dd(r.prev.date)}</div></> : <span className="muted">1re saisie</span>}</td>
-                  <td><input className="cell-input" inputMode="decimal" aria-label={`Dépense boost ${r.b.slot}`} aria-invalid={r.errors.some((e) => e.includes('épense'))} value={r.v.spend} placeholder={r.prev ? String(r.prev.spend).replace('.', ',') : '0,00'} onChange={(e) => set(r.b.id, 'spend', e.target.value)} /></td>
-                  <td><div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
-                    <input className="cell-input" inputMode="numeric" aria-label={`Conversations boost ${r.b.slot}`} aria-invalid={r.errors.some((e) => e.includes('message'))} value={r.v.messages} placeholder={r.prev ? String(r.prev.messages) : '0'} onChange={(e) => set(r.b.id, 'messages', e.target.value)} />
-                    {r.prev && <IconButton icon="refresh" label="Pas de changement : reprendre la valeur précédente" onClick={() => setVals({ ...vals, [r.b.id]: { spend: vals[r.b.id]?.spend || String(r.prev!.spend).replace('.', ','), messages: String(r.prev!.messages) } })} />}
-                  </div></td>
-                  <td className="t-num">{r.newMsgs == null || r.errors.length ? '—' : <strong className={r.newMsgs > 0 ? 'pos' : 'muted'}>{signed(r.newMsgs)}</strong>}{r.newSpend != null && !r.errors.length ? <div className="small muted">{usd(Math.max(0, r.newSpend))}</div> : null}</td>
-                  <td className="t-actions"><div className="row" style={{ gap: 2, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
-                    <IconButton icon="edit" label="Modifier le boost" onClick={() => setForm(r.b)} />
-                    <Button variant="quiet" onClick={() => setStop(r.b)}>Arrêter</Button>
-                  </div></td>
-                </tr>
-                {r.errors.length > 0 && <tr className="is-choice"><td></td><td colSpan={6}><span className="small neg">{r.errors.join(' ')}</span></td></tr>}
-              </Fragment>
-            ))}</tbody>
+        {boosts.length === 0 ? <Empty icon="megaphone" title="Aucun boost sur cette période">{edit && <Button icon="plus" onClick={() => setForm('new')}>Ajouter un boost</Button>}</Empty> : (
+          <div className="table-wrap" ref={wrapRef}><table className="table week-table boost-week">
+            <thead><tr>
+              <th className="bw-slot">N°</th><th className="bw-name">Boost</th>
+              {shownDays.map((d) => <th key={d} className={`t-num ${isToday(d) ? 'is-today' : ''}`}>{isToday(d) ? 'Aujourd’hui' : dayShort(d)}</th>)}
+              <th className="t-num">{last === today ? 'Du jour' : `Le ${dd(last)}`}<div className="small muted">jour − veille</div></th>
+              <th className="t-num">Total<div className="small muted">période</div></th>
+              {edit && <th></th>}
+            </tr></thead>
+            <tbody>
+              {boosts.map((b, i) => {
+                const paused = isPaused(b);
+                const tot = metric === 'msg' ? stats.reduce((t, s) => t + (s.perBoost.get(b.id) ?? 0), 0) : stats.reduce((t, s) => t + (s.spendPerBoost.get(b.id) ?? 0), 0);
+                const dl = metric === 'msg' ? stats[shownDays.indexOf(last)]?.perBoost.get(b.id) : stats[shownDays.indexOf(last)]?.spendPerBoost.get(b.id);
+                return (
+                  <tr key={b.id} className={`${paused ? 'is-paused' : ''} ${over === b.id && drag && drag !== b.id ? 'drag-over' : ''}`}
+                    draggable={edit} onDragStart={(e) => { setDrag(b.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', b.id); }}
+                    onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(b.id); } }} onDragLeave={() => setOver(null)} onDragEnd={() => { setDrag(null); setOver(null); }}
+                    onDrop={async (e) => { e.preventDefault(); const id = drag; setDrag(null); setOver(null); if (id && id !== b.id) await move(id, b.id); }}>
+                    <td className="bw-slot">
+                      <div className="slot-cell">
+                        {edit && <span className="drag-handle" title="Glisser pour changer l’ordre"><Icon name="grip" size={16} /></span>}
+                        <span className="slot-badge">{b.slot}</span>
+                        {edit && <span className="move-btns">
+                          <button type="button" aria-label={`Monter le boost ${b.slot}`} disabled={i === 0} onClick={() => move(b.id, all.indexOf(boosts[i - 1]))}><Icon name="chevronUp" size={14} /></button>
+                          <button type="button" aria-label={`Descendre le boost ${b.slot}`} disabled={i === boosts.length - 1} onClick={() => move(b.id, all.indexOf(boosts[i + 1]))}><Icon name="chevronDown" size={14} /></button>
+                        </span>}
+                      </div>
+                    </td>
+                    <td className="bw-name"><strong>{b.label || `Boost ${b.slot}`}</strong>
+                      <div className="small muted">{paused ? <Badge tone="warn">En pause</Badge> : <Badge tone="ok">Actif</Badge>} lancé le {dd(b.startDate)}{b.dailyBudget ? ` · ${usd(b.dailyBudget)}/j` : ''}</div></td>
+                    {shownDays.map((d) => {
+                      const r = readingOn(b.id, d);
+                      const active = activeOn(b, d);
+                      if (d > today || d < b.startDate) return <td key={d} className="t-num muted">·</td>;
+                      if (!active && !r) return <td key={d} className="t-num"><span className="small muted">pause</span></td>;
+                      const delta = metric === 'msg' ? stats[shownDays.indexOf(d)].perBoost.get(b.id) : stats[shownDays.indexOf(d)].spendPerBoost.get(b.id);
+                      const prev = prevReading(b.id, d);
+                      return (
+                        <td key={d} className={`bw-day ${isToday(d) ? 'is-today' : ''}`}>
+                          {edit ? <CellInput label={`${metric === 'msg' ? 'Conversations' : 'Dépense'} boost ${b.slot} ${dd(d)}`} decimal={metric === 'spend'} today={isToday(d)} missing={!r}
+                            value={r ? (metric === 'msg' ? r.messages : r.spend) : undefined} placeholder={prev ? String(metric === 'msg' ? prev.messages : prev.spend) : isToday(d) ? 'à saisir' : ''}
+                            onCommit={(v) => (metric === 'msg' ? saveReading(b.id, d, v, undefined) : saveReading(b.id, d, r?.messages ?? prev?.messages ?? (v == null ? undefined : 0), v))} />
+                            : <span className="num">{r ? (metric === 'msg' ? fmtNum(r.messages) : usd(r.spend)) : <span className="muted small">à saisir</span>}</span>}
+                          {r && delta != null && <div className={`bw-delta ${delta > 0 ? 'pos' : 'muted'}`}>{metric === 'msg' ? signed(delta) : `+${usd(delta)}`}</div>}
+                        </td>
+                      );
+                    })}
+                    <td className="t-num"><strong className={dl ? 'pos' : 'muted'}>{dl == null ? '—' : metric === 'msg' ? signed(dl) : usd(dl)}</strong></td>
+                    <td className="t-num"><strong>{metric === 'msg' ? fmtNum(tot) : usd(tot)}</strong></td>
+                    {edit && <td className="t-actions"><div className="row" style={{ gap: 2, flexWrap: 'nowrap', justifyContent: 'flex-end' }}>
+                      <IconButton icon="edit" label={`Modifier le boost ${b.slot}`} onClick={() => setForm(b)} />
+                      {paused ? <IconButton icon="play" label={`Reprendre le boost ${b.slot}`} onClick={async () => { await resumeBoost(b, today); toast('Boost repris'); }} />
+                        : <IconButton icon="pause" label={`Mettre en pause le boost ${b.slot}`} onClick={() => setPause(b)} />}
+                      <IconButton icon="trash" label={`Supprimer le boost ${b.slot}`} onClick={() => setDel(b)} />
+                    </div></td>}
+                  </tr>
+                );
+              })}
+              <tr className="synth-total"><td className="bw-slot"></td><td className="bw-name">Total nouvelles conversations</td>{stats.map((s, i) => <td key={i} className={`t-num ${isToday(shownDays[i]) ? 'is-today' : ''}`}>{shownDays[i] > today ? '·' : s.entered ? fmtNum(s.theo) : '—'}</td>)}<td className="t-num">{fmtNum(stats[shownDays.indexOf(last)]?.theo ?? 0)}</td><td className="t-num">{fmtNum(msgW)}</td>{edit && <td></td>}</tr>
+              <tr><td className="bw-slot"></td><td className="bw-name">Messages réels comptés <span className="small muted">(facultatif)</span></td>{shownDays.map((d, i) => <td key={d} className={`bw-day ${isToday(d) ? 'is-today' : ''}`}>{d > today ? <span className="muted">·</span> : edit ? <CellInput label={`Messages réels ${dd(d)}`} value={stats[i].real} onCommit={(v) => saveReal(pageId, d, v)} /> : <span className="num">{stats[i].real ?? '—'}</span>}</td>)}<td className="t-num">{stats[shownDays.indexOf(last)]?.real ?? '—'}</td><td className="t-num">{realW || '—'}</td>{edit && <td></td>}</tr>
+              <tr><td className="bw-slot"></td><td className="bw-name">Commandes en ligne</td>{stats.map((s, i) => <td key={i} className="t-num">{shownDays[i] > today ? '·' : fmtNum(s.orders)}</td>)}<td className="t-num">{fmtNum(stats[shownDays.indexOf(last)]?.orders ?? 0)}</td><td className="t-num">{fmtNum(ordersW)}</td>{edit && <td></td>}</tr>
+              <tr className="synth-total"><td className="bw-slot"></td><td className="bw-name">Chiffre d’affaires</td>{shownDays.map((d) => <td key={d} className="t-num small">{d > today ? '·' : fmtAr(rev.get(d) ?? 0)}</td>)}<td className="t-num small">{fmtAr(rev.get(last) ?? 0)}</td><td className="t-num">{fmtAr(revW)}</td>{edit && <td></td>}</tr>
+              <tr><td className="bw-slot"></td><td className="bw-name">CA par conversation</td>{stats.map((s, i) => <td key={i} className="t-num small">{s.theo ? fmtAr((rev.get(shownDays[i]) ?? 0) / s.theo) : '—'}</td>)}<td className="t-num small">{stats[shownDays.indexOf(last)]?.theo ? fmtAr((rev.get(last) ?? 0) / stats[shownDays.indexOf(last)].theo) : '—'}</td><td className="t-num">{msgW ? fmtAr(revW / msgW) : '—'}</td>{edit && <td></td>}</tr>
+              <tr><td className="bw-slot"></td><td className="bw-name">Dépense</td>{stats.map((s, i) => <td key={i} className="t-num small">{s.entered ? usd(s.spend) : '—'}</td>)}<td className="t-num small">{usd(stats[shownDays.indexOf(last)]?.spend ?? 0)}</td><td className="t-num small">{usd(spendW)}</td>{edit && <td></td>}</tr>
+            </tbody>
           </table></div>
         )}
       </div>
-
-      <div className="card stack">
-        <div className="grid-2" style={{ alignItems: 'end' }}>
-          <TextField label={`Messages réellement reçus sur la page le ${dd(date)}`} required value={real} onChange={setReal} inputMode="numeric" error={tried && (realN == null || realN < 0 || !Number.isInteger(realN)) ? 'À saisir (0 si aucun message)' : null}
-            hint="Les nouvelles conversations comptées vous-même dans Messenger / Meta Business Suite (messages physiques)." />
-          <div className="small muted">Commandes en ligne saisies ce jour pour cette page : <strong>{orders}</strong></div>
-        </div>
-        <div className="stat-grid">
-          <div className="card stat"><span className="small muted">Messages théoriques du jour (boosts)</span><strong className="stat-value num">{fmtNum(theo)}</strong></div>
-          <div className="card stat"><span className="small muted">Messages réels</span><strong className="stat-value num">{realN == null ? '—' : fmtNum(realN)}</strong></div>
-          <div className={`card stat ${gap != null && gap < 0 ? '' : 'stat-strong'}`}><span className="small muted">Écart (réel − théorique)</span><strong className={`stat-value num ${gap != null && gap < 0 ? 'neg' : ''}`}>{signed(gap)}</strong>{gap != null && theo > 0 && <span className="small muted">réel = {Math.round(((realN ?? 0) / theo) * 100)} % du théorique</span>}</div>
-          <div className="card stat"><span className="small muted">Dépense du jour</span><strong className="stat-value num">{usd(spendDay)}</strong>{realN ? <span className="small muted">{usd(spendDay / realN)} par message réel</span> : null}</div>
-        </div>
-        {nErr > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>{nErr} boost(s) avec une erreur de saisie : corrigez les valeurs en rouge. Une valeur cumulée ne peut pas être plus petite que la précédente.</span></div>}
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <Button icon="check" busy={busy} disabled={nErr > 0} onClick={async () => {
-            setTried(true);
-            const missing = rows.filter((r) => r.spend == null || r.messages == null);
-            if (missing.length) { toast(`Saisissez tous les boosts actifs (${missing.map((m) => 'n° ' + m.b.slot).join(', ')}), ou arrêtez ceux qui ne sont plus actifs.`, 'error'); return; }
-            setBusy(true);
-            try { await saveDay(pageId, date, rows.map((r) => ({ boostId: r.b.id, spend: r.spend!, messages: r.messages! })), realN as number); toast(already ? 'Saisie du jour corrigée' : 'Journée enregistrée'); }
-            catch (e: any) { toast(e?.message ?? String(e), 'error'); }
-            finally { setBusy(false); }
-          }}>{already ? 'Enregistrer les corrections' : 'Enregistrer la journée'}</Button>
-        </div>
-      </div>
-
-      <StoppedList pageId={pageId} />
-      {form && <BoostForm pageId={pageId} boost={form === 'new' ? undefined : form} date={date} onClose={() => setForm(null)} />}
-      {stop && <StopModal boost={stop} date={date} onClose={() => setStop(null)} />}
+      {form && <BoostForm pageId={pageId} boost={form === 'new' ? undefined : form} date={today} onClose={() => setForm(null)} />}
+      {pause && <PauseModal boost={pause} onClose={() => setPause(null)} />}
+      {del && <Confirm title={`Supprimer ${boostName(del)}`} danger confirmLabel="Supprimer le boost"
+        message={<p>Le boost et ses {readingsOf(del.id).length} saisie(s) seront supprimés. À faire seulement pour un boost qui ne sert plus (sinon, mettez-le en pause : son historique reste).</p>}
+        onClose={() => setDel(null)} onConfirm={async () => { await deleteBoost(del); toast('Boost supprimé'); }} />}
     </>
-  );
-}
-
-function StoppedList({ pageId }: { pageId: string }) {
-  const stopped = boostsOf(pageId).filter((b) => b.status === 'stopped').sort((a, b) => (b.stoppedOn ?? '').localeCompare(a.stoppedOn ?? '')).slice(0, 8);
-  if (!stopped.length) return null;
-  return (
-    <details className="card card-flush">
-      <summary className="card-pad" style={{ cursor: 'pointer' }}><strong>Boosts arrêtés ({stopped.length})</strong></summary>
-      <ul className="list">{stopped.map((b) => (
-        <li key={b.id} className="list-item">
-          <div className="list-item-main"><span className="list-item-title">{boostName(b)}</span><p className="small muted">du {dd(b.startDate)} au {dd(b.stoppedOn ?? b.startDate)} · {b.stopReason}</p></div>
-          <Button variant="quiet" onClick={async () => { try { await restartBoost(b); toast('Boost réactivé'); } catch (e: any) { toast(e.message, 'error'); } }}>Réactiver</Button>
-        </li>
-      ))}</ul>
-    </details>
   );
 }
 
 function BoostForm({ pageId, boost, date, onClose }: { pageId: string; boost?: Boost; date: string; onClose: () => void }) {
-  const [slot, setSlot] = useState(String(boost?.slot ?? nextSlot(pageId)));
   const [label, setLabel] = useState(boost?.label ?? '');
   const [start, setStart] = useState(boost?.startDate ?? date);
   const [budget, setBudget] = useState(boost?.dailyBudget != null ? String(boost.dailyBudget).replace('.', ',') : '1');
   const [busy, setBusy] = useState(false);
-  const n = parseNum(slot);
-  const other = boost && n != null ? boostsOf(pageId).find((x) => x.id !== boost.id && x.status === 'active' && x.slot === n) : undefined;
   return (
     <Modal title={boost ? `Modifier le boost n° ${boost.slot}` : `Nouveau boost — ${pageName(pageId)}`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || n < 1 || !start} onClick={async () => {
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!start} onClick={async () => {
         setBusy(true);
         try {
-          const d = { slot: n!, label: label.trim() || undefined, startDate: start, dailyBudget: parseNum(budget) };
+          const d = { label: label.trim() || undefined, startDate: start, dailyBudget: parseNum(budget) };
           if (boost) await updateBoost(boost, d); else await createBoost({ pageId, ...d });
-          toast(boost ? 'Boost modifié' : 'Boost ajouté'); onClose();
+          toast(boost ? 'Boost modifié' : 'Boost ajouté à la fin de la liste'); onClose();
         } catch (e: any) { toast(e.message, 'error'); } finally { setBusy(false); }
       }}>{boost ? 'Enregistrer' : 'Ajouter le boost'}</Button></>}>
       <div className="stack">
-        <p className="small">Seuls les boosts <strong>actifs</strong> sont enregistrés. Le numéro est la position du boost dans la liste de l’Espace Pubs (1 = le premier en haut), pour le retrouver facilement.</p>
-        <div className="grid-2">
-          <TextField label="N° du boost" required value={slot} onChange={setSlot} inputMode="numeric" hint={other ? `Le n° ${n} est déjà pris par « ${boostName(other)} » : les deux numéros seront échangés.` : undefined} />
-          <TextField label="Date de lancement" type="date" required value={start} onChange={setStart} max={todayYmd()} />
-        </div>
         <TextField label="Texte de la publicité (pour la reconnaître)" value={label} onChange={setLabel} placeholder="Ex. SUPER PROMOTION pyjamas" />
-        <TextField label="Budget par jour ($)" value={budget} onChange={setBudget} inputMode="decimal" />
-      </div>
-    </Modal>
-  );
-}
-
-function StopModal({ boost, date, onClose }: { boost: Boost; date: string; onClose: () => void }) {
-  const [on, setOn] = useState(date);
-  const [reason, setReason] = useState(STOP_REASONS[0]);
-  const [note, setNote] = useState('');
-  return (
-    <Modal title={`Arrêter ${boostName(boost)}`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button variant="danger" onClick={async () => { await stopBoost(boost, on, [reason, note.trim()].filter(Boolean).join(' — ')); toast('Boost arrêté'); onClose(); }}>Arrêter le boost</Button></>}>
-      <div className="stack">
-        <p className="small">À faire quand le boost n’est plus actif dans l’Espace Pubs. Il ne sera plus demandé à la saisie après cette date ; ses résultats restent dans l’historique.</p>
         <div className="grid-2">
-          <TextField label="Dernier jour actif" type="date" value={on} onChange={setOn} />
-          <SelectField label="Raison" value={reason} onChange={setReason} options={STOP_REASONS.map((r) => ({ value: r, label: r }))} />
+          <TextField label="Date de lancement" type="date" required value={start} onChange={setStart} max={todayYmd()} />
+          <TextField label="Budget par jour ($)" value={budget} onChange={setBudget} inputMode="decimal" />
         </div>
-        <TextField label="Note (facultatif)" value={note} onChange={setNote} />
+        {!boost && <p className="small muted">Le boost est ajouté à la fin de la liste ; glissez-le ensuite à sa place (même ordre que l’Espace Pubs).</p>}
       </div>
     </Modal>
   );
 }
 
-// ---------------------------------------------------------------- Semaine (lundi → dimanche)
-function WeekView() {
-  const pg = usePage(true);
-  const [date, setDate] = useState(todayYmd());
-  const monday = mondayOf(date);
-  const days = weekDates(monday);
-  const label = `Semaine du ${dd(monday)} au ${dd(days[6])}`;
+function PauseModal({ boost, onClose }: { boost: Boost; onClose: () => void }) {
+  const [reason, setReason] = useState(STOP_REASONS[0]);
   return (
-    <div className="stack">
-      <div className="card row" style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <div style={{ minWidth: 220 }}><SelectField label="Page" value={pg.pageId} onChange={pg.set} options={pg.options} /></div>
-        <DateNav date={monday} setDate={setDate} step={7} label={label} />
+    <Modal title={`Mettre en pause ${boostName(boost)}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button onClick={async () => { await pauseBoost(boost, todayYmd(), reason); toast('Boost en pause'); onClose(); }}>Mettre en pause</Button></>}>
+      <div className="stack">
+        <p className="small">À faire quand le boost est mis en pause dans l’Espace Pubs. La case d’aujourd’hui reste à remplir ; à partir de demain il n’est plus demandé. « Reprendre » le remet en route quand vous voulez.</p>
+        <SelectField label="Raison" value={reason} onChange={setReason} options={STOP_REASONS.map((r) => ({ value: r, label: r }))} />
       </div>
-      {pg.pageId ? <PageWeek pageId={pg.pageId} days={days} /> : <AllPagesWeek pageIds={pg.pages.map((p) => p.id)} days={days} />}
-    </div>
+    </Modal>
   );
 }
 
-function PageWeek({ pageId, days }: { pageId: string; days: string[] }) {
-  const stats = days.map((d) => dayStats(pageId, d));
-  const boosts = boostsOf(pageId).filter((b) => days.some((d) => stats[days.indexOf(d)].perBoost.has(b.id)) || days.some((d) => b.startDate <= d && (b.status === 'active' || (b.stoppedOn ?? '') >= d)))
-    .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || a.slot - b.slot);
-  const sum = (f: (s: (typeof stats)[number]) => number | undefined) => stats.reduce((t, s) => t + (f(s) ?? 0), 0);
-  const theoW = sum((s) => s.theo), realW = sum((s) => s.real), spendW = sum((s) => s.spend), ordersW = sum((s) => s.orders);
-  const hasReal = stats.some((s) => s.real != null);
-  const cell = (n: number | undefined, cls = '') => <td className={`t-num ${cls}`}>{n == null ? <span className="muted">—</span> : fmtNum(n)}</td>;
-  const exp = () => exportTables(`boosts_${pageName(pageId)}_${days[0]}.xlsx`, [{
-    name: 'Semaine',
-    cols: [{ key: 'l', label: 'Ligne', value: (r: any) => r.l, width: 30 }, ...days.map((d, i) => ({ key: d, label: dayShort(d), value: (r: any) => r.v[i] ?? '', width: 12 })), { key: 't', label: 'Total semaine', value: (r: any) => r.t, width: 14 }],
-    rows: [
-      ...boosts.map((b) => ({ l: boostName(b), v: stats.map((s) => s.perBoost.get(b.id)), t: stats.reduce((t, s) => t + (s.perBoost.get(b.id) ?? 0), 0) })),
-      { l: 'Total théorique', v: stats.map((s) => s.theo), t: theoW }, { l: 'Réel (compté)', v: stats.map((s) => s.real), t: realW },
-      { l: 'Écart (réel − théo)', v: stats.map((s) => s.gap), t: realW - theoW }, { l: 'Dépense ($)', v: stats.map((s) => Math.round(s.spend * 100) / 100), t: Math.round(spendW * 100) / 100 },
-      { l: 'Commandes en ligne', v: stats.map((s) => s.orders), t: ordersW },
-    ],
-  }]);
-  return (
-    <>
-      <div className="stat-grid">
-        <div className="card stat"><span className="small muted">Messages théoriques (semaine)</span><strong className="stat-value num">{fmtNum(theoW)}</strong></div>
-        <div className="card stat"><span className="small muted">Messages réels (semaine)</span><strong className="stat-value num">{hasReal ? fmtNum(realW) : '—'}</strong></div>
-        <div className="card stat stat-strong"><span className="small muted">Écart (réel − théorique)</span><strong className={`stat-value num ${realW - theoW < 0 ? 'neg' : ''}`}>{hasReal ? signed(realW - theoW) : '—'}</strong>{hasReal && theoW > 0 && <span className="small muted">réel = {Math.round((realW / theoW) * 100)} % du théorique</span>}</div>
-        <div className="card stat"><span className="small muted">Dépense (semaine)</span><strong className="stat-value num">{usd(spendW)}</strong>{realW ? <span className="small muted">{usd(spendW / realW)} par message réel</span> : null}</div>
-        <div className="card stat"><span className="small muted">Commandes en ligne</span><strong className="stat-value num">{fmtNum(ordersW)}</strong>{realW ? <span className="small muted">{Math.round((ordersW / realW) * 100)} % des messages réels</span> : null}</div>
-      </div>
-      <div className="card card-flush">
-        <div className="card-pad row-between"><div><h2>{pageName(pageId)} — messages par jour</h2><p className="small muted">Nouveaux messages théoriques de chaque boost (écart entre deux saisies), puis le total comparé au réel compté.</p></div><Button variant="ghost" icon="download" onClick={exp}>Excel</Button></div>
-        <div className="table-wrap"><table className="table week-table">
-          <thead><tr><th>Boost</th>{days.map((d) => <th key={d} className="t-num">{dayShort(d)}</th>)}<th className="t-num">Semaine</th></tr></thead>
-          <tbody>
-            {boosts.length === 0 && <tr><td colSpan={9} className="small muted">Aucun boost cette semaine.</td></tr>}
-            {boosts.map((b) => {
-              const tot = stats.reduce((t, s) => t + (s.perBoost.get(b.id) ?? 0), 0);
-              return <tr key={b.id} style={{ opacity: b.status === 'active' ? 1 : .65 }}><td><span className="slot-badge">{b.slot}</span> {b.label || `Boost ${b.slot}`}{b.status === 'stopped' && <span className="small muted"> (arrêté le {dd(b.stoppedOn!)})</span>}</td>
-                {stats.map((s, i) => { const active = days[i] >= b.startDate && (b.status === 'active' || (b.stoppedOn ?? '') >= days[i]); const v = s.perBoost.get(b.id); return <td key={i} className={`t-num ${v == null && active && days[i] <= todayYmd() ? 'cell-missing' : ''}`}>{v == null ? <span className="muted">{active && days[i] <= todayYmd() ? 'à saisir' : '·'}</span> : fmtNum(v)}</td>; })}
-                <td className="t-num"><strong>{fmtNum(tot)}</strong></td></tr>;
-            })}
-            <tr className="synth-total"><td>Total théorique</td>{stats.map((s, i) => <Fragment key={i}>{cell(s.entered ? s.theo : undefined)}</Fragment>)}<td className="t-num">{fmtNum(theoW)}</td></tr>
-            <tr className="synth-total"><td>Réel (compté)</td>{stats.map((s, i) => <Fragment key={i}>{cell(s.real)}</Fragment>)}<td className="t-num">{hasReal ? fmtNum(realW) : '—'}</td></tr>
-            <tr><td><strong>Écart (réel − théo)</strong></td>{stats.map((s, i) => <td key={i} className={`t-num ${s.gap != null && s.gap < 0 ? 'neg' : ''}`}>{signed(s.gap)}</td>)}<td className={`t-num ${realW - theoW < 0 ? 'neg' : ''}`}><strong>{hasReal ? signed(realW - theoW) : '—'}</strong></td></tr>
-            <tr><td>Dépense</td>{stats.map((s, i) => <td key={i} className="t-num small">{s.entered ? usd(s.spend) : '—'}</td>)}<td className="t-num small">{usd(spendW)}</td></tr>
-            <tr><td>Coût par message réel</td>{stats.map((s, i) => <td key={i} className="t-num small">{s.real ? usd(s.spend / s.real) : '—'}</td>)}<td className="t-num small">{realW ? usd(spendW / realW) : '—'}</td></tr>
-            <tr><td>Commandes en ligne</td>{stats.map((s, i) => <Fragment key={i}>{cell(s.orders)}</Fragment>)}<td className="t-num">{fmtNum(ordersW)}</td></tr>
-          </tbody>
-        </table></div>
-      </div>
-    </>
-  );
-}
-
-function AllPagesWeek({ pageIds, days }: { pageIds: string[]; days: string[] }) {
-  type Row = { id: string; name: string; theo: number; real: number; hasReal: boolean; spend: number; orders: number; active: number; daysTheo: number[]; daysReal: (number | undefined)[] };
+// ---------------------------------------------------------------- Toutes les pages
+function AllPagesTable({ pageIds, days, onPick }: { pageIds: string[]; days: string[]; onPick: (id: string) => void }) {
+  const today = todayYmd();
+  const last = days.filter((d) => d <= today).pop() ?? days[0];
+  const rev = useRevenue(days[0], last);
+  type Row = { id: string; name: string; active: number; daily: number[]; msgs: number; revenue: number; orders: number; spend: number };
   const rows: Row[] = pageIds.map((id) => {
     const st = days.map((d) => dayStats(id, d));
-    return { id, name: pageName(id), theo: st.reduce((t, s) => t + s.theo, 0), real: st.reduce((t, s) => t + (s.real ?? 0), 0), hasReal: st.some((s) => s.real != null), spend: st.reduce((t, s) => t + s.spend, 0), orders: st.reduce((t, s) => t + s.orders, 0), active: activeBoosts(id, days[6] > todayYmd() ? todayYmd() : days[6]).length, daysTheo: st.map((s) => s.theo), daysReal: st.map((s) => s.real) };
-  }).filter((r) => r.theo || r.hasReal || r.active || r.orders);
+    const r = rev.get(id);
+    return { id, name: pageName(id), active: activeBoosts(id, last).length, daily: st.map((s) => s.theo), msgs: st.reduce((t, s) => t + s.theo, 0), revenue: days.reduce((t, d) => t + (r?.get(d) ?? 0), 0), orders: st.reduce((t, s) => t + s.orders, 0), spend: st.reduce((t, s) => t + s.spend, 0) };
+  }).filter((r) => r.msgs || r.active || r.revenue || r.orders);
   const cols: Col<Row>[] = [
-    { key: 'n', label: 'Page', value: (r) => r.name, render: (r) => <a href="#/boosts/semaine" onClick={() => setMeta('boostPage', r.id)}>{r.name}</a> },
+    { key: 'n', label: 'Page', value: (r) => r.name, render: (r) => <button type="button" className="link-btn" onClick={() => onPick(r.id)}>{r.name}</button> },
     { key: 'a', label: 'Boosts actifs', value: (r) => r.active, num: true, total: true },
-    { key: 't', label: 'Messages théo.', value: (r) => r.theo, num: true, total: true },
-    { key: 'r', label: 'Messages réels', value: (r) => r.real, num: true, total: true },
-    { key: 'g', label: 'Écart (réel − théo)', value: (r) => r.real - r.theo, num: true, total: true, render: (r) => <span className={r.real - r.theo < 0 ? 'neg' : ''}>{r.hasReal ? signed(r.real - r.theo) : '—'}</span> },
-    { key: 'p', label: 'Réel / théo.', value: (r) => (r.theo ? Math.round((r.real / r.theo) * 100) : 0), num: true, render: (r) => (r.theo && r.hasReal ? `${Math.round((r.real / r.theo) * 100)} %` : '—'), total: (rs) => { const t = rs.reduce((a, r) => a + r.theo, 0); return t ? `${Math.round((rs.reduce((a, r) => a + r.real, 0) / t) * 100)} %` : '—'; } },
+    { key: 'm', label: 'Conversations', value: (r) => r.msgs, num: true, total: true },
+    { key: 'c', label: 'Chiffre d’affaires', value: (r) => Math.round(r.revenue), money: true, num: true, total: true },
+    { key: 'cm', label: 'CA / conversation', value: (r) => (r.msgs ? Math.round(r.revenue / r.msgs) : 0), money: true, num: true, total: (rs) => { const m = rs.reduce((t, r) => t + r.msgs, 0); return m ? fmtAr(rs.reduce((t, r) => t + r.revenue, 0) / m) : '—'; } },
+    { key: 'o', label: 'Commandes', value: (r) => r.orders, num: true, total: true },
     { key: 's', label: 'Dépense ($)', value: (r) => Math.round(r.spend * 100) / 100, num: true, total: true },
-    { key: 'c', label: 'Coût / message réel ($)', value: (r) => (r.real ? Math.round((r.spend / r.real) * 100) / 100 : 0), num: true, render: (r) => (r.real ? usd(r.spend / r.real) : '—') },
-    { key: 'o', label: 'Commandes en ligne', value: (r) => r.orders, num: true, total: true },
+    { key: 'sc', label: 'Coût / conversation', value: (r) => (r.msgs ? Math.round((r.spend / r.msgs) * 100) / 100 : 0), num: true, render: (r) => (r.msgs ? usd(r.spend / r.msgs) : '—') },
   ];
-  const dayTot = days.map((_, i) => ({ theo: rows.reduce((t, r) => t + r.daysTheo[i], 0), real: rows.reduce((t, r) => t + (r.daysReal[i] ?? 0), 0), has: rows.some((r) => r.daysReal[i] != null) }));
   return (
     <>
       <div className="card card-flush">
-        <div className="card-pad row-between"><div><h2>Toutes les pages — semaine</h2><p className="small muted">Touchez une page pour voir le détail de ses boosts.</p></div><Button variant="ghost" icon="download" onClick={() => exportTables(`boosts_pages_${days[0]}.xlsx`, [{ name: 'Pages', cols, rows }])}>Excel</Button></div>
-        <SortTable cols={cols} rows={rows} rowKey={(r) => r.id} initialSort={{ key: 'r', desc: true }} empty="Aucune saisie cette semaine." />
+        <div className="card-pad row-between"><div><h2>Toutes les pages</h2><p className="small muted">Combien de conversations, et combien elles rapportent. Touchez une page pour saisir ses boosts.</p></div><Button variant="ghost" className="btn-sm" icon="download" onClick={() => exportTables(`boosts_pages_${days[0]}.xlsx`, [{ name: 'Pages', cols, rows }])}>Excel</Button></div>
+        <SortTable cols={cols} rows={rows} rowKey={(r) => r.id} initialSort={{ key: 'm', desc: true }} empty="Aucune saisie sur cette période." />
       </div>
       <div className="card card-flush">
-        <div className="card-pad"><h2>Total par jour (toutes les pages)</h2></div>
+        <div className="card-pad"><h2>Conversations par jour</h2></div>
         <div className="table-wrap"><table className="table week-table">
-          <thead><tr><th></th>{days.map((d) => <th key={d} className="t-num">{dayShort(d)}</th>)}<th className="t-num">Semaine</th></tr></thead>
+          <thead><tr><th>Page</th>{days.map((d) => <th key={d} className="t-num">{d === today ? 'Aujourd’hui' : dayShort(d)}</th>)}<th className="t-num">Total</th></tr></thead>
           <tbody>
-            <tr><td>Théorique</td>{dayTot.map((d, i) => <td key={i} className="t-num">{fmtNum(d.theo)}</td>)}<td className="t-num"><strong>{fmtNum(dayTot.reduce((t, d) => t + d.theo, 0))}</strong></td></tr>
-            <tr><td>Réel</td>{dayTot.map((d, i) => <td key={i} className="t-num">{d.has ? fmtNum(d.real) : '—'}</td>)}<td className="t-num"><strong>{fmtNum(dayTot.reduce((t, d) => t + d.real, 0))}</strong></td></tr>
-            <tr className="synth-total"><td>Écart</td>{dayTot.map((d, i) => <td key={i} className={`t-num ${d.real - d.theo < 0 ? 'neg' : ''}`}>{d.has ? signed(d.real - d.theo) : '—'}</td>)}<td className="t-num">{signed(dayTot.reduce((t, d) => t + d.real - d.theo, 0))}</td></tr>
+            {rows.map((r) => <tr key={r.id}><td>{r.name}</td>{r.daily.map((n, i) => <td key={i} className="t-num">{days[i] > today ? '·' : fmtNum(n)}</td>)}<td className="t-num"><strong>{fmtNum(r.msgs)}</strong></td></tr>)}
+            <tr className="synth-total"><td>Total</td>{days.map((d, i) => <td key={d} className="t-num">{d > today ? '·' : fmtNum(rows.reduce((t, r) => t + r.daily[i], 0))}</td>)}<td className="t-num">{fmtNum(rows.reduce((t, r) => t + r.msgs, 0))}</td></tr>
           </tbody>
         </table></div>
       </div>
@@ -360,16 +376,17 @@ function AllPagesWeek({ pageIds, days }: { pageIds: string[]; days: string[] }) 
 // ---------------------------------------------------------------- Performance
 function Performance() {
   const pg = usePage(true);
-  const [to, setTo] = useState(todayYmd());
-  const [span, setSpan] = useState('7');
-  const from = addDays(to, -(Number(span) - 1));
+  const per = usePeriodBar();
+  const today = todayYmd();
+  const from = per.from, to = per.to > today ? today : per.to;
+  const span = `${per.days.filter((d) => d <= today).length}`;
   const rows = useMemo(() => boostPerformance(from, to, pg.pageId || undefined).filter((r) => !pg.scope.on || pg.scope.pages.includes(r.b.pageId)), [from, to, pg.pageId, pg.scope.on]);
   const order: Record<string, number> = { bad: 0, average: 1, good: 2, new: 3, none: 4 };
   const active = rows.filter((r) => r.b.status === 'active').sort((a, b) => order[a.verdict] - order[b.verdict] || (b.cost ?? 0) - (a.cost ?? 0));
   const stopped = rows.filter((r) => r.b.status !== 'active');
   const cols: Col<BoostPerf>[] = [
     { key: 'p', label: 'Page', value: (r) => pageName(r.b.pageId), hide: !!pg.pageId },
-    { key: 'n', label: 'Boost', value: (r) => r.b.slot, render: (r) => <><span className="slot-badge">{r.b.slot}</span> {r.b.label || ''}<div className="small muted">lancé le {dd(r.b.startDate)} · {r.days} j{r.b.stoppedOn ? ` · arrêté le ${dd(r.b.stoppedOn)}` : ''}</div></> },
+    { key: 'n', label: 'Boost', value: (r) => r.b.slot, render: (r) => <><span className="slot-badge">{r.b.slot}</span> {r.b.label || ''}<div className="small muted">lancé le {dd(r.b.startDate)} · {r.days} j{r.b.status !== 'active' ? ' · en pause' : ''}</div></> },
     { key: 'm', label: `Messages théo. (${span} j)`, value: (r) => r.messages, num: true, total: true },
     { key: 's', label: `Dépense (${span} j)`, value: (r) => Math.round(r.spend * 100) / 100, num: true, total: (rs) => usd(rs.reduce((t, r) => t + r.spend, 0)), render: (r) => usd(r.spend) },
     { key: 'c', label: 'Coût / message', value: (r) => (r.cost == null ? 9999 : Math.round(r.cost * 100) / 100), num: true, render: (r) => usd(r.cost), total: (rs) => { const m = rs.reduce((t, r) => t + r.messages, 0); return m ? usd(rs.reduce((t, r) => t + r.spend, 0) / m) : '—'; } },
@@ -380,19 +397,16 @@ function Performance() {
   const bad = active.filter((r) => r.verdict === 'bad');
   return (
     <div className="stack">
-      <div className="card row" style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <div style={{ minWidth: 220 }}><SelectField label="Page" value={pg.pageId} onChange={pg.set} options={pg.options} /></div>
-          <div style={{ minWidth: 160 }}><SelectField label="Période" value={span} onChange={setSpan} options={[{ value: '7', label: '7 derniers jours' }, { value: '14', label: '14 derniers jours' }, { value: '30', label: '30 derniers jours' }]} /></div>
-        </div>
-        <TextField label="Jusqu’au" type="date" value={to} onChange={(v) => v && setTo(v)} max={todayYmd()} />
+      <div className="card boost-filters">
+        <div className="boost-page-field"><SelectField label="Page" value={pg.pageId} onChange={pg.set} options={pg.options} /></div>
+        {per.bar}
       </div>
-      {bad.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span><strong>{bad.length} boost(s) peu performant(s)</strong> : {bad.map((r) => `${pg.pageId ? '' : pageName(r.b.pageId) + ' '}n° ${r.b.slot}`).join(', ')}. Pensez à les arrêter dans l’Espace Pubs et à lancer un nouveau boost à la place (puis notez-le dans « Saisie du jour »).</span></div>}
+      {bad.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span><strong>{bad.length} boost(s) peu performant(s)</strong> : {bad.map((r) => `${pg.pageId ? '' : pageName(r.b.pageId) + ' '}n° ${r.b.slot}`).join(', ')}. Pensez à les mettre en pause (ou les supprimer) dans « Saisie et suivi », et à lancer un nouveau boost à la place.</span></div>}
       <div className="card card-flush">
         <div className="card-pad row-between"><div><h2>Boosts actifs</h2><p className="small muted">Du {dd(from)} au {dd(to)}. Les plus faibles en premier.</p></div><Button variant="ghost" icon="download" onClick={() => exportTables(`performance_boosts_${to}.xlsx`, [{ name: 'Boosts', cols: [...cols.filter((c) => !c.hide), { key: 'x', label: 'Conseil', value: (r: BoostPerf) => r.advice, width: 50 }], rows: [...active, ...stopped] }])}>Excel</Button></div>
         <SortTable cols={cols} rows={active} rowKey={(r) => r.b.id} empty="Aucun boost actif sur la période." />
       </div>
-      {stopped.length > 0 && <div className="card card-flush"><div className="card-pad"><h2>Boosts arrêtés pendant la période</h2></div><SortTable cols={cols} rows={stopped} rowKey={(r) => r.b.id} /></div>}
+      {stopped.length > 0 && <div className="card card-flush"><div className="card-pad"><h2>Boosts en pause</h2></div><SortTable cols={cols} rows={stopped} rowKey={(r) => r.b.id} /></div>}
       <div className="card small muted stack-s">
         <strong>Comment l’avis est calculé</strong>
         <p>Pour chaque boost : coût par message = dépense ÷ nouveaux messages théoriques sur la période. Il est comparé au coût moyen des boosts de la même page (ou de toutes les pages s’il est seul).</p>

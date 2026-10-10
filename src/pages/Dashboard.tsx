@@ -1,13 +1,14 @@
 // Accueil : tableau de bord adapté au rôle (chiffres de la période, trésorerie, stock, livreurs, meilleurs articles).
 import { useMemo, useState } from 'react';
 import { setMeta } from '../lib/db';
-import { fmtAr, productStock, type Product } from '../lib/catalog';
+import { fmtAr, fmtNum, productStock, type Product } from '../lib/catalog';
 import { bucketOf, type Prospect } from '../lib/prospects';
 import { rootOf } from '../lib/scope';
 import { get } from '../lib/db';
 import type { Category } from '../lib/catalog';
 import { OrderRow } from './Orders';
 import { anomalies, boostRoi, coverage, sameDayLastWeek, targets } from '../lib/insights';
+import { messagesByPage } from '../lib/boosts';
 import { addDays } from '../lib/money';
 import { ACCOUNTS, balances, courierBalance, today as todayYmd, type AccountId } from '../lib/money';
 import { bucketFor, groupBy, kpis, pendingPurchases, previousPeriod, productLabel, salesLedger, series, stockValue, dormant } from '../lib/analytics';
@@ -181,6 +182,9 @@ function ManagerBoard({ part }: { part: 'summary' | 'sales' | 'money' | 'chart' 
   const pts = series(lines, from, to, bucket);
   const top = groupBy(lines, (l) => l.productId, productLabel).slice(0, 5);
   const byPage = groupBy(lines, (l) => rootOf(l.categoryId) || '_', (id) => ({ label: id === '_' ? 'Sans page' : get<Category>('categories', id)?.name ?? '?' })).filter((g) => Math.round(g.revenue) !== 0).sort((a, b) => b.revenue - a.revenue);
+  const readings = useTable('boostReadings');
+  const msgs = useMemo(() => messagesByPage(from, to), [from, to, readings]);
+  const msgTotal = [...msgs.values()].reduce((t, n) => t + n, 0);
   const bal = balances();
   const stock = stockValue();
   const purchases = pendingPurchases();
@@ -221,14 +225,15 @@ function ManagerBoard({ part }: { part: 'summary' | 'sales' | 'money' | 'chart' 
             <span className="small muted">{t.label}</span>
             <strong className={`stat-value num ${t.cur < 0 ? 'neg' : ''}`}>{t.value}</strong>
             <span className="small muted"><Delta cur={t.cur} prev={t.prev} pct={t.isPct} invert={t.invert} /> vs période précédente</span>
+            {t.label === "Chiffre d'affaires" && msgTotal > 0 && <span className="small msg-hint"><a href="#/boosts/suivi">{fmtNum(msgTotal)} messages (boosts)</a> · {fmtAr(k.revenue / msgTotal)} par message</span>}
           </div>
         ))}
       </div>
       {byPage.length > 0 && <div className="card card-flush">
         <div className="card-pad"><h2>Chiffre d’affaires par page</h2></div>
         <div className="table-wrap"><table className="table"><thead><tr><th>Page</th><th className="t-num">CA</th><th className="t-num">Part</th><th className="t-num">Pièces</th><th className="t-num">Ventes</th>{cost && <th className="t-num">Bénéfice brut</th>}</tr></thead>
-          <tbody>{byPage.map((g) => <tr key={g.key}><td><strong>{g.label}</strong><div className="bar-track mini"><span className="bar-fill" style={{ width: `${k.revenue ? Math.max(2, (g.revenue / k.revenue) * 100) : 0}%` }} /></div></td><td className="t-num">{fmtAr(g.revenue)}</td><td className="t-num">{pct(k.revenue ? g.revenue / k.revenue : 0)}</td><td className="t-num">{g.qty}</td><td className="t-num">{g.orders}</td>{cost && <td className="t-num">{fmtAr(g.gross)}</td>}</tr>)}</tbody>
-          <tfoot><tr className="t-total"><td>Total</td><td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.revenue, 0))}</td><td className="t-num">100 %</td><td className="t-num">{byPage.reduce((t, g) => t + g.qty, 0)}</td><td className="t-num">{k.orders}</td>{cost && <td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.gross, 0))}</td>}</tr></tfoot></table></div>
+          <tbody>{byPage.map((g) => <tr key={g.key}><td><strong>{g.label}</strong><div className="bar-track mini"><span className="bar-fill" style={{ width: `${k.revenue ? Math.max(2, (g.revenue / k.revenue) * 100) : 0}%` }} /></div></td><td className="t-num">{fmtAr(g.revenue)}{msgs.get(g.key) ? <div className="small muted msg-hint">{fmtNum(msgs.get(g.key)!)} messages · {fmtAr(g.revenue / msgs.get(g.key)!)}/msg</div> : null}</td><td className="t-num">{pct(k.revenue ? g.revenue / k.revenue : 0)}</td><td className="t-num">{g.qty}</td><td className="t-num">{g.orders}</td>{cost && <td className="t-num">{fmtAr(g.gross)}</td>}</tr>)}</tbody>
+          <tfoot><tr className="t-total"><td>Total</td><td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.revenue, 0))}{msgTotal ? <div className="small muted msg-hint">{fmtNum(msgTotal)} messages · {fmtAr(byPage.reduce((t, g) => t + g.revenue, 0) / msgTotal)}/msg</div> : null}</td><td className="t-num">100 %</td><td className="t-num">{byPage.reduce((t, g) => t + g.qty, 0)}</td><td className="t-num">{k.orders}</td>{cost && <td className="t-num">{fmtAr(byPage.reduce((t, g) => t + g.gross, 0))}</td>}</tr></tfoot></table></div>
       </div>}
     </>
   );

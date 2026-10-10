@@ -21,9 +21,11 @@ export interface Boost extends BaseRecord {
   label?: string;           // texte de la publicité, pour le reconnaître
   startDate: string;        // date de lancement (AAAA-MM-JJ)
   dailyBudget?: number;     // budget par jour ($)
-  status: 'active' | 'stopped';
-  stoppedOn?: string;       // dernier jour actif
+  status: 'active' | 'paused' | 'stopped';   // « stopped » : ancien arrêt, traité comme une pause
+  stoppedOn?: string;       // ancien arrêt : dernier jour actif
   stopReason?: string;
+  /** Périodes de pause (dates incluses ; `to` absent = encore en pause). */
+  pauses?: { from: string; to?: string }[];
   createdByName?: string;
 }
 export interface BoostReading extends BaseRecord {
@@ -52,45 +54,64 @@ export const pageName = (id: string) => get<Category>('categories', id)?.name ??
 
 // ---------- Boosts ----------
 export const boostsOf = (pageId: string) => all<Boost>('boosts').filter((b) => b.pageId === pageId);
-/** Boost actif ce jour-là : lancé avant ou ce jour, et pas encore arrêté (ou arrêté ce jour ou après). */
-export const activeOn = (b: Boost, date: string) => b.startDate <= date && (b.status === 'active' || (!!b.stoppedOn && b.stoppedOn >= date));
+/** En pause ce jour-là (pause en cours ou passée, ou ancien « arrêt »). */
+export function pausedOn(b: Boost, date: string) {
+  if (b.status === 'stopped' && b.stoppedOn && date > b.stoppedOn && !(b.pauses ?? []).length) return true;
+  return (b.pauses ?? []).some((p) => p.from <= date && (!p.to || date <= p.to));
+}
+export const isPaused = (b: Boost) => b.status !== 'active';
+/** Boost actif ce jour-là : lancé avant ou ce jour, et pas en pause. */
+export const activeOn = (b: Boost, date: string) => b.startDate <= date && !pausedOn(b, date);
 export const activeBoosts = (pageId: string, date: string) => boostsOf(pageId).filter((b) => activeOn(b, date)).sort((a, b) => a.slot - b.slot);
 export const boostName = (b: Boost) => `Boost ${b.slot}${b.label ? ` — ${b.label}` : ''}`;
-export function nextSlot(pageId: string) {
-  const used = new Set(boostsOf(pageId).filter((b) => b.status === 'active').map((b) => b.slot));
-  let n = 1; while (used.has(n)) n++;
-  return n;
-}
+/** Nouveau boost : à la fin de la liste. */
+export function nextSlot(pageId: string) { return boostsOf(pageId).reduce((m, b) => Math.max(m, b.slot), 0) + 1; }
+/** Boosts d'une page dans l'ordre d'affichage (les actifs, puis ceux en pause). */
+export const orderedBoosts = (pageId: string) => boostsOf(pageId).sort((a, b) => a.slot - b.slot);
 
-export async function createBoost(d: { pageId: string; slot: number; label?: string; startDate: string; dailyBudget?: number }) {
-  const clash = boostsOf(d.pageId).find((b) => b.status === 'active' && b.slot === d.slot);
-  if (clash) throw new Error(`Le n° ${d.slot} est déjà pris par un boost actif (${boostName(clash)}). Arrêtez-le d'abord ou choisissez un autre numéro.`);
-  const [b] = await save('boosts', { ...d, status: 'active', createdByName: currentUser()?.fullName });
-  await audit('Boost', `${pageName(d.pageId)} : nouveau boost n° ${d.slot}${d.label ? ` (${d.label})` : ''}, lancé le ${d.startDate}`, 'boosts', b.id);
+export async function createBoost(d: { pageId: string; slot?: number; label?: string; startDate: string; dailyBudget?: number }) {
+  const slot = nextSlot(d.pageId);
+  const [b] = await save('boosts', { ...d, slot, status: 'active', createdByName: currentUser()?.fullName });
+  await audit('Boost', `${pageName(d.pageId)} : nouveau boost n° ${slot}${d.label ? ` (${d.label})` : ''}, lancé le ${d.startDate}`, 'boosts', b.id);
   return b as Boost;
 }
 
-/** Modifier un boost. Si le nouveau numéro est pris par un autre boost actif, les deux numéros sont échangés. */
-export async function updateBoost(b: Boost, patch: Partial<Pick<Boost, 'slot' | 'label' | 'startDate' | 'dailyBudget'>>) {
-  const updates: Partial<Boost>[] = [{ id: b.id, ...patch }];
-  if (patch.slot != null && patch.slot !== b.slot) {
-    const other = boostsOf(b.pageId).find((x) => x.id !== b.id && x.status === 'active' && x.slot === patch.slot);
-    if (other) updates.push({ id: other.id, slot: b.slot });
-  }
+/** Modifier un boost (texte, date de lancement, budget). */
+export async function updateBoost(b: Boost, patch: Partial<Pick<Boost, 'label' | 'startDate' | 'dailyBudget'>>) {
+  await save('boosts', { id: b.id, ...patch });
+  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} modifié`, 'boosts', b.id);
+}
+/** Nouvel ordre d'affichage (glisser-déposer) : les numéros deviennent 1, 2, 3… dans cet ordre. */
+export async function reorderBoosts(pageId: string, ids: string[]) {
+  const updates = ids.map((id, i) => ({ id, slot: i + 1 })).filter((u) => get<Boost>('boosts', u.id)?.slot !== u.slot);
+  if (!updates.length) return;
   await save('boosts', updates);
-  await audit('Boost', `${pageName(b.pageId)} : boost n° ${b.slot} modifié${patch.slot != null && patch.slot !== b.slot ? ` (devient n° ${patch.slot})` : ''}`, 'boosts', b.id);
+  await audit('Boost', `${pageName(pageId)} : ordre des boosts changé`, 'boosts', ids[0]);
 }
-
-export async function stopBoost(b: Boost, stoppedOn: string, reason: string) {
-  await save('boosts', { id: b.id, status: 'stopped', stoppedOn, stopReason: reason });
-  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} arrêté le ${stoppedOn} — ${reason}`, 'boosts', b.id);
+/** Mettre en pause : le boost n'est plus demandé à la saisie à partir de demain (la saisie d'aujourd'hui reste possible). */
+export async function pauseBoost(b: Boost, today: string, reason?: string) {
+  const from = addDays(today, 1);
+  await save('boosts', { id: b.id, status: 'paused', pauses: [...(b.pauses ?? []).filter((p) => p.to), { from }], stopReason: reason || undefined });
+  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} mis en pause${reason ? ` — ${reason}` : ''}`, 'boosts', b.id);
 }
-export async function restartBoost(b: Boost) {
-  const clash = boostsOf(b.pageId).find((x) => x.id !== b.id && x.status === 'active' && x.slot === b.slot);
-  if (clash) throw new Error(`Le n° ${b.slot} est repris par ${boostName(clash)} : changez d'abord son numéro.`);
-  await save('boosts', { id: b.id, status: 'active', stoppedOn: undefined, stopReason: undefined });
-  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} réactivé`, 'boosts', b.id);
+/** Reprendre : actif de nouveau à partir d'aujourd'hui. */
+export async function resumeBoost(b: Boost, today: string) {
+  let pauses = [...(b.pauses ?? [])];
+  if (b.status === 'stopped' && b.stoppedOn && !pauses.length) pauses = [{ from: addDays(b.stoppedOn, 1) }];
+  pauses = pauses.map((p) => (p.to ? p : { ...p, to: addDays(today, -1) })).filter((p) => !p.to || p.to >= p.from);
+  await save('boosts', { id: b.id, status: 'active', pauses, stopReason: undefined });
+  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} repris`, 'boosts', b.id);
 }
+/** Supprimer un boost devenu inutile, avec ses saisies. */
+export async function deleteBoost(b: Boost) {
+  const rs = all<BoostReading>('boostReadings').filter((r) => r.boostId === b.id);
+  if (rs.length) await save('boostReadings', rs.map((r) => ({ id: r.id, deleted: true })));
+  await save('boosts', { id: b.id, deleted: true });
+  await audit('Boost', `${pageName(b.pageId)} : ${boostName(b)} supprimé (${rs.length} saisie(s))`, 'boosts', b.id);
+}
+// Anciennes fonctions (compatibilité)
+export const stopBoost = (b: Boost, on: string, reason: string) => pauseBoost(b, on, reason);
+export const restartBoost = (b: Boost) => resumeBoost(b, dayOf(new Date().toISOString()));
 
 // ---------- Saisies ----------
 export const readingId = (boostId: string, date: string) => `br_${boostId}_${date}`;
@@ -114,8 +135,7 @@ export function checkReading(boostId: string, date: string, spend: number | unde
   const errs: string[] = [];
   if (messages == null || isNaN(messages)) errs.push('Nombre de messages (conversations) à saisir.');
   else if (messages < 0 || !Number.isInteger(messages)) errs.push('Le nombre de messages doit être un nombre entier positif.');
-  if (spend == null || isNaN(spend)) errs.push('Dépense ($) à saisir.');
-  else if (spend < 0) errs.push('La dépense ne peut pas être négative.');
+  if (spend != null && (isNaN(spend) || spend < 0)) errs.push('La dépense ne peut pas être négative.');
   const prev = prevReading(boostId, date);
   const next = nextReading(boostId, date);
   if (prev && messages != null && messages < prev.messages) errs.push(`Erreur de saisie : ${messages} messages, alors que le ${fmtD(prev.date)} il y en avait déjà ${prev.messages}. Le total cumulé reste stable ou augmente, il ne baisse jamais.`);
@@ -135,6 +155,45 @@ export async function saveDay(pageId: string, date: string, rows: { boostId: str
   await save('pageMessages', { id: pageMsgId(pageId, date), pageId, date, count: real, userName: u });
   const d = dayStats(pageId, date);
   await audit('Boosts — saisie du jour', `${pageName(pageId)} ${date} : ${d.theo} message(s) théorique(s), ${real} réel(s), dépense ${n2(d.spend)} $`, 'pageMessages', pageMsgId(pageId, date));
+}
+
+/** Enregistre une case du tableau : conversations cumulées (et dépense cumulée, facultative) d'un boost un jour donné. */
+export async function saveReading(boostId: string, date: string, messages: number | undefined, spend?: number) {
+  const b = get<Boost>('boosts', boostId);
+  if (!b) throw new Error('Boost introuvable.');
+  const cur = readingOn(boostId, date);
+  if (messages == null && spend == null) {
+    if (cur) await save('boostReadings', { id: cur.id, deleted: true });
+    return;
+  }
+  const m = messages ?? cur?.messages ?? prevReading(boostId, date)?.messages ?? 0;
+  const sp = spend ?? cur?.spend ?? prevReading(boostId, date)?.spend ?? 0;
+  const errs = checkReading(boostId, date, sp, m);
+  if (errs.length) throw new Error(errs.join(' '));
+  await save('boostReadings', { id: readingId(boostId, date), boostId, pageId: b.pageId, date, spend: sp, messages: m, userName: currentUser()?.fullName });
+}
+/** Messages réellement comptés sur la page un jour donné (facultatif ; vide = effacer). */
+export async function saveReal(pageId: string, date: string, count: number | undefined) {
+  const cur = realOn(pageId, date);
+  if (count == null) { if (cur) await save('pageMessages', { id: cur.id, deleted: true }); return; }
+  if (count < 0 || !Number.isInteger(count)) throw new Error('Nombre entier positif attendu.');
+  await save('pageMessages', { id: pageMsgId(pageId, date), pageId, date, count, userName: currentUser()?.fullName });
+}
+
+/** Nouveaux messages (conversations) par page sur une période, d'après les saisies des boosts. */
+export function messagesByPage(from: string, to: string) {
+  const m = new Map<string, number>();
+  const byBoost = new Map<string, BoostReading[]>();
+  for (const r of all<BoostReading>('boostReadings')) { if (!byBoost.has(r.boostId)) byBoost.set(r.boostId, []); byBoost.get(r.boostId)!.push(r); }
+  for (const rs of byBoost.values()) {
+    rs.sort((a, b) => a.date.localeCompare(b.date));
+    for (let i = 0; i < rs.length; i++) {
+      const r = rs[i]; if (r.date < from || r.date > to) continue;
+      const d = Math.max(0, r.messages - (i ? rs[i - 1].messages : 0));
+      m.set(r.pageId, (m.get(r.pageId) ?? 0) + d);
+    }
+  }
+  return m;
 }
 
 // ---------- Calculs ----------
@@ -182,7 +241,7 @@ export interface BoostPerf {
 
 /** Performance de chaque boost sur la période [from, to] et avis : bon, moyen, faible. */
 export function boostPerformance(from: string, to: string, pageId?: string): BoostPerf[] {
-  const list = all<Boost>('boosts').filter((b) => (!pageId || b.pageId === pageId) && b.startDate <= to && (b.status === 'active' || (b.stoppedOn ?? '') >= from));
+  const list = all<Boost>('boosts').filter((b) => (!pageId || b.pageId === pageId) && b.startDate <= to && (b.status === 'active' || readingsOf(b.id).some((r) => r.date >= from && r.date <= to)));
   const rows: BoostPerf[] = list.map((b) => {
     const rs = readingsOf(b.id);
     let spend = 0, messages = 0, last3 = 0, n = 0;
@@ -194,7 +253,7 @@ export function boostPerformance(from: string, to: string, pageId?: string): Boo
       if (r.date >= in3) last3 += d.messages;
     }
     const lastR = rs.filter((r) => r.date <= to).pop();
-    const days = Math.max(1, Math.round((new Date(`${(b.stoppedOn && b.stoppedOn < to ? b.stoppedOn : to)}T12:00:00`).getTime() - new Date(`${b.startDate}T12:00:00`).getTime()) / 864e5) + 1);
+    const days = Math.max(1, Math.round((new Date(`${to}T12:00:00`).getTime() - new Date(`${b.startDate}T12:00:00`).getTime()) / 864e5) + 1);
     return { b, days, readings: n, spend, messages, cost: messages ? spend / messages : null, last3, totalSpend: lastR?.spend ?? 0, totalMessages: lastR?.messages ?? 0, verdict: 'none' as Verdict, advice: '' };
   });
   // Référence : coût moyen par message de la page (ou de toutes les pages si la page n'a qu'un boost).
@@ -205,11 +264,11 @@ export function boostPerformance(from: string, to: string, pageId?: string): Boo
     const ref = same.length >= 2 ? avg(same) : global;
     if (!r.readings) { r.verdict = 'none'; r.advice = 'Aucun résultat saisi sur la période.'; continue; }
     if (r.readings < 3 && r.days < 4) { r.verdict = 'new'; r.advice = 'Lancé depuis peu : attendre 3 à 4 jours avant de juger.'; continue; }
-    if (r.b.status === 'active' && r.last3 === 0 && r.readings >= 3) { r.verdict = 'bad'; r.advice = 'Aucun message depuis 3 jours : à arrêter, et lancer un nouveau boost à la place.'; continue; }
-    if (r.cost == null) { r.verdict = r.spend > 0 ? 'bad' : 'none'; r.advice = r.spend > 0 ? 'Des dépenses sans aucun message : à arrêter.' : 'Pas de dépense sur la période.'; continue; }
+    if (r.b.status === 'active' && r.last3 === 0 && r.readings >= 3) { r.verdict = 'bad'; r.advice = 'Aucun message depuis 3 jours : à mettre en pause (ou supprimer), et lancer un nouveau boost à la place.'; continue; }
+    if (r.cost == null) { r.verdict = r.spend > 0 ? 'bad' : 'none'; r.advice = r.spend > 0 ? 'Des dépenses sans aucun message : à mettre en pause.' : 'Pas de dépense sur la période.'; continue; }
     if (ref == null) { r.verdict = 'average'; r.advice = ''; continue; }
     if (r.cost <= ref * 0.8) { r.verdict = 'good'; r.advice = `Coût par message ${Math.round((1 - r.cost / ref) * 100)} % sous la moyenne : à garder (voire augmenter le budget).`; }
-    else if (r.cost >= ref * 1.3) { r.verdict = 'bad'; r.advice = `Coût par message ${Math.round((r.cost / ref - 1) * 100)} % au-dessus de la moyenne : à arrêter ou à remplacer.`; }
+    else if (r.cost >= ref * 1.3) { r.verdict = 'bad'; r.advice = `Coût par message ${Math.round((r.cost / ref - 1) * 100)} % au-dessus de la moyenne : à mettre en pause ou à remplacer.`; }
     else { r.verdict = 'average'; r.advice = 'Dans la moyenne : à surveiller.'; }
   }
   return rows;

@@ -617,3 +617,17 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 | Retour partiel | Le client peut rendre tout le lot ou une partie. Le prix du lot ne compte que pour les **lots complets gardés** ; les articles gardés d'un lot incomplet sont payés **au prix normal**. Les articles rendus reviennent en stock. |
 | Prix par quantité | Dans la fiche d'un article (« Modifier ») : ex. **3 pièces pour 50 000 Ar**. Appliqué automatiquement dès que la quantité est atteinte (couleurs/tailles mélangées), plusieurs paliers possibles, pas sur les lignes au prix de gros ou au prix modifié. Même règle au retour : le reste repasse au prix normal. |
 | Rapports | Un article vendu dans un lot complet compte pour le lot (meilleures ventes, CA par page) ; le stock et la fin de stock prévue restent calculés sur les articles réels. Ticket et bon de livraison affichent la ligne « Prix du lot / prix par quantité ». |
+
+## 10 ter. Boosts : saisie par semaine, pause, ordre, messages → chiffre d'affaires *(10/10/2026, remplace la « saisie du jour »)*
+
+| Point | Règle |
+|---|---|
+| Onglets | **Saisie et suivi** (un seul tableau) et **Performance des boosts**. |
+| Filtres (même design partout) | Page (ou « Toutes les pages ») + **Semaine** (lundi → dimanche, ‹ ›, « Cette semaine ») ou **Période** (du … au …, 62 jours au plus). |
+| Tableau d'une page | Lignes : n° / boost / une colonne par jour (conversations **cumulées** affichées par Meta ; les jours passés déjà remplis par l'historique) / **du jour** (jour − veille) / **total de la période**. Sous chaque case : nouvelles conversations de ce jour. On tape dans la case du jour ; l'enregistrement se fait en quittant la case (ou Entrée). Une valeur plus petite que la veille est refusée. Bascule « Conversations / Dépense ($) » (dépense facultative). Sur téléphone, le tableau s'ouvre sur la colonne d'aujourd'hui. |
+| Lignes de synthèse | Total nouvelles conversations, messages réels comptés (facultatif), commandes en ligne, **chiffre d'affaires de la page**, **CA par conversation**, dépense. Export Excel. |
+| Pause / reprise | « Pause » : le boost n'est plus demandé à partir de demain (la case du jour reste à remplir), badge « En pause », raison. « Reprendre » le remet en route à partir d'aujourd'hui. Les boosts en pause sans saisie sur la période sont masqués (case « Afficher les boosts en pause »). |
+| Supprimer | Pour un boost qui ne sert plus : supprimé avec ses saisies (confirmation). |
+| Ordre | Glisser-déposer la poignée ⋮⋮ (souris) ou flèches ↑↓ (téléphone) : les numéros deviennent 1, 2, 3… dans l'ordre choisi (même ordre que l'Espace Pubs). Un nouveau boost s'ajoute à la fin. |
+| Toutes les pages | Par page : boosts actifs, conversations, CA, CA par conversation, commandes, dépense, coût par conversation (tri par colonne) + conversations par jour. |
+| Tableau de bord | Sous le chiffre d'affaires : « N messages (boosts) · X Ar par message » ; dans « CA par page », sous le CA de chaque page : messages et CA par message. |

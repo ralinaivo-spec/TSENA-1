@@ -1117,3 +1117,33 @@ tr.row-error td { background: var(--danger-soft); }
 .adjust-list strong { white-space: nowrap; color: var(--ok, #127a3a); }
 .lot-pick { background: var(--surface-2); }
 .tier-row { gap: 8px; align-items: center; flex-wrap: wrap; }
+/* Boosts : tableau semaine / période */
+.boost-filters { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; }
+.boost-page-field { flex: 1 1 220px; max-width: 320px; min-width: 0; }
+.boost-period { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; min-width: 0; }
+.bw-period-nav { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bw-period-nav strong { white-space: nowrap; }
+.bw-period-range { display: flex; gap: 10px; flex-wrap: wrap; }
+.bw-period-range .field { min-width: 140px; }
+.boost-week th, .boost-week td { vertical-align: middle; }
+.boost-week th.is-today, .boost-week td.is-today { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+.boost-week .bw-name { min-width: 170px; white-space: normal; }
+.boost-week .bw-day { min-width: 78px; text-align: right; }
+.boost-cell { width: 76px; min-height: 36px; text-align: right; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.boost-cell.is-today.is-missing { border-color: var(--gold, #B87A0E); background: color-mix(in srgb, var(--gold, #B87A0E) 10%, var(--surface)); }
+.bw-delta { font-size: .78rem; font-weight: 700; margin-top: 2px; }
+.boost-week tr.is-paused td { opacity: .6; }
+.boost-week tr.is-paused td.t-actions { opacity: 1; }
+.boost-week tr.drag-over td { box-shadow: inset 0 3px 0 var(--brand); }
+.slot-cell { display: flex; align-items: center; gap: 4px; }
+.drag-handle { cursor: grab; color: var(--muted); display: inline-flex; }
+.move-btns { display: none; flex-direction: column; }
+.move-btns button { border: 0; background: transparent; color: var(--muted); padding: 0 2px; line-height: 1; cursor: pointer; }
+.move-btns button:disabled { opacity: .3; }
+@media (hover: none) { .drag-handle { display: none; } .move-btns { display: inline-flex; } }
+@media (min-width: 700px) {
+  .boost-week .bw-slot { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+  .boost-week .bw-name { position: sticky; left: 64px; background: var(--surface); z-index: 1; }
+}
+.msg-hint { display: block; margin-top: 2px; }
+.msg-hint a { color: inherit; text-decoration: underline dotted; }
