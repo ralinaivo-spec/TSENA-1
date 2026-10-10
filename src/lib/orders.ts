@@ -4,6 +4,7 @@ import { audit, currentUser } from './auth';
 import { addMoves, nextNumber, stockOf, variantLabel, type Product, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
 import { assertOpenNow } from './closed';
+import { adjustsKeptTotal, adjustsTotal, computeAdjusts, type Adjust } from './lots';
 
 export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean; pickup?: boolean }
 /** Zone « Sur boutique » : le client vient chercher, pas de frais ni de livreur. */
@@ -25,6 +26,14 @@ export interface OrderLine {
   wholesale?: boolean;      // prix de gros pour cet article (sinon prix détail)
   qtyKept?: number;         // renseigné au retour du livreur
   qtyReturned?: number;
+  /** Article faisant partie d'un lot / d'une promotion (même lotKey = même lot vendu). */
+  lotKey?: string;
+  lotProductId?: string;
+  lotItem?: string;         // élément du lot
+  lotPer?: number;          // quantité de cet élément par lot
+  lotN?: number;            // nombre de lots
+  lotPrice?: number;        // prix d'un lot au moment de la vente
+  gift?: boolean;           // offert (promotion)
 }
 export interface Payment {
   id: string;
@@ -56,6 +65,8 @@ export interface Order extends BaseRecord {
   wholesale?: 'auto' | 'yes' | 'no';
   wantedDate?: string;
   lines: OrderLine[];
+  /** Prix du lot / prix par quantité : différence avec les prix normaux des articles. */
+  adjusts?: Adjust[];
   returnLines?: { variantId: string; qty: number; unitPrice: number }[]; // échange : articles repris au client
   credit?: number;                // échange : valeur des articles repris
   discount: number;
@@ -156,8 +167,9 @@ export const sellingLines = (o: Order) => o.lines.filter((l) => !l.isChoice);
 /** Livraison partie avec des articles « en choix » dont le client n'a pas encore dit ce qu'il garde. */
 export const hasPendingChoice = (o: Pick<Order, 'status' | 'lines'>) => o.status === 'out' && o.lines.some((l) => l.isChoice);
 export const choiceQty = (o: Pick<Order, 'lines'>) => o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0);
-export function itemsTotal(o: Order) { return sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0); }
-export function keptTotal(o: Order) { return o.lines.reduce((s, l) => s + (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice, 0); }
+export function itemsTotal(o: Pick<Order, 'lines' | 'adjusts'>) { return o.lines.filter((l) => !l.isChoice).reduce((s, l) => s + l.qty * l.unitPrice, 0) + adjustsTotal(o); }
+/** Montant des articles gardés : le prix du lot ne compte que pour les lots complets, le reste au prix normal. */
+export function keptTotal(o: Pick<Order, 'lines' | 'adjusts'>) { return o.lines.reduce((s, l) => s + (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice, 0) + adjustsKeptTotal(o); }
 export const paidTotal = (o: Order) => (o.payments || []).reduce((s, p) => s + p.amount, 0);
 const isClosed = (o: Order) => ['delivered', 'partial', 'refused'].includes(o.status);
 /** Montant total à payer par le client (articles − remise − reprise + frais). */
@@ -215,6 +227,10 @@ export function linePrice(variantId: string, wholesale: boolean) {
 export function repriceLines(lines: OrderLine[], _legacy?: boolean) {
   return lines.map((l) => (l.priceManual ? l : { ...l, unitPrice: linePrice(l.variantId, !!l.wholesale) }));
 }
+/** Prix des lignes + différences « prix du lot » et « prix par quantité ». */
+export function priceOrder(lines: OrderLine[]) { const ls = repriceLines(lines); return { lines: ls, adjusts: computeAdjusts(ls) }; }
+/** Lignes du même lot sont retirées ensemble. */
+export const removeLine = (lines: OrderLine[], l: OrderLine) => lines.filter((x) => (l.lotKey ? x.lotKey !== l.lotKey : x.id !== l.id));
 /** Anciennes lignes (prix de gros décidé pour toute la commande) : on retrouve si chaque ligne était au prix de gros. */
 export function withLineWholesale(lines: OrderLine[]) {
   return lines.map((l) => (l.wholesale !== undefined ? l : { ...l, wholesale: l.unitPrice !== linePrice(l.variantId, false) && l.unitPrice === linePrice(l.variantId, true) }));
@@ -228,7 +244,7 @@ export function discountAr(value: string | number | undefined, unit: 'ar' | 'pct
 export function stockShortages(lines: Pick<OrderLine, 'variantId' | 'qty'>[], excludeOrderId?: string) {
   const reserved = reservedIndex(excludeOrderId);
   const want = new Map<string, number>();
-  for (const l of lines) want.set(l.variantId, (want.get(l.variantId) ?? 0) + (l.qty || 0));
+  for (const l of lines) if (l.variantId) want.set(l.variantId, (want.get(l.variantId) ?? 0) + (l.qty || 0));
   return [...want.entries()].map(([variantId, qty]) => ({ variantId, qty, available: Math.max(0, availableOf(variantId, reserved)) })).filter((x) => x.qty > x.available);
 }
 
@@ -337,7 +353,7 @@ export async function cancelDeliveryToShop(o: Order) {
 }
 
 /** Vente sur place (comptoir) : enregistrée et terminée immédiatement. */
-export async function createWalkInSale(d: { lines: OrderLine[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number; employee?: { id: string; name: string } }) {
+export async function createWalkInSale(d: { lines: OrderLine[]; adjusts?: Adjust[]; discount: number; wholesale: Order['wholesale']; phone?: string; name?: string; notes?: string; payments: { amount: number; method: PayMethod; ref?: string }[]; outsideHours: boolean; cashGiven?: number; employee?: { id: string; name: string } }) {
   assertOpenNow('Vente');
   const at = bizNow();
   const u = currentUser();
@@ -353,7 +369,7 @@ export async function createWalkInSale(d: { lines: OrderLine[]; discount: number
   const number = nextNumber(internal ? 'VI' : 'V', 'orders');
   const [o] = await save('orders', {
     number, kind: 'order', channel: 'shop', customerId, phone, name: d.name || undefined, zoneId: pickup?.id, deliveryFee: 0, feeCharged: 0,
-    wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), discount: d.discount, notes: d.notes,
+    wholesale: d.wholesale, lines: d.lines.map((l) => ({ ...l, qtyKept: l.qty, qtyReturned: 0 })), adjusts: d.adjusts?.length ? d.adjusts : undefined, discount: d.discount, notes: d.notes,
     payments: d.payments.filter((p) => p.amount).map((p) => ({ id: newId(), at, amount: p.amount, method: p.method, ref: p.ref, receivedBy: 'shop' as const, userName: u?.fullName })),
     status: 'delivered', statusDates: { delivered: at }, dispatchedAt: at, returnedAt: at, outsideHours: d.outsideHours, cashGiven: d.cashGiven || undefined, createdBy: u?.id, createdByName: u?.fullName,
     ...(internal ? { internal: true, employeeId: d.employee!.id, employeeName: d.employee!.name, wholesale: 'no' as const } : {}),
@@ -431,7 +447,7 @@ export function courierAccount(courierId: string, from?: string, to?: string) {
 export function orderText(o: Order) {
   const parts: (string | number | undefined)[] = [o.number, o.name, o.facebook, o.phone, fmtPhone(o.phone), o.place, o.notes, ORDER_STATUS[o.status]?.label,
     get<Zone>('zones', o.zoneId || '')?.name, get<Courier>('couriers', o.courierId || '')?.name, orderTotal(o), o.createdByName];
-  for (const l of o.lines) { const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId); parts.push(p?.code, p?.name, v ? variantLabel(v) : undefined, v?.sku); }
+  for (const l of o.lines) { const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId); parts.push(p?.code, p?.name, v ? variantLabel(v) : undefined, v?.sku, l.lotProductId ? get<Product>('products', l.lotProductId)?.name : undefined); }
   return parts.filter((x) => x !== undefined && x !== '').join(' ');
 }
 /** Tout le texte d'une fiche client. */

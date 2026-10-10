@@ -1,6 +1,7 @@
 // Tableau de synthèse d'une journée (comme le cahier Excel des ventes) :
 // montant « sans retour » (ce qui est parti ce jour-là) et « avec retour » (corrigé par les retours constatés
 // au versement des livreurs, même les jours suivants), par livreur et par catégorie (page).
+import { adjustKept } from './lots';
 import { all, get } from './db';
 import type { Category, Product, Variant } from './catalog';
 import { courierSplit, isPickupZone, isWalkIn, type Courier, type Order } from './orders';
@@ -36,9 +37,13 @@ const CLOSED = ['delivered', 'partial', 'refused'];
 /** Valeurs d'une commande, ligne par ligne (remise répartie), sans retour et avec retour. */
 function orderLines(o: Order) {
   const closed = CLOSED.includes(o.status) || isWalkIn(o);
-  const sansLines = o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, value: l.qty * l.unitPrice }));
+  const adj = o.adjusts || [];
+  // Prix du lot / par quantité : rattaché à un article du lot (pour la page).
+  const sansLines = [...o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, value: l.qty * l.unitPrice })),
+    ...adj.map((a) => ({ variantId: a.refVariantId || '', value: a.qty * a.unit }))];
   const avecLines = o.status === 'cancelled' ? [] : closed
-    ? o.lines.map((l) => ({ variantId: l.variantId, value: (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice }))
+    ? [...o.lines.map((l) => ({ variantId: l.variantId, value: (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice })),
+      ...adj.map((a) => ({ variantId: a.refVariantId || '', value: adjustKept(a, o.lines, adj) * a.unit }))]
     : sansLines;
   const spread = (lines: { variantId: string; value: number }[]) => {
     const t = lines.reduce((s, l) => s + l.value, 0);

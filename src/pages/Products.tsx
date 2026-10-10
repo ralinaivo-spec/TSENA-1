@@ -14,6 +14,8 @@ import { photoBytes } from '../lib/images';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ArticleBuilder, AttrBadges } from './Categories';
+import { LOT_STATUS, LotDetail, LotForm, NewArticleChooser, TierEditor, lotPhoto, tierText } from './Lots';
+import { isLot, lotAvailable, lotStatus, type PriceTier } from '../lib/lots';
 
 /** Photo d'article. Avec `zoom`, un toucher l'affiche en grand. */
 export function Thumb({ src, size = 56, alt = '', zoom }: { src?: string; size?: number; alt?: string; zoom?: boolean }) {
@@ -57,6 +59,8 @@ function ProductList() {
   const [sf, setSf] = useState<StockFilter>('');
   const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [lotNew, setLotNew] = useState(false);
   const [catsOpen, setCatsOpen] = useState(false);
   const [simple, setSimple] = useState(false);
   const [limit, setLimit] = useState(60);
@@ -75,7 +79,7 @@ function ProductList() {
       .filter((p) => scope.product(p.id))
       .filter(inCat)
       .filter((p) => !n || matchQuery(productText(p), n))
-      .map((p) => ({ p, stock: productStock(p.id), incoming: productIncoming(p.id) }))
+      .map((p) => ({ p, stock: isLot(p) ? lotAvailable(p, stockOf) : productStock(p.id), incoming: isLot(p) ? 0 : productIncoming(p.id) }))
       .filter(({ p, stock, incoming }) => {
         if (sf === 'in') return stock > 0;
         if (sf === 'out') return stock <= 0;
@@ -92,7 +96,7 @@ function ProductList() {
         actions={<>
           {can('catalog.edit') && <Button variant="ghost" icon="list" onClick={() => navigate('/pages')}>Pages et variantes</Button>}
           {can('catalog.edit') && <Button variant="ghost" icon="upload" onClick={() => navigate('/import')}>Importer</Button>}
-          {can('catalog.edit') && <Button icon="plus" onClick={() => setCreating(true)}>Nouvel article</Button>}
+          {can('catalog.edit') && <Button icon="plus" onClick={() => setChoosing(true)}>Nouvel article</Button>}
         </>} />
       <ScopeBar scope={scope} />
       <div className="card stack">
@@ -129,13 +133,15 @@ function ProductList() {
             {list.slice(0, limit).map(({ p, stock, incoming }) => (
               <li key={p.id}>
                 <a className="list-item list-link" href={`#/articles/${p.id}`}>
-                  <Thumb src={p.photo} />
+                  <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} />
                   <div className="list-item-main">
                     <div className="row" style={{ gap: 8 }}>
                       <span className="list-item-title">{p.name}</span>
+                      {isLot(p) && <Badge tone="brand">Lot</Badge>}
+                      {isLot(p) && lotStatus(p) !== 'open' && lotStatus(p) !== 'off' && <Badge tone={LOT_STATUS[lotStatus(p)].tone}>{LOT_STATUS[lotStatus(p)].label}</Badge>}
                       {p.active === false && <Badge>Archivé</Badge>}
                     </div>
-                    <p className="small muted">{p.code} · {categoryPath(p.categoryId)}{p.attrs ? (attrSummary(p) ? ` · ${attrSummary(p)}` : '') : ` · ${productVariants(p.id).length} variante(s)`}</p>
+                    <p className="small muted">{p.code} · {categoryPath(p.categoryId)}{isLot(p) ? ` · ${(p.lot?.items ?? []).reduce((t, x) => t + x.qty, 0)} article(s) dans le lot` : p.attrs ? (attrSummary(p) ? ` · ${attrSummary(p)}` : '') : ` · ${productVariants(p.id).length} variante(s)`}{tierText(p) ? ` · ${tierText(p)}` : ''}</p>
                   </div>
                   <div className="list-item-side">
                     <span className={`stock-pill ${stock <= 0 ? 'is-out' : stock <= (p.alertQty ?? 3) ? 'is-low' : ''}`}>{fmtNum(stock)}</span>
@@ -149,6 +155,8 @@ function ProductList() {
         )}
       </div>
       {list.length > limit && <Button variant="ghost" onClick={() => setLimit(limit + 100)}>Afficher plus ({list.length - limit})</Button>}
+      {choosing && <NewArticleChooser onClose={() => setChoosing(false)} onArticle={() => { setChoosing(false); setCreating(true); }} onLot={() => { setChoosing(false); setLotNew(true); }} />}
+      {lotNew && <LotForm onClose={() => setLotNew(false)} onSaved={(p) => navigate('/articles/' + p.id)} />}
       {creating && <ArticleBuilder cat={cat ? get<Category>('categories', cat) : undefined} onClose={() => setCreating(false)} />}
       {can('catalog.edit') && <p className="small muted">Article sans variantes (ancien mode) : <button type="button" className="link-btn" onClick={() => setSimple(true)}>créer un article simple</button></p>}
       {simple && <ProductForm onClose={() => setSimple(false)} onSaved={(p) => navigate('/articles/' + p.id)} />}
@@ -169,6 +177,23 @@ function ProductDetail({ id }: { id: string }) {
   const [editVariant, setEditVariant] = useState<Variant | null>(null);
   const [delArt, setDelArt] = useState(false);
   if (!p) return <Empty icon="store" title="Article introuvable"><Button variant="ghost" onClick={() => navigate('/articles')}>Retour aux articles</Button></Empty>;
+  if (isLot(p)) return (
+    <>
+      <div className="row"><Button variant="quiet" icon="chevronRight" className="back-btn" onClick={() => navigate('/articles')}>Articles</Button></div>
+      <LotDetail p={p} onEdit={() => setEditing(true)} />
+      {can('catalog.edit') && <div className="row">
+        <Button variant="quiet" icon={p.active === false ? 'refresh' : 'list'} onClick={() => setArchive(true)}>{p.active === false ? 'Réactiver le lot' : 'Archiver le lot'}</Button>
+        {!articleUsage(p.id).used && <Button variant="quiet" icon="trash" onClick={() => setDelArt(true)}>Supprimer le lot</Button>}
+      </div>}
+      {editing && <LotForm lot={p} onClose={() => setEditing(false)} />}
+      {delArt && <Confirm title="Supprimer le lot" danger confirmLabel="Supprimer" message={<p>Le lot <strong>{p.name}</strong> sera supprimé (il n’a jamais été vendu). Les articles qu’il contient ne changent pas.</p>}
+        onClose={() => setDelArt(false)} onConfirm={async () => { await deleteArticle(p); toast('Lot supprimé'); navigate('/articles'); }} />}
+      {archive && <Confirm title={p.active === false ? 'Réactiver le lot' : 'Archiver le lot'} confirmLabel={p.active === false ? 'Réactiver' : 'Archiver'}
+        message={<p>{p.active === false ? 'Le lot sera de nouveau proposé à la vente.' : 'Le lot ne sera plus proposé à la vente. Son historique est conservé.'}</p>}
+        onClose={() => setArchive(false)}
+        onConfirm={async () => { await save('products', { id: p.id, active: p.active === false }); await audit(p.active === false ? 'Lot réactivé' : 'Lot archivé', `${p.code} — ${p.name}`, 'products', p.id); }} />}
+    </>
+  );
   const variants = productVariants(p.id);
   const vIds = new Set(variants.map((v) => v.id));
   const moves = allMoves.filter((m) => vIds.has(m.variantId)).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 80);
@@ -195,6 +220,7 @@ function ProductDetail({ id }: { id: string }) {
             <div><span className="small muted">En arrivage</span><strong className="num">{fmtNum(productIncoming(p.id))}</strong></div>
             <div><span className="small muted">Prix détail</span><strong className="num">{fmtAr(p.priceRetail)}</strong></div>
             <div><span className="small muted">Prix de gros</span><strong className="num">{fmtAr(p.priceWholesale)}</strong></div>
+            {tierText(p) && <div><span className="small muted">Prix par quantité</span><strong className="num">{tierText(p)}</strong></div>}
             {showCost && <div><span className="small muted">Coût moyen</span><strong className="num">{fmtAr(avgCost)}</strong></div>}
             {showCost && <div><span className="small muted">Marge détail</span><strong className="num">{margin != null ? `${Math.round(margin * 100)} %` : '—'}</strong></div>}
             {showCost && <div><span className="small muted">Valeur du stock</span><strong className="num">{fmtAr(value)}</strong></div>}
@@ -307,6 +333,7 @@ export function ProductForm({ product, onClose, onSaved }: { product?: Product; 
   const [notes, setNotes] = useState(product?.notes ?? '');
   const [colors, setColors] = useState('');
   const [sizes, setSizes] = useState('');
+  const [tiers, setTiers] = useState<PriceTier[]>(product?.tiers ?? []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -331,6 +358,7 @@ export function ProductForm({ product, onClose, onSaved }: { product?: Product; 
         code: code.trim(), name: name.trim(), categoryId: cat || undefined, photo,
         priceRetail: parseNum(priceRetail), priceWholesale: parseNum(priceWholesale), alertQty: parseNum(alertQty),
         link: link.trim() || undefined, notes: notes.trim() || undefined,
+        tiers: tiers.filter((t) => t.qty > 1 && t.price > 0).length ? tiers.filter((t) => t.qty > 1 && t.price > 0) : (product?.tiers ? [] : undefined),
       };
       if (product) {
         await save('products', { id: product.id, ...data });
@@ -386,6 +414,7 @@ export function ProductForm({ product, onClose, onSaved }: { product?: Product; 
           </div>
         )}
         <TextField label="Lien fournisseur (facultatif)" value={link} onChange={setLink} inputMode="url" autoCapitalize="none" />
+        <TierEditor tiers={tiers} onChange={setTiers} unit={parseNum(priceRetail)} />
         <TextField label="Notes (facultatif)" value={notes} onChange={setNotes} />
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>

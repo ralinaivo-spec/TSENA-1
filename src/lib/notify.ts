@@ -77,7 +77,7 @@ export function useNotifications() {
       if (w.length) out.push({ id: 'versement', level: 'important', title: `${w.length} semaine(s) terminée(s) pas encore versée(s) au patron`, text: `Dernière : ${fmtAr(w[0].expected)} à verser`, href: '#/recapitulatif' });
     }
     if (can('catalog.view')) {
-      const act = products.filter((p) => p.active !== false);
+      const act = products.filter((p) => p.active !== false && p.kind !== 'lot');
       let out0 = 0, low = 0;
       for (const p of act) { const s = productStock(p.id); if (s <= 0) out0++; else if (s <= (p.alertQty ?? 3)) low++; }
       if (out0 + low) out.push({ id: 'stock', level: 'important', title: `Stock : ${low ? `${low} article(s) presque épuisé(s)` : ''}${low && out0 ? ', ' : ''}${out0 ? `${out0} en rupture` : ''}`, href: '#/stock' });

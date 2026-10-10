@@ -359,7 +359,7 @@ function RecentActivity() {
 function LowStock() {
   const products = useTable<Product>('products'); useTable('stockMoves'); useTable('variants');
   const scope = useMyScope();
-  const low = products.filter((p) => p.active !== false && scope.product(p.id)).map((p) => ({ p, s: productStock(p.id) })).filter((x) => x.s <= (x.p.alertQty ?? 3)).sort((a, b) => a.s - b.s);
+  const low = products.filter((p) => p.active !== false && p.kind !== 'lot' && scope.product(p.id)).map((p) => ({ p, s: productStock(p.id) })).filter((x) => x.s <= (x.p.alertQty ?? 3)).sort((a, b) => a.s - b.s);
   if (!low.length) return null;
   return (
     <div className="card stack-s">

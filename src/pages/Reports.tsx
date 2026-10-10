@@ -355,7 +355,7 @@ function StockReport() {
   const cost = can('costs.view');
   const [cat, setCat] = useState('');
   const cats = useTable<Category>('categories');
-  const rows: SRow[] = all<Product>('products').filter((p) => !cat || p.categoryId === cat).map((p) => {
+  const rows: SRow[] = all<Product>('products').filter((p) => p.kind !== 'lot' && (!cat || p.categoryId === cat)).map((p) => {
     const vs = all<Variant>('variants').filter((v) => v.productId === p.id);
     const qty = vs.reduce((t, v) => t + Math.max(0, stockOf(v.id)), 0);
     const value = vs.reduce((t, v) => t + Math.max(0, stockOf(v.id)) * variantCost(v), 0);

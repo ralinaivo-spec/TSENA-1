@@ -6,7 +6,7 @@ import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, productText, attrSummary, findProductByCode, findVariantBySku, type Category} from '../lib/catalog';
 import {
-  availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, repriceLines, reservedIndex, useWholesale,
+  availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, priceOrder, removeLine, reservedIndex, useWholesale,
   type Order, type OrderLine, type PayMethod, discountAr, stockShortages,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
@@ -16,6 +16,8 @@ import { ItemPicker, StockTag } from './Orders';
 import { defaultTarget, printTo, ticketDoc } from '../lib/print';
 import { PrintButton, PrintDialog } from '../ui/print';
 import { Thumb } from './Products';
+import { AdjustList, LotTag, lotPhoto } from './Lots';
+import { adjustsTotal, isLot, lotAvailable, lotOpen } from '../lib/lots';
 
 export function PosPage() {
   const can = useCan();
@@ -47,9 +49,10 @@ export function PosPage() {
   const me = useMe();
   const minQty = company.wholesaleMinQty ?? 3;
   const step = company.internalRounding ?? 1;
-  const priced = internal ? lines.map((l) => ({ ...l, priceManual: false, wholesale: false, unitPrice: internalPrice(l.variantId, step) })) : repriceLines(lines);
+  const pr = internal ? { lines: lines.map((l) => ({ ...l, priceManual: false, wholesale: false, unitPrice: internalPrice(l.variantId, step) })), adjusts: [] } : priceOrder(lines);
+  const priced = pr.lines; const adjusts = pr.adjusts;
   const noCost = internal ? priced.filter((l) => !l.unitPrice) : [];
-  const items = priced.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const items = priced.reduce((s, l) => s + l.qty * l.unitPrice, 0) + adjustsTotal({ adjusts });
   const discAr = internal ? 0 : discountAr(discount, discUnit, items);
   const total = Math.max(0, items - discAr);
   const short = stockShortages(priced);
@@ -58,8 +61,8 @@ export function PosPage() {
 
   const n = q.trim().toLowerCase();
   const found = useMemo(() => products
-    .filter((p) => p.active !== false && scope.product(p.id) && (!cat || rootOf(p.categoryId) === cat) && (!n || matchQuery(productText(p), n)))
-    .map((p) => ({ p, avail: productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
+    .filter((p) => p.active !== false && scope.product(p.id) && (!isLot(p) || lotOpen(p)) && (!cat || rootOf(p.categoryId) === cat) && (!n || matchQuery(productText(p), n)))
+    .map((p) => ({ p, avail: isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
     .sort((a, b) => Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
     .slice(0, 60), [products, n, reserved, scope.on, cat]);
   const pages = cats.filter((c) => !c.parentId && products.some((p) => p.active !== false && rootOf(p.categoryId) === c.id)).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
@@ -68,6 +71,7 @@ export function PosPage() {
     const code = q.trim().toUpperCase().replace(/\s+/g, '');
     if (!code) return;
     const byCode = findProductByCode(code);
+    if (byCode && isLot(byCode)) { if (lotOpen(byCode)) setPicking(byCode); setQ(''); return; }
     const v = findVariantBySku(code) ?? (byCode ? productVariants(byCode.id).find((x) => x.active !== false) : undefined);
     if (v) { add([{ variantId: v.id, qty: 1 }]); setQ(''); toast(`Ajouté : ${get<Product>('products', v.productId)?.name ?? code}`); return; }
     if (found.length === 1) { pick(found[0].p); setQ(''); }
@@ -80,18 +84,20 @@ export function PosPage() {
   function add(a: { variantId: string; qty: number }[]) {
     const merged = [...lines];
     for (const x of a) {
-      const ex = merged.find((l) => l.variantId === x.variantId);
+      const ex = merged.find((l) => l.variantId === x.variantId && !l.lotKey);
       if (ex) ex.qty += x.qty; else merged.push({ id: newId(), variantId: x.variantId, qty: x.qty, unitPrice: linePrice(x.variantId, false) });
     }
     setLines(merged);
   }
   function pick(p: Product) {
+    if (isLot(p)) { setPicking(p); return; }
     const vs = productVariants(p.id).filter((v) => v.active !== false);
     if (vs.length === 1) add([{ variantId: vs[0].id, qty: 1 }]); else setPicking(p);
   }
   const setLine = (id: string, patch: Partial<OrderLine>) => setLines(lines.map((l) => (l.id === id ? { ...l, ...patch } : l)).filter((l) => l.qty > 0));
+  const firstOfLot = (l: OrderLine) => !l.lotKey || priced.find((x) => x.lotKey === l.lotKey)?.id === l.id;
   const reset = () => { setLines([]); setDiscount(''); setPhone(''); setName(''); setDiscUnit('ar'); setQ(''); setInternal(false); setEmployeeId(''); };
-  const tilePrice = (p: Product) => internal ? Math.min(...productVariants(p.id).map((v) => internalPrice(v.id, step) || Infinity)) : p.priceRetail;
+  const tilePrice = (p: Product) => internal && !isLot(p) ? Math.min(...productVariants(p.id).map((v) => internalPrice(v.id, step) || Infinity)) : p.priceRetail;
 
   if (!can('pos.sell')) return <Empty icon="lock" title="Accès réservé" />;
   return (
@@ -110,9 +116,9 @@ export function PosPage() {
             <ul className="list pos-results">
               {found.slice(0, 8).map(({ p, avail }) => (
                 <li key={p.id}><button type="button" className={`list-item list-link btn-reset ${avail <= 0 ? 'is-out' : ''}`} onClick={() => { pick(p); setQ(''); }}>
-                  <Thumb src={p.photo} size={44} />
-                  <div className="list-item-main"><span className="list-item-title">{p.name}</span><p className="small muted">{p.attrs ? attrSummary(p, ', ') : p.code}</p></div>
-                  <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} en stock</span></div>
+                  <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} size={44} />
+                  <div className="list-item-main"><span className="list-item-title">{p.name} {isLot(p) && <Badge tone="brand">Lot</Badge>}</span><p className="small muted">{p.attrs ? attrSummary(p, ', ') : p.code}</p></div>
+                  <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} {isLot(p) ? 'lot(s)' : 'en stock'}</span></div>
                 </button></li>
               ))}
               {found.length > 8 && <li className="small muted" style={{ padding: '8px 14px' }}>+ {found.length - 8} autre(s) : précisez la recherche ou parcourez le catalogue.</li>}
@@ -140,7 +146,9 @@ export function PosPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <strong className="cart-name">{p?.name}</strong>
                       <div className="small muted">{p?.attrs ? attrSummary(p, ', ') : `${p?.code} · ${variantLabel(v)}`}</div>
+                      <LotTag l={l} />
                       <StockTag variantId={l.variantId} reserved={reserved} short={short.find((x) => x.variantId === l.variantId)} />
+                      {l.lotKey ? <div className="row" style={{ gap: 6, marginTop: 6 }}><span className="small">{l.qty} × {fmtAr(l.unitPrice)}</span>{firstOfLot(l) && <Button variant="quiet" className="btn-sm" icon="x" onClick={() => setLines(removeLine(lines, l))}>Retirer le lot</Button>}</div> : <>
                       {!internal && <div className="line-opts"><label><input type="checkbox" checked={!!l.wholesale} onChange={(e) => setLine(l.id, { wholesale: e.target.checked, priceManual: false })} /> Prix de gros</label></div>}
                       <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: internal ? 'wrap' : 'nowrap' }}>
                         <IconButton icon="x" label="Retirer un" onClick={() => setLine(l.id, { qty: l.qty - 1 })} />
@@ -151,7 +159,7 @@ export function PosPage() {
                         {internal
                           ? <span className="small muted">{l.unitPrice ? `${fmtAr(l.unitPrice)} (revient ${fmtAr(Math.round((v?.costAvg ?? 0) * 100) / 100)})` : <span className="neg">prix de revient manquant</span>}</span>
                           : <input className="cell-input" style={{ maxWidth: 110 }} inputMode="numeric" aria-label="Prix unitaire" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} />}
-                      </div>
+                      </div></>}
                     </div>
                     <strong className="num">{fmtAr(l.qty * l.unitPrice)}</strong>
                   </li>
@@ -159,6 +167,7 @@ export function PosPage() {
               })}
             </ul>
           )}
+          <AdjustList adjusts={adjusts} lines={priced} />
           {!internal && <>
           <div className="grid-2">
             <DiscountField value={discount} unit={discUnit} onChange={setDiscount} onUnit={setDiscUnit} amount={discAr} />
@@ -201,10 +210,10 @@ export function PosPage() {
         )}
       </div>
 
-      {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} />}
-      {browse && <ItemPicker noChoice onClose={() => setBrowse(false)} onAdd={add} />}
+      {picking && <ItemPicker noChoice initialProduct={picking} onClose={() => setPicking(null)} onAdd={add} onAddLines={(ls) => setLines([...lines, ...ls])} />}
+      {browse && <ItemPicker noChoice onClose={() => setBrowse(false)} onAdd={add} onAddLines={(ls) => setLines([...lines, ...ls])} />}
       {paying && <PayDialog total={total} onClose={() => setPaying(false)} onPaid={async (payments, cashGiven) => {
-        const o = await createWalkInSale({ lines: priced, discount: discAr, wholesale: undefined, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
+        const o = await createWalkInSale({ lines: priced, adjusts, discount: discAr, wholesale: undefined, phone: internal ? undefined : phone.trim() || undefined, name: internal ? undefined : name.trim() || undefined, payments, cashGiven, outsideHours: isOutsideHours(new Date(), company), employee: internal && employee ? { id: employee.id, name: employee.fullName } : undefined });
         setLast(o); reset(); setPaying(false); toast(`Vente ${o.number} enregistrée`);
         if (getMeta('printAutoTicket', false)) {
           printTo(defaultTarget(), ticketDoc(o, company)).then((m) => toast(m)).catch((e) => toast(`Ticket non imprimé : ${e?.message ?? e}`, 'error'));

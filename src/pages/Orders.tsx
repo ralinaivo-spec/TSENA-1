@@ -8,7 +8,7 @@ import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, varia
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
-  repriceLines, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
+  priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
@@ -23,6 +23,8 @@ import { PrintButton, type DocChoice } from '../ui/print';
 import { ProspectForm, ProspectList } from './Prospects';
 import { Zones } from './Deliveries';
 import { bucketOf, type Prospect } from '../lib/prospects';
+import { AdjustList, LotPicker, LotTag, lotPhoto } from './Lots';
+import { isLot, lotAvailable, lotOpen } from '../lib/lots';
 
 const TABS: { key: string; label: string; statuses: OrderStatus[] }[] = [
   { key: 'enregistrees', label: 'Enregistrées', statuses: ['new', 'confirmed'] },
@@ -192,13 +194,13 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const known = useMemo(() => findCustomer(phone), [phone]);
-  const priced = repriceLines(lines);
-  const itemsAr = priced.filter((l) => !l.isChoice).reduce((t, l) => t + l.qty * l.unitPrice, 0);
+  const { lines: priced, adjusts } = priceOrder(lines);
+  const itemsAr = itemsTotal({ lines: priced, adjusts });
   const discAr = discountAr(discount, discUnit, itemsAr);
   const short = stockShortages(priced, order?.id);
   const shortOf = (vid: string) => short.find((x) => x.variantId === vid);
   const reservedNow = useMemo(() => reservedIndex(order?.id), [order?.id, priced.length]);
-  const draft = { lines: priced, discount: discAr, deliveryFee: parseNum(fee) || 0, payments: [], status: 'new', kind: exchangeOf ? 'exchange' : 'order', credit: exchangeOf ? exchangeOf.returnLines.reduce((s, r) => s + r.qty * r.unitPrice, 0) : 0 } as unknown as Order;
+  const draft = { lines: priced, adjusts, discount: discAr, deliveryFee: parseNum(fee) || 0, payments: [], status: 'new', kind: exchangeOf ? 'exchange' : 'order', credit: exchangeOf ? exchangeOf.returnLines.reduce((s, r) => s + r.qty * r.unitPrice, 0) : 0 } as unknown as Order;
   const total = exchangeOf ? exchangeBalance(draft) : orderTotal(draft);
 
   function onPhone(v: string) {
@@ -251,7 +253,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
       else if (cust) await save('customers', { id: cust.id, phone: cust.phone || p || undefined, phone2: cust.phone && p && normPhone(cust.phone) !== p && !cust.phone2 ? p : cust.phone2, name: cust.name || name.trim() || undefined, facebook: cust.facebook || facebook.trim() || undefined, zoneId: zoneId || cust.zoneId, place: place.trim() || cust.place });
       const data: Partial<Order> = {
         phone: p, name: name.trim() || undefined, facebook: facebook.trim() || undefined, channel, customerId: cust?.id, zoneId: zoneId || undefined, place: pickup ? (place.trim() || undefined) : place.trim(), placeToConfirm: false,
-        courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, discount: discAr, discountPct: discUnit === 'pct' ? Number(String(discount).replace(',', '.')) || undefined : undefined, notes: notes.trim() || undefined,
+        courierId: pickup ? undefined : cid, deliveryFee: pickup ? 0 : parseNum(fee) || 0, wantedDate: wantedDate || undefined, lines: priced, adjusts: adjusts.length ? adjusts : (order?.adjusts ? [] : undefined), discount: discAr, discountPct: discUnit === 'pct' ? Number(String(discount).replace(',', '.')) || undefined : undefined, notes: notes.trim() || undefined,
       };
       if (order) {
         await save('orders', { id: order.id, ...data });
@@ -314,16 +316,17 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
                     <tr key={l.id}>
                       <td>
                         <div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={48} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}</div>
+                          <LotTag l={l} />
                           <StockTag variantId={l.variantId} reserved={reservedNow} short={shortOf(l.variantId)} /></div></div>
-                        <div className="line-opts">
+                        {!l.lotKey && <div className="line-opts">
                           <label><input type="checkbox" checked={!!l.wholesale} onChange={(e) => setLine(l.id, { wholesale: e.target.checked, priceManual: false })} /> Prix de gros</label>
                           <label><input type="checkbox" checked={!!l.isChoice} onChange={(e) => setLine(l.id, { isChoice: e.target.checked })} /> Envoyé en choix</label>
-                        </div>
+                        </div>}
                       </td>
-                      <td><input className="cell-input" inputMode="numeric" aria-label="Quantité" value={l.qty || ''} onChange={(e) => setLine(l.id, { qty: parseNum(e.target.value) || 0 })} /></td>
-                      <td><input className="cell-input" inputMode="numeric" aria-label="Prix" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} /></td>
+                      <td data-label="Qté">{l.lotKey ? <span className="num">{l.qty}</span> : <input className="cell-input" inputMode="numeric" aria-label="Quantité" value={l.qty || ''} onChange={(e) => setLine(l.id, { qty: parseNum(e.target.value) || 0 })} />}</td>
+                      <td data-label="Prix (Ar)">{l.lotKey ? <span className="num">{fmtAr(l.unitPrice)}</span> : <input className="cell-input" inputMode="numeric" aria-label="Prix" value={l.unitPrice || ''} onChange={(e) => setLine(l.id, { unitPrice: parseNum(e.target.value) || 0, priceManual: true })} />}</td>
                       <td className="t-num">{l.isChoice ? <span className="muted">choix</span> : fmtAr(l.qty * l.unitPrice)}</td>
-                      <td className="t-actions"><IconButton icon="x" label="Retirer" onClick={() => setLines(lines.filter((x) => x.id !== l.id))} /></td>
+                      <td className="t-actions">{(!l.lotKey || priced.find((x) => x.lotKey === l.lotKey)?.id === l.id) && <IconButton icon="x" label={l.lotKey ? 'Retirer le lot' : 'Retirer'} onClick={() => setLines(removeLine(lines, l))} />}</td>
                     </tr>
                   );
                 })}
@@ -331,6 +334,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
             </table>
           </div>
         )}
+        <AdjustList adjusts={adjusts} lines={priced} />
         {short.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>Stock insuffisant pour {short.length} article(s) : diminuez la quantité ou choisissez un autre article.</span></div>}
 
         <div className="grid-2">
@@ -370,10 +374,10 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
         {error && <div className="notice notice-danger"><Icon name="alert" /><span>{error}</span></div>}
       </div>
       {zonesOpen && <Modal title="Zones de livraison" wide onClose={() => setZonesOpen(false)} footer={<Button onClick={() => setZonesOpen(false)}><Icon name="chevronLeft" size={16} /> Revenir à la commande</Button>}><Zones /></Modal>}
-      {picking && <ItemPicker excludeOrderId={order?.id} onClose={() => setPicking(false)} onAdd={(add) => {
+      {picking && <ItemPicker excludeOrderId={order?.id} onClose={() => setPicking(false)} onAddLines={(ls) => setLines([...lines, ...ls])} onAdd={(add) => {
         const merged = [...lines];
         for (const a of add) {
-          const ex = merged.find((l) => l.variantId === a.variantId && !!l.isChoice === !!a.isChoice);
+          const ex = merged.find((l) => l.variantId === a.variantId && !!l.isChoice === !!a.isChoice && !l.lotKey);
           if (ex) ex.qty += a.qty; else merged.push({ id: newId(), variantId: a.variantId, qty: a.qty, isChoice: a.isChoice, unitPrice: linePrice(a.variantId, false) });
         }
         setLines(merged);
@@ -383,7 +387,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
 }
 
 /** Choisir des articles : recherche, puis quantité par taille/couleur avec le stock disponible. */
-export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialProduct, unknownQty }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; noChoice?: boolean; initialProduct?: Product; unknownQty?: boolean }) {
+export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoice, initialProduct, unknownQty }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; onAddLines?: (lines: OrderLine[]) => void; noChoice?: boolean; initialProduct?: Product; unknownQty?: boolean }) {
   const { products } = useCatalog();
   const reserved = useMemo(() => reservedIndex(excludeOrderId), [excludeOrderId]);
   const [q, setQ] = useState('');
@@ -393,7 +397,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
   const [want, setWant] = useState<Record<string, boolean>>({});
   const scope = useMyScope();
   const n = q.trim().toLowerCase();
-  const found = products.filter((p) => p.active !== false && scope.product(p.id) && (!n || matchQuery(productText(p), n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
+  const found = products.filter((p) => p.active !== false && scope.product(p.id) && (isLot(p) ? !!onAddLines && lotOpen(p) : true) && (!n || matchQuery(productText(p), n))).sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
   const family = prod?.attrs ? [prod, ...siblingsOf(prod)] : prod ? [prod] : [];
   const variants = family.flatMap((p) => productVariants(p.id).filter((v) => v.active !== false));
   const cellLabel = (v: Variant) => { const p = get<Product>('products', v.productId); return p?.attrs ? (p.id === prod?.id ? `${p.name} (choisi)` : p.name) : variantLabel(v); };
@@ -402,6 +406,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
     ...(parseNum(choice[v.id] ?? '') ? [{ variantId: v.id, qty: parseNum(choice[v.id])!, isChoice: true }] : []),
     ...(unknownQty && want[v.id] && !parseNum(qty[v.id] ?? '') ? [{ variantId: v.id, qty: 0 }] : []),
   ]);
+  if (prod && isLot(prod) && onAddLines) return <LotPicker p={prod} reserved={reserved} onBack={initialProduct ? undefined : () => setProd(null)} onClose={onClose} onAdd={onAddLines} />;
   return (
     <Modal title={prod ? prod.name : 'Ajouter un article'} onClose={onClose} wide
       footer={prod ? <><Button variant="ghost" onClick={() => { setProd(null); setQty({}); setChoice({}); setWant({}); }}>Autre article</Button><Button disabled={!picked.length} onClick={() => { onAdd(picked); onClose(); }}>Ajouter</Button></> : undefined}>
@@ -411,11 +416,11 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, noChoice, initialPr
           <div className="field"><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <ul className="list card" style={{ padding: 0 }}>
             {found.map((p) => {
-              const avail = productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
+              const avail = isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
               return (
                 <li key={p.id}><button className="list-item list-link btn-reset" onClick={() => setProd(p)}>
-                  <Thumb src={p.photo} size={72} zoom alt={p.name} />
-                  <div className="list-item-main"><span className="list-item-title">{p.name}</span><p className="small muted">{p.code} · {fmtAr(p.priceRetail)}{p.priceWholesale ? ` · gros ${fmtAr(p.priceWholesale)}` : ''}</p></div>
+                  <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} size={72} zoom alt={p.name} />
+                  <div className="list-item-main"><span className="list-item-title">{p.name} {isLot(p) && <Badge tone="brand">Lot</Badge>}</span><p className="small muted">{p.code} · {fmtAr(p.priceRetail)}{isLot(p) ? ' le lot' : ''}{p.priceWholesale ? ` · gros ${fmtAr(p.priceWholesale)}` : ''}</p></div>
                   <span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span>
                 </button></li>
               );
@@ -528,7 +533,7 @@ function OrderDetail({ id }: { id: string }) {
                 const q = closed ? (l.qtyKept ?? 0) : l.isChoice ? 0 : l.qty;
                 return (
                   <tr key={l.id}>
-                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={56} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}{l.isChoice ? ' · en choix' : ''}</div></div></div></td>
+                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(v)} size={56} zoom alt={p?.name} /><div><strong>{p?.name}</strong><div className="small muted">{p?.code} · {variantLabel(v)}{l.isChoice ? ' · en choix' : ''}</div><LotTag l={l} /></div></div></td>
                     <td className="t-num num">{l.qty}</td>
                     {closed && <td className={`t-num num ${(l.qtyKept ?? 0) < l.qty && !l.isChoice ? 'neg' : ''}`}>{l.qtyKept ?? 0}</td>}
                     <td className="t-num">{fmtAr(l.unitPrice)}</td>
@@ -543,6 +548,7 @@ function OrderDetail({ id }: { id: string }) {
             </tbody>
           </table>
         </div>
+        {(o.adjusts || []).length > 0 && <div style={{ margin: '12px 16px 0' }}><AdjustList adjusts={o.adjusts} lines={o.lines} closed={closed} /></div>}
         <div className="summary-box" style={{ margin: 16 }}>
           <div><span>Articles</span><strong className="num">{fmtAr(closed ? keptTotal(o) : itemsTotal(o))}</strong></div>
           {o.discount > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(o.discount)}</strong></div>}
@@ -703,7 +709,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
                 const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId);
                 return (
                   <tr key={l.id} className={l.isChoice ? 'is-choice' : ''}>
-                    <td><strong>{p?.code}</strong> {variantLabel(v)} {l.isChoice && <Badge tone="warn">choix</Badge>}<div className="small muted">{fmtAr(l.unitPrice)}</div></td>
+                    <td><strong>{p?.code}</strong> {variantLabel(v)} {l.isChoice && <Badge tone="warn">choix</Badge>}<div className="small muted">{fmtAr(l.unitPrice)}</div><LotTag l={l} /></td>
                     <td className="t-num num" data-label="Parti">{l.qty}</td>
                     <td data-label="Gardé par le client"><input className="cell-input" inputMode="numeric" aria-label="Gardé" placeholder={l.isChoice ? 'à préciser' : ''} aria-invalid={l.isChoice && (kept[l.id] ?? '').trim() === ''} value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td>
                     <td className="t-num num" data-label="Revient en stock">{l.qty - keptNum[l.id]}</td>
@@ -714,6 +720,10 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
           </table>
         </div>
 
+        {(o.adjusts || []).length > 0 && <>
+          <AdjustList adjusts={o.adjusts} lines={sim.lines} closed />
+          <p className="small muted">Lot ou prix par quantité : le prix réduit ne compte que pour les lots complets gardés ; le reste est payé au prix normal.</p>
+        </>}
         <div className="card stack-s settle-box">
           <h3>Ce que la boutique doit recevoir</h3>
           <div className="money-lines">

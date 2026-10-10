@@ -1099,3 +1099,21 @@ tr.row-error td { background: var(--danger-soft); }
 /* Groupes de boutons sur une ligne : ne jamais élargir la page (défilement horizontal à l'intérieur du groupe). */
 .segmented, .row-between, .row > .field { min-width: 0; }
 .row-between > h2, .row-between > h3 { min-width: 0; overflow-wrap: anywhere; }
+/* Lots, promotions, prix par quantité */
+.type-choice { display: flex; gap: 14px; align-items: flex-start; text-align: left; width: 100%; padding: 16px; border: 1.5px solid var(--line); border-radius: var(--radius-m); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; }
+.type-choice:hover, .type-choice:focus-visible { border-color: var(--brand); background: var(--surface-2); }
+.type-choice > span { display: grid; gap: 4px; }
+.type-choice svg { color: var(--brand); flex: 0 0 auto; margin-top: 2px; }
+.lot-items { margin: 0; }
+.lot-item { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.lot-item:last-child { border-bottom: 0; }
+.lot-item-main { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.lot-item-opts { gap: 10px; align-items: center; flex-wrap: wrap; }
+.lot-item-opts select { min-height: 38px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); color: var(--ink); font: inherit; font-size: .9rem; }
+.lot-tag { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 2px 0; }
+.adjust-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adjust-list li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 8px 12px; border-radius: var(--radius-s); background: var(--surface-2); font-size: .9rem; }
+.adjust-list li > span { min-width: 0; overflow-wrap: anywhere; }
+.adjust-list strong { white-space: nowrap; color: var(--ok, #127a3a); }
+.lot-pick { background: var(--surface-2); }
+.tier-row { gap: 8px; align-items: center; flex-wrap: wrap; }

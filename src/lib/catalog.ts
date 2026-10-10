@@ -22,6 +22,11 @@ export interface Product extends BaseRecord {
   active: boolean;
   /** Valeurs choisies pour les variantes de la catégorie : id de la variante → id de la valeur. */
   attrs?: Record<string, string>;
+  /** Lot ou promotion : article sans stock propre qui regroupe d'autres articles (voir lots.ts). */
+  kind?: 'lot';
+  lot?: import('./lots').LotDef;
+  /** Prix par quantité (ex. 3 pièces pour 50 000 Ar). */
+  tiers?: import('./lots').PriceTier[];
 }
 export interface Variant extends BaseRecord {
   productId: string;
@@ -199,7 +204,7 @@ export function categoryPath(id?: string): string {
 // ---------- Écritures ----------
 export async function addMoves(moves: Omit<StockMove, 'id' | 'createdAt' | 'updatedAt' | 'at'> & { at?: string } | (Omit<StockMove, 'id' | 'createdAt' | 'updatedAt' | 'at'> & { at?: string })[]) {
   const u = currentUser();
-  const list = (Array.isArray(moves) ? moves : [moves]).filter((m) => m.qty !== 0);
+  const list = (Array.isArray(moves) ? moves : [moves]).filter((m) => m.qty !== 0 && !!m.variantId);
   if (!list.length) return [];
   return save('stockMoves', list.map((m) => ({ ...m, at: m.at ?? bizNow(), userId: u?.id, userName: u?.fullName })));
 }
@@ -318,7 +323,7 @@ export function attrSummary(p: Product, sep = ' · ') {
 /** Où un article est utilisé (ventes, commandes, achats, réceptions) : s'il l'est, on ne peut que l'archiver. */
 export function articleUsage(productId: string) {
   const vids = new Set(all<Variant>('variants').filter((v) => v.productId === productId).map((v) => v.id));
-  const orders = all<any>('orders').filter((o) => (o.lines || []).some((l: any) => vids.has(l.variantId)) || (o.returnLines || []).some((l: any) => vids.has(l.variantId))).length;
+  const orders = all<any>('orders').filter((o) => (o.lines || []).some((l: any) => vids.has(l.variantId) || l.lotProductId === productId) || (o.returnLines || []).some((l: any) => vids.has(l.variantId))).length;
   const purchases = all<Purchase>('purchases').filter((p) => p.lines.some((l) => vids.has(l.variantId))).length;
   const receptions = all<any>('receptions').filter((r) => (r.items || []).some((i: any) => vids.has(i.variantId))).length;
   const moves = all<StockMove>('stockMoves').filter((m) => vids.has(m.variantId)).length;

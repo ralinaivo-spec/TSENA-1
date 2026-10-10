@@ -7,7 +7,7 @@ import { rootOf } from './scope';
 import { addDays, dayOf, today } from './money';
 import { grid, usdRate } from './payouts';
 import { DEFAULT_COMPANY, type Company } from './settings';
-import { isWalkIn, keptTotal, sellingLines, type Order } from './orders';
+import { isWalkIn, itemsTotal, keptTotal, sellingLines, type Order } from './orders';
 import type { Payout } from './closed';
 import type { Prospect } from './prospects';
 
@@ -34,10 +34,10 @@ export interface Coverage { product: Product; stock: number; perDay: number; day
 export function coverage(maxDays = 14): Coverage[] {
   const t = today(); const from = addDays(t, -29);
   const sold = new Map<string, number>();
-  for (const l of salesLedger(from, t)) sold.set(l.productId, (sold.get(l.productId) ?? 0) + l.qty);
+  for (const l of salesLedger(from, t)) { const id = l.itemProductId ?? l.productId; sold.set(id, (sold.get(id) ?? 0) + l.qty); }
   const out: Coverage[] = [];
   for (const p of all<Product>('products')) {
-    if (p.active === false) continue;
+    if (p.active === false || p.kind === 'lot') continue;
     const q = sold.get(p.id) ?? 0; if (q <= 0) continue;
     const stock = productVariants(p.id).reduce((s, v) => s + Math.max(0, stockOf(v.id)), 0);
     const perDay = q / 30; const days = stock / perDay;
@@ -78,7 +78,7 @@ export function anomalies(from: string, to: string): Anomaly[] {
         out.push({ kind: 'below_cost', text: `${o.number} : ${p?.name ?? '?'} vendu ${l.unitPrice.toLocaleString('fr-FR')} Ar, en dessous du prix de revient (${Math.round(c).toLocaleString('fr-FR')} Ar)`, href: `#/commandes/${o.id}` });
       }
     }
-    const items = isWalkIn(o) ? keptTotal(o) : sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    const items = isWalkIn(o) ? keptTotal(o) : itemsTotal(o);
     if (o.discount && items > 0 && o.discount / items > 0.2) out.push({ kind: 'discount', text: `${o.number} : remise de ${Math.round((o.discount / items) * 100)} % (${o.discount.toLocaleString('fr-FR')} Ar)`, href: `#/commandes/${o.id}`, amount: o.discount });
   }
   for (const p of all<Payout>('payouts')) {

@@ -5,6 +5,7 @@ import { stockOf, variantCost, incomingOf, type Category, type Product, type Pur
 import { isPickupZone, isWalkIn, sellingLines, type Courier, type Order } from './orders';
 import { dayOf, type CashMove, type FinanceCategory } from './money';
 import { purchaseTotalAr, purchasePaid, purchaseTotal } from './purchases';
+import { adjustKept, type Adjust } from './lots';
 
 export interface SaleLine {
   at: string; day: string; hour: number;
@@ -12,6 +13,7 @@ export interface SaleLine {
   order: Order;
   channel: 'shop' | 'online';
   variantId: string; productId: string; categoryId?: string;
+  itemProductId?: string; // article réellement sorti du stock (productId = le lot quand il est vendu en lot)
   qty: number;      // négatif pour un retour
   amount: number;   // chiffre d'affaires (négatif pour un retour), remise répartie
   cost: number;     // coût des articles (négatif pour un retour)
@@ -24,40 +26,59 @@ const costOf = (variantId: string) => { const v = get<Variant>('variants', varia
 export function salesLedger(from?: string, to?: string): SaleLine[] {
   const inR = (iso?: string) => { if (!iso) return false; const d = dayOf(iso); return (!from || d >= from) && (!to || d <= to); };
   const out: SaleLine[] = [];
-  const push = (o: Order, at: string, kind: SaleLine['kind'], variantId: string, qty: number, amount: number) => {
+  type Over = { productId: string; categoryId?: string } | undefined;
+  const push = (o: Order, at: string, kind: SaleLine['kind'], variantId: string, qty: number, amount: number, over?: Over) => {
     if (!qty && !amount) return;
-    const v = get<Variant>('variants', variantId);
+    const v = variantId ? get<Variant>('variants', variantId) : undefined;
     const p = v && get<Product>('products', v.productId);
     const d = new Date(at);
     out.push({
-      at, day: dayOf(at), hour: d.getHours(), kind, order: o, channel: isWalkIn(o) || o.pickedUp ? 'shop' : 'online', variantId, productId: v?.productId ?? '', categoryId: p?.categoryId,
-      qty, amount, cost: qty * costOf(variantId), userName: o.createdByName, courierId: isPickupZone(o.zoneId) ? undefined : o.courierId, zoneId: o.zoneId, customerId: o.customerId,
+      at, day: dayOf(at), hour: d.getHours(), kind, order: o, channel: isWalkIn(o) || o.pickedUp ? 'shop' : 'online', variantId, productId: over?.productId ?? v?.productId ?? '', categoryId: over ? over.categoryId : p?.categoryId,
+      itemProductId: v?.productId, qty, amount, cost: qty * costOf(variantId), userName: o.createdByName, courierId: isPickupZone(o.zoneId) ? undefined : o.courierId, zoneId: o.zoneId, customerId: o.customerId,
     });
   };
+  /** Un article vendu dans un lot complet compte pour le lot (meilleures ventes, CA par page). */
+  const lotOver = (o: Order, l: { lotKey?: string; lotProductId?: string }): Over => {
+    if (!l.lotKey || !l.lotProductId) return undefined;
+    const a = (o.adjusts || []).find((x) => x.lotKey === l.lotKey);
+    if (a && adjustKept(a, o.lines, o.adjusts || []) === 0) return undefined;
+    return { productId: l.lotProductId, categoryId: get<Product>('products', l.lotProductId)?.categoryId };
+  };
+  const adjOver = (a: Adjust): Over => ({ productId: a.productId, categoryId: get<Product>('products', a.productId)?.categoryId });
+  type Row = { variantId: string; qty: number; value: number; over?: Over };
   /** Remise répartie au prorata des montants. */
-  const withDiscount = (lines: { variantId: string; qty: number; value: number }[], discount: number) => {
+  const withDiscount = (lines: Row[], discount: number) => {
     const total = lines.reduce((t, l) => t + l.value, 0);
     return lines.map((l) => ({ ...l, value: l.value - (total ? (discount * l.value) / total : 0) }));
   };
   for (const o of all<Order>('orders')) {
+    const adj = o.adjusts || [];
     if (isWalkIn(o)) {
       if (o.status === 'cancelled' || !inR(o.createdAt)) continue;
-      for (const l of withDiscount(o.lines.map((l) => ({ variantId: l.variantId, qty: l.qtyKept ?? l.qty, value: (l.qtyKept ?? l.qty) * l.unitPrice })), o.discount || 0)) push(o, o.createdAt, 'sale', l.variantId, l.qty, l.value);
+      const rows: Row[] = [
+        ...o.lines.map((l) => ({ variantId: l.variantId, qty: l.qtyKept ?? l.qty, value: (l.qtyKept ?? l.qty) * l.unitPrice, over: lotOver(o, l) })),
+        ...adj.map((a) => ({ variantId: '', qty: 0, value: adjustKept(a, o.lines, adj) * a.unit, over: adjOver(a) })),
+      ];
+      for (const l of withDiscount(rows, o.discount || 0)) push(o, o.createdAt, 'sale', l.variantId, l.qty, l.value, l.over);
       continue;
     }
     if (!o.dispatchedAt) continue;
-    const nonChoice = withDiscount(sellingLines(o).map((l) => ({ variantId: l.variantId, qty: l.qty, value: l.qty * l.unitPrice })), o.discount || 0);
-    if (inR(o.dispatchedAt)) for (const l of nonChoice) push(o, o.dispatchedAt, 'sale', l.variantId, l.qty, l.value);
+    const nonChoice = withDiscount([
+      ...sellingLines(o).map((l) => ({ variantId: l.variantId, qty: l.qty, value: l.qty * l.unitPrice, over: lotOver(o, l) })),
+      ...adj.map((a) => ({ variantId: '', qty: 0, value: a.qty * a.unit, over: adjOver(a) })),
+    ], o.discount || 0);
+    if (inR(o.dispatchedAt)) for (const l of nonChoice) push(o, o.dispatchedAt, 'sale', l.variantId, l.qty, l.value, l.over);
     if (o.status === 'cancelled') {
       const at = o.statusDates?.cancelled;
-      if (at && inR(at)) for (const l of nonChoice) push(o, at, 'return', l.variantId, -l.qty, -l.value);
+      if (at && inR(at)) for (const l of nonChoice) push(o, at, 'return', l.variantId, -l.qty, -l.value, l.over);
       continue;
     }
     if (o.returnedAt && inR(o.returnedAt)) {
       for (const l of o.lines) {
         if (l.isChoice) { if (l.qtyKept) push(o, o.returnedAt, 'sale', l.variantId, l.qtyKept, l.qtyKept * l.unitPrice); }
-        else if (l.qtyReturned) push(o, o.returnedAt, 'return', l.variantId, -l.qtyReturned, -l.qtyReturned * l.unitPrice);
+        else if (l.qtyReturned) push(o, o.returnedAt, 'return', l.variantId, -l.qtyReturned, -l.qtyReturned * l.unitPrice, lotOver(o, l));
       }
+      for (const a of adj) { const back = a.qty - adjustKept(a, o.lines, adj); if (back) push(o, o.returnedAt, 'return', '', 0, -back * a.unit, adjOver(a)); }
       for (const rl of o.returnLines || []) push(o, o.returnedAt, 'return', rl.variantId, -rl.qty, -rl.qty * rl.unitPrice);
     }
   }
@@ -176,8 +197,8 @@ export function stockValue() {
 /** Articles en stock qui ne se sont pas vendus depuis N jours. */
 export function dormant(days = 60) {
   const since = new Date(); since.setDate(since.getDate() - days);
-  const sold = new Set(salesLedger(dayOf(since.toISOString())).filter((l) => l.kind === 'sale').map((l) => l.productId));
-  return all<Product>('products').filter((p) => p.active !== false && !sold.has(p.id))
+  const sold = new Set(salesLedger(dayOf(since.toISOString())).filter((l) => l.kind === 'sale').map((l) => l.itemProductId ?? l.productId));
+  return all<Product>('products').filter((p) => p.active !== false && p.kind !== 'lot' && !sold.has(p.id))
     .map((p) => {
       const vs = all<Variant>('variants').filter((v) => v.productId === p.id);
       const q = vs.reduce((t, v) => t + Math.max(0, stockOf(v.id)), 0);

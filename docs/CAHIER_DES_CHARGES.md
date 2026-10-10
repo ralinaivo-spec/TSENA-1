@@ -605,3 +605,15 @@ Une liste de choix ne doit pas prendre toute la place : peu d'options → bouton
 | Graphique Bénéfice et perte | Au minimum par jour (le détail par heure n'est plus affiché), comme le tableau de bord. |
 | Mêmes menus sur ordinateur et téléphone | Le menu est identique ; sur téléphone, les entrées sont dans la barre du bas + « Menu ». |
 | Synchronisation après mise à jour | Quand une nouvelle version ajoute un type de données (ex. clients à suivre), l'appareil retélécharge automatiquement tout le cloud une fois. Corrige le cas d'un téléphone resté sur une ancienne version qui avait reçu ces données sans les garder. |
+
+## 9 nonies. Lots, promotions et prix par quantité *(10/10/2026)*
+
+| Point | Règle |
+|---|---|
+| Création | Articles → « Nouvel article » → choix : **Article (avec couleurs, tailles…)** ou **Lot ou promotion**. |
+| Lot / promotion | Article sans stock propre : nom, code (automatique si vide), page, **prix du lot**, articles contenus avec quantité par lot. Pour chaque article : variante imposée ou **« au choix à la vente »** (ex. 3 pyjamas : 2 roses + 1 bleu choisis en vendant), case **Cadeau** (offert). Dates de début / fin facultatives : hors dates, le lot n'est plus proposé (badge « Promotion terminée »), l'historique reste. |
+| Fiche du lot | Prix du lot, valeur des articles séparés, ce que gagne le client, nombre de lots possibles avec le stock, marge (prix de revient cadeaux compris). |
+| Vente (commande et vente sur place) | Le lot apparaît dans la recherche (badge « Lot »). On choisit le nombre de lots et les couleurs au choix (ajout bloqué tant que le compte n'y est pas). Les articles du lot sortent du stock ; une ligne « Prix du lot » donne la différence avec les prix normaux. Quantités du lot non modifiables ligne par ligne ; « Retirer le lot » enlève tout le lot. |
+| Retour partiel | Le client peut rendre tout le lot ou une partie. Le prix du lot ne compte que pour les **lots complets gardés** ; les articles gardés d'un lot incomplet sont payés **au prix normal**. Les articles rendus reviennent en stock. |
+| Prix par quantité | Dans la fiche d'un article (« Modifier ») : ex. **3 pièces pour 50 000 Ar**. Appliqué automatiquement dès que la quantité est atteinte (couleurs/tailles mélangées), plusieurs paliers possibles, pas sur les lignes au prix de gros ou au prix modifié. Même règle au retour : le reste repasse au prix normal. |
+| Rapports | Un article vendu dans un lot complet compte pour le lot (meilleures ventes, CA par page) ; le stock et la fin de stock prévue restent calculés sur les articles réels. Ticket et bon de livraison affichent la ligne « Prix du lot / prix par quantité ». |

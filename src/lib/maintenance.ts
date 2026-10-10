@@ -185,7 +185,7 @@ export function checkData(): Issue[] {
   issues.push({ key: 'orphan', title: 'Variantes sans article', level: orphanV.length ? 'warn' : 'ok', detail: orphanV.length ? 'Tailles/couleurs dont l’article a été supprimé.' : 'Toutes les variantes ont leur article.',
     items: orphanV.map((v) => v.sku), fixLabel: 'Supprimer ces variantes', fix: orphanV.length ? async () => { await save('variants', orphanV.map((v) => ({ id: v.id, deleted: true }))); } : undefined });
 
-  const noVar = products.filter((p) => !variants.some((v) => v.productId === p.id));
+  const noVar = products.filter((p) => p.kind !== 'lot' && !p.deleted && !variants.some((v) => v.productId === p.id));
   issues.push({ key: 'novar', title: 'Articles sans taille ni couleur', level: noVar.length ? 'info' : 'ok', detail: noVar.length ? 'Ces articles ne peuvent pas être vendus : ouvrez-les et ajoutez au moins une variante.' : 'Tous les articles sont vendables.', items: noVar.map((p) => `${p.code} ${p.name}`) });
 
   const noCost = variants.filter((v) => get('products', v.productId) && stockOf(v.id) > 0 && !v.costAvg);

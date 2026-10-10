@@ -4,7 +4,8 @@ import { all, applyRemote, bizNow, dataVersion, get, newId, nowIso, remove, save
 import { audit, currentUser } from './auth';
 import { assertOpenAt } from './closed';
 import { variantCost, type Variant } from './catalog';
-import { courierSplit, isPickupZone, isWalkIn, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
+import { adjustsKeptTotal, adjustsTotal } from './lots';
+import { courierSplit, isPickupZone, isWalkIn, itemsTotal, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
 // ---------- Comptes ----------
 export type AccountId = PayMethod | 'bank';
@@ -345,7 +346,7 @@ export function report(from: string, to: string): Report {
     if (!o.dispatchedAt) continue;
     const nonChoice = sellingLines(o);
     if (inR(o.dispatchedAt)) {
-      const value = nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0);
+      const value = itemsTotal(o) - (o.discount || 0);
       addSale(o, value, nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0), true);
       if (o.pickedUp && o.status !== 'cancelled') s.walkIns.push(o);
       else if (o.status !== 'cancelled') { const d = deliveryNet(o); s.deliveries.push({ o, courierId: isPickupZone(o.zoneId) ? '' : o.courierId || '', value, ...d, settled: !!o.courierSettledAt }); }
@@ -353,12 +354,13 @@ export function report(from: string, to: string): Report {
     const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
     if (inR(back)) {
       let ret = 0, retCost = 0;
-      if (o.status === 'cancelled') { ret = nonChoice.reduce((t, l) => t + l.qty * l.unitPrice, 0) - (o.discount || 0); retCost = nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0); }
+      if (o.status === 'cancelled') { ret = itemsTotal(o) - (o.discount || 0); retCost = nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0); }
       else {
         for (const l of o.lines) {
           if (l.isChoice) { const k = l.qtyKept ?? 0; if (k) addSale(o, k * l.unitPrice, k * costOf(l.variantId), false); }
           else { const r = l.qtyReturned ?? 0; ret += r * l.unitPrice; retCost += r * costOf(l.variantId); }
         }
+        ret += adjustsTotal(o) - adjustsKeptTotal(o); // lot devenu incomplet : prix normal pour ce qui est gardé
         for (const rl of o.returnLines || []) { ret += rl.qty * rl.unitPrice; retCost += rl.qty * costOf(rl.variantId); }
         if (o.credit && !(o.returnLines || []).length) ret += o.credit;
         s.courierFees += o.feeCharged ?? 0;

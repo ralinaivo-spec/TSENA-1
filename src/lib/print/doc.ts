@@ -4,10 +4,11 @@
 import { get } from '../db';
 import { fmtAr, fmtNum, variantLabel, type Product, type Variant } from '../catalog';
 import {
-  CHANNELS, courierSplit, exchangeBalance, fmtPhone, isPickupZone, isWalkIn, keptTotal, orderTotal, PAY_METHODS, paidTotal, remaining, sellingLines,
+  CHANNELS, courierSplit, exchangeBalance, fmtPhone, isPickupZone, isWalkIn, itemsTotal, keptTotal, orderTotal, PAY_METHODS, paidTotal, remaining, sellingLines,
   type Courier, type Order, type Zone,
 } from '../orders';
 import type { Company } from '../settings';
+import { adjustKept, adjustLabel } from '../lots';
 
 export type Block =
   | { k: 'text'; s: string; align?: 'left' | 'center' | 'right'; bold?: boolean; big?: boolean }
@@ -144,10 +145,11 @@ export function ticketDoc(o: Order, c: Company, opts: { cashGiven?: number } = {
     b.push(T('En choix (non compté) :', { bold: true }));
     for (const l of choices) b.push(T(`  ${fmtNum(l.qty)} x ${itemName(l.variantId)}`));
   }
+  for (const a of o.adjusts || []) { const n = closed ? adjustKept(a, o.lines, o.adjusts!) : a.qty; if (n) b.push(P(adjustLabel(a), (n * a.unit < 0 ? '- ' : '') + ar(Math.abs(n * a.unit)))); }
   for (const r of o.returnLines || []) b.push(...itemLines(r.variantId, -r.qty, r.unitPrice, ' (repris)'));
   b.push(L());
 
-  const items = closed ? keptTotal(o) : sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const items = closed ? keptTotal(o) : itemsTotal(o);
   const fee = closed ? (o.feeCharged ?? o.deliveryFee) : o.deliveryFee;
   b.push(P(`${fmtNum(count)} article(s)`, ar(items)));
   if (o.discount) b.push(P('Remise', '- ' + ar(o.discount)));
@@ -188,9 +190,11 @@ export function deliveryNoteDoc(o: Order, c: Company): PrintDoc {
   b.push(T(`Canal : ${CHANNELS[o.channel]}`));
   b.push(L());
   for (const l of o.lines) b.push(...itemLines(l.variantId, l.qty, l.unitPrice, l.isChoice ? ' (CHOIX)' : ''));
+  for (const a of o.adjusts || []) b.push(P(adjustLabel(a), (a.unit < 0 ? '- ' : '') + ar(Math.abs(a.qty * a.unit))));
+  if ((o.adjusts || []).some((a) => a.kind === 'lot')) b.push(T('LOT : prix du lot seulement si le client garde le lot complet.'));
   if (o.lines.some((l) => l.isChoice)) b.push(T('CHOIX : le client paie seulement ce qu’il garde, le reste revient à la boutique.'));
   b.push(L());
-  const items = sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const items = itemsTotal(o);
   b.push(P('Articles', ar(items)));
   if (o.discount) b.push(P('Remise', '- ' + ar(o.discount)));
   if (o.credit) b.push(P('Articles repris', '- ' + ar(o.credit)));
@@ -227,7 +231,7 @@ export function parcelLabelDoc(o: Order, c: Company): PrintDoc {
   for (const l of o.lines) b.push(T(`${fmtNum(l.qty)} x ${itemName(l.variantId)}${l.isChoice ? ' (CHOIX)' : ''}`));
   if (o.lines.some((l) => l.isChoice)) b.push(T('CHOIX : le client paie seulement ce qu\u2019il garde.'));
   b.push(L());
-  const items = sellingLines(o).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  const items = itemsTotal(o);
   b.push(P('Articles', ar(items)));
   if (o.discount) b.push(P('Remise', '- ' + ar(o.discount)));
   if (o.credit) b.push(P('Articles repris', '- ' + ar(o.credit)));

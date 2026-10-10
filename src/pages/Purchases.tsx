@@ -414,7 +414,7 @@ function LinePicker({ currency, onClose, onAdd }: { currency: 'RMB' | 'MGA'; onC
   const [price, setPrice] = useState('');
   const [creating, setCreating] = useState(false);
   const n = q.trim().toLowerCase();
-  const found = products.filter((p) => p.active !== false && (!n || matchQuery(productText(p), n))).slice(0, 30);
+  const found = products.filter((p) => p.active !== false && p.kind !== 'lot' && (!n || matchQuery(productText(p), n))).slice(0, 30);
   const variants = prod ? productVariants(prod.id) : [];
   const chosen = variants.filter((v) => parseNum(qty[v.id] ?? '')! > 0);
   return (
