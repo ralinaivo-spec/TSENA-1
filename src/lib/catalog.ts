@@ -247,8 +247,15 @@ export async function receiveIntoStock(entries: { variantId: string; qty: number
 
 /** Trouve ou crée une catégorie par son nom (et sa catégorie parente). */
 export async function ensureCategory(name: string, parentId?: string): Promise<string> {
-  const clean = name.trim();
-  const found = all<Category>('categories').find((c) => c.name.toLowerCase() === clean.toLowerCase() && (c.parentId || undefined) === (parentId || undefined));
+  const clean = name.trim().replace(/\s+/g, ' ');
+  const key = (x: string) => normText(x).replace(/\s+/g, ' ').trim();
+  const sameName = all<Category>('categories').filter((c) => key(c.name) === key(clean));
+  // Parent donné : la catégorie sous ce parent. Sans parent (fichier qui ne donne que le nom, ex. « Boxer garçon ») :
+  // la catégorie existante de ce nom, même rangée sous une autre (Enfant › Boxer garçon), plutôt qu'en créer une
+  // deuxième au premier niveau, où les articles se retrouveraient dans une autre catégorie.
+  const found = parentId
+    ? sameName.find((c) => c.parentId === parentId)
+    : sameName.find((c) => !c.parentId && !c.removed) ?? (sameName.filter((c) => !c.removed).length === 1 ? sameName.find((c) => !c.removed) : undefined) ?? sameName.find((c) => !c.parentId);
   if (found) { if (found.removed) await save('categories', { id: found.id, removed: false }); return found.id; }
   // Identifiant tiré du nom : la même catégorie créée sur deux appareils hors ligne ne fait qu'une.
   const slug = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
