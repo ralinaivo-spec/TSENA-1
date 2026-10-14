@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, type Category } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -18,7 +18,7 @@ import { Help, DiscountField, Badge, Button, Confirm, Empty, FilterSelect, IconB
 import { Icon } from '../ui/icons';
 import { PayLines, payLinesSum, splitInTwo, type PayLine } from '../ui/payments';
 import { ListDates, defaultPeriod, inPeriod, type ListOrder, type Period } from '../ui/period';
-import { Thumb } from './Products';
+import { Thumb, categoryOptions } from './Products';
 import { siblingsOf } from '../lib/attrs';
 import { deliveryNoteDoc, parcelLabelDoc, ticketDoc } from '../lib/print';
 import { PrintButton, type DocChoice } from '../ui/print';
@@ -469,10 +469,20 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
 }
 
 /** Choisir des articles : recherche, puis quantité par taille/couleur avec le stock disponible. */
+/** L'article est dans la catégorie choisie ou dans une de ses sous-catégories. */
+function inCategory(p: Product, cat: string) {
+  if (!cat) return true;
+  let c = p.categoryId ? get<Category>('categories', p.categoryId) : undefined;
+  while (c) { if (c.id === cat) return true; c = c.parentId ? get<Category>('categories', c.parentId) : undefined; }
+  return false;
+}
+
 export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoice, initialProduct, unknownQty }: { excludeOrderId?: string; onClose: () => void; onAdd: (a: { variantId: string; qty: number; isChoice?: boolean }[]) => void; onAddLines?: (lines: OrderLine[]) => void; noChoice?: boolean; initialProduct?: Product; unknownQty?: boolean }) {
-  const { products } = useCatalog();
+  const { products, categories } = useCatalog();
   const reserved = useMemo(() => reservedIndex(excludeOrderId), [excludeOrderId]);
   const [q, setQ] = useState('');
+  const [cat, setCat] = useKeep('picker.cat', '');
+  const [limit, setLimit] = useState(60);
   const [prod, setProd] = useState<Product | null>(initialProduct ?? null);
   const [qty, setQty] = useState<Record<string, string>>({});
   const [choice, setChoice] = useState<Record<string, string>>({});
@@ -480,8 +490,14 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
   const scope = useMyScope();
   const n = q.trim().toLowerCase();
   const [allMatches, setAllMatches] = useState(false);
-  const searched = searchItems(products.filter((p) => p.active !== false && scope.product(p.id) && (isLot(p) ? !!onAddLines && lotOpen(p) : true)), productText, n, allMatches);
-  const found = searched.list.sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
+  const usable = products.filter((p) => p.active !== false && scope.product(p.id) && (isLot(p) ? !!onAddLines && lotOpen(p) : true));
+  // Catégories proposées dans le filtre : seulement celles (et leurs parents) qui ont des articles à vendre ici.
+  const catIds = new Set(usable.flatMap((p) => { const ids: string[] = []; let c = p.categoryId ? get<Category>('categories', p.categoryId) : undefined; while (c) { ids.push(c.id); c = c.parentId ? get<Category>('categories', c.parentId) : undefined; } return ids; }));
+  const catOpts = categoryOptions(categories.filter((c) => catIds.has(c.id)), 'Toutes les catégories');
+  const catF = catIds.has(cat) ? cat : '';
+  const searched = searchItems(usable.filter((p) => inCategory(p, catF)), productText, n, allMatches);
+  const sorted = searched.list.sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true }));
+  const found = sorted.slice(0, limit);
   // Articles voisins proposés en choix : même modèle seulement (autres tailles / couleurs), et qui répondent à la recherche.
   const family = prod?.attrs ? [prod, ...siblingsOf(prod).filter((x) => !n || (matchExact(productText(prod), n) ? matchExact(productText(x), n) : matchQuery(productText(x), n)))] : prod ? [prod] : [];
   const variants = family.flatMap((p) => productVariants(p.id).filter((v) => v.active !== false));
@@ -498,7 +514,10 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
       {!prod ? (
         <div className="stack">
           <ScopeBar scope={scope} />
-          <div className="field"><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
+          <div className="row">
+            <div className="field" style={{ flex: '2 1 220px' }}><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); setLimit(60); }} /></div>
+            {catOpts.length > 2 && <div className="field" style={{ flex: '1 1 180px' }}><FilterSelect label="Catégorie" value={catF} onChange={(v) => { setCat(v); setLimit(60); }} options={catOpts} /></div>}
+          </div>
           <MoreMatches n={searched.others} onShow={() => setAllMatches(true)} />
           <ul className="list card" style={{ padding: 0 }}>
             {found.map((p) => {
@@ -511,7 +530,8 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
                 </button></li>
               );
             })}
-            {!found.length && <Empty icon="search" title="Aucun article trouvé" />}
+            {sorted.length > found.length && <li style={{ padding: '10px 14px' }}><Button variant="ghost" className="btn-sm" onClick={() => setLimit(limit + 100)}>Afficher plus ({sorted.length - found.length})</Button></li>}
+            {!found.length && <Empty icon="search" title={catF ? 'Aucun article trouvé dans cette catégorie' : 'Aucun article trouvé'} />}
           </ul>
         </div>
       ) : (
