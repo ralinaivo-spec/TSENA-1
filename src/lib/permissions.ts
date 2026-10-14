@@ -14,6 +14,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { group: 'Ventes', key: 'orders.prepare', label: 'Préparer les commandes' },
   { group: 'Ventes', key: 'pos.sell', label: 'Vendre en boutique (caisse)' },
   { group: 'Ventes', key: 'returns.manage', label: 'Enregistrer retours et échanges' },
+  { group: 'Livraison', key: 'deliveries.menu', label: 'Ouvrir le menu « Livraisons et livreurs » (admin et gérant)' },
   { group: 'Livraison', key: 'orders.dispatch', label: 'Assigner les commandes aux livreurs' },
   { group: 'Livraison', key: 'deliveries.manage', label: 'Enregistrer le retour des livreurs (livré, refusé, choix rendus, argent rapporté)' },
   { group: 'Livraison', key: 'couriers.view', label: 'Consulter le compte des livreurs (frais gagnés, argent à rendre)' },

@@ -1220,3 +1220,7 @@ a.bell { text-decoration: none; }
 .list-dates > .field { flex: 0 1 200px; }
 .list-dates .period-picker { flex: 1 1 280px; }
 .list-dates-row { align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Listes d'articles regroupées par catégorie (Vente sur place, ajout d'article à une commande). */
+.list-group-head { position: sticky; top: 0; z-index: 1; padding: 8px 20px; font-size: 13px; font-weight: 700; background: var(--brand-soft, var(--surface-2, #f1edf9)); border-top: 1px solid var(--line); }
+.pos-results .list-group-head { padding: 6px 12px; }

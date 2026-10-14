@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr} from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, categoryPath, groupByCategory } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -456,7 +456,9 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
   const n = q.trim().toLowerCase();
   const [allMatches, setAllMatches] = useState(false);
   const searched = searchItems(products.filter((p) => p.active !== false && scope.product(p.id) && (isLot(p) ? !!onAddLines && lotOpen(p) : true)), productText, n, allMatches);
-  const found = searched.list.sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
+  // Regroupés par catégorie pour s'y retrouver d'un coup d'œil (catégories par ordre alphabétique, codes dans chaque catégorie).
+  const found = searched.list.sort((a, b) => categoryPath(a.categoryId).localeCompare(categoryPath(b.categoryId), 'fr', { numeric: true }) || a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 150);
+  const groups = groupByCategory(found, (p) => p.categoryId);
   // Articles voisins proposés en choix : même modèle seulement (autres tailles / couleurs), et qui répondent à la recherche.
   const family = prod?.attrs ? [prod, ...siblingsOf(prod).filter((x) => !n || (matchExact(productText(prod), n) ? matchExact(productText(x), n) : matchQuery(productText(x), n)))] : prod ? [prod] : [];
   const variants = family.flatMap((p) => productVariants(p.id).filter((v) => v.active !== false));
@@ -476,7 +478,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
           <div className="field"><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
           <MoreMatches n={searched.others} onShow={() => setAllMatches(true)} />
           <ul className="list card" style={{ padding: 0 }}>
-            {found.map((p) => {
+            {groups.map((g) => [<li key={'h' + g.key} className="list-group-head">{g.label} <span className="muted">({g.items.length})</span></li>, ...g.items.map((p) => {
               const avail = isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
               return (
                 <li key={p.id}><button className="list-item list-link btn-reset" onClick={() => setProd(p)}>
@@ -485,7 +487,8 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
                   <span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span>
                 </button></li>
               );
-            })}
+            })])}
+            {searched.list.length > found.length && <li className="small muted" style={{ padding: '8px 14px' }}>+ {searched.list.length - found.length} autre(s) : précisez la recherche.</li>}
             {!found.length && <Empty icon="search" title="Aucun article trouvé" />}
           </ul>
         </div>

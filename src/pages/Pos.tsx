@@ -4,7 +4,7 @@ import { useCan, useMe, type User } from '../lib/auth';
 import { rootOf, useMyScope } from '../lib/scope';
 import { ScopeBar } from '../ui/scope';
 import { get, getMeta, newId, useTable } from '../lib/db';
-import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, searchItems, productText, attrSummary, findProductByCode, findVariantBySku, type Category, parseAr } from '../lib/catalog';
+import { fmtAr, fmtNum, parseNum, productVariants, todayYmd, useCatalog, variantLabel, type Product, type Variant, matchQuery, searchItems, productText, attrSummary, findProductByCode, findVariantBySku, type Category, parseAr, categoryPath, groupByCategory } from '../lib/catalog';
 import {
   availableOf, createWalkInSale, internalPrice, isOutsideHours, isWalkIn, linePrice, orderLabel, PAY_METHODS, paidTotal, keptTotal, priceOrder, removeLine, reservedIndex, useWholesale,
   type Order, type OrderLine, type PayMethod, discountAr, stockShortages,
@@ -68,8 +68,11 @@ export function PosPage() {
   const searched = useMemo(() => searchItems(products.filter((p) => p.active !== false && scope.product(p.id) && (!isLot(p) || lotOpen(p)) && (!cat || rootOf(p.categoryId) === cat)), productText, n, allMatches), [products, n, scope.on, cat, allMatches]);
   const found = useMemo(() => searched.list
     .map((p) => ({ p, avail: isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0) }))
-    .sort((a, b) => Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
+    // Par catégorie, puis les articles en stock d'abord dans chaque catégorie.
+    .sort((a, b) => categoryPath(a.p.categoryId).localeCompare(categoryPath(b.p.categoryId), 'fr', { numeric: true }) || Number(b.avail > 0) - Number(a.avail > 0) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }))
     .slice(0, 60), [searched, reserved]);
+  const SHOWN = 20;
+  const foundGroups = groupByCategory(found.slice(0, SHOWN), (x) => x.p.categoryId);
   const pages = cats.filter((c) => !c.parentId && products.some((p) => p.active !== false && rootOf(p.categoryId) === c.id)).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   /** Lecteur de code-barres ou saisie du code + Entrée : l'article est ajouté directement au panier. */
   function onEnter() {
@@ -122,15 +125,15 @@ export function PosPage() {
           {n && pages.length > 1 && <Choice label="Page" hideLabel value={cat} onChange={setCat} max={5} options={[{ value: '', label: pages.length + 1 > 5 ? 'Toutes les pages' : 'Toutes' }, ...pages.map((c) => ({ value: c.id, label: c.name }))]} />}
           {n && (found.length === 0 ? <p className="small muted">Aucun article trouvé.</p> : (
             <ul className="list pos-results">
-              {found.slice(0, 8).map(({ p, avail }) => (
+              {foundGroups.map((g) => [<li key={'h' + g.key} className="list-group-head">{g.label} <span className="muted">({g.items.length})</span></li>, ...g.items.map(({ p, avail }) => (
                 <li key={p.id}><button type="button" className={`list-item list-link btn-reset ${avail <= 0 ? 'is-out' : ''}`} onClick={() => { pick(p); setQ(''); }}>
                   <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} size={44} />
                   <div className="list-item-main"><span className="list-item-title">{p.name} {isLot(p) && <Badge tone="brand">Lot</Badge>}</span><p className="small muted">{p.attrs ? attrSummary(p, ', ') : p.code}</p></div>
                   <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} {isLot(p) ? 'lot(s)' : 'en stock'}</span></div>
                 </button></li>
-              ))}
+              ))])}
               {searched.others > 0 && <li style={{ padding: '4px 14px' }}><MoreMatches n={searched.others} onShow={() => setAllMatches(true)} /></li>}
-              {found.length > 8 && <li className="small muted" style={{ padding: '8px 14px' }}>+ {found.length - 8} autre(s) : précisez la recherche ou parcourez le catalogue.</li>}
+              {found.length > SHOWN && <li className="small muted" style={{ padding: '8px 14px' }}>+ {found.length - SHOWN} autre(s) : précisez la recherche ou parcourez le catalogue.</li>}
             </ul>
           ))}
           {!n && <p className="small muted" style={{ margin: 0 }}>Tapez un nom ou un code (ou scannez) : les articles correspondants s’affichent ici. Touchez-en un pour l’ajouter au panier.</p>}

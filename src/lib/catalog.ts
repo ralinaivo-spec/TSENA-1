@@ -221,6 +221,20 @@ export function categoryPath(id?: string): string {
   return c.parentId ? `${categoryPath(c.parentId)} › ${c.name}` : c.name;
 }
 
+/**
+ * Regroupe une liste par catégorie (chemin complet, ex. « Enfant › Boxer garçon »), catégories dans l'ordre alphabétique,
+ * « Sans catégorie » à la fin. L'ordre des éléments dans chaque catégorie est gardé.
+ */
+export function groupByCategory<T>(items: T[], catOf: (x: T) => string | undefined): { key: string; label: string; items: T[] }[] {
+  const groups = new Map<string, { key: string; label: string; items: T[] }>();
+  for (const x of items) {
+    const id = catOf(x) || '';
+    if (!groups.has(id)) groups.set(id, { key: id || '_none', label: categoryPath(id || undefined), items: [] });
+    groups.get(id)!.items.push(x);
+  }
+  return [...groups.values()].sort((a, b) => (a.key === '_none' ? 1 : b.key === '_none' ? -1 : a.label.localeCompare(b.label, 'fr', { numeric: true })));
+}
+
 // ---------- Écritures ----------
 export async function addMoves(moves: Omit<StockMove, 'id' | 'createdAt' | 'updatedAt' | 'at'> & { at?: string } | (Omit<StockMove, 'id' | 'createdAt' | 'updatedAt' | 'at'> & { at?: string })[]) {
   const u = currentUser();

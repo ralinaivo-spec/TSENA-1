@@ -330,7 +330,7 @@ function OrdersState() {
     { label: 'Enregistrées', value: String(n(['new', 'confirmed'])), href: '#/commandes/enregistrees' },
     { label: 'En attente de livraison', value: String(n(['ready'])), href: '#/commandes/attente' },
     { label: 'En livraison', value: String(n(['out'])), href: '#/commandes/livraison' },
-    ...(can('deliveries.manage') ? [{ label: 'À rendre par les livreurs', value: fmtAr(due), href: '#/livraisons/retour' }] : []),
+    ...(can('deliveries.menu') ? [{ label: 'À rendre par les livreurs', value: fmtAr(due), href: '#/livraisons/retour' }] : []),
   ];
   return (
     <>
