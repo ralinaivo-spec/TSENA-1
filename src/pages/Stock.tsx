@@ -52,7 +52,6 @@ function StockState() {
   const [q, setQ] = useKeep('stock.q', '');
   const [cat, setCat] = useKeep('stock.cat', '');
   const [f, setF] = useKeep<'' | 'in' | 'out' | 'neg'>('stock.f', 'in');
-  const [sort, setSort] = useKeep<'stock' | 'value' | 'new' | 'old'>('stock.sort', 'new');
   const [limit, setLimit] = useKeep('stock.limit', 150);
   const scope = useMyScope();
   const [allMatches, setAllMatches] = useKeep('stock.all', false);
@@ -70,8 +69,8 @@ function StockState() {
     return sr.list
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
       .map((r) => ({ ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0) }))
-      .sort((a, b) => (sort === 'stock' ? b.stock - a.stock : sort === 'value' ? b.value - a.value : sort === 'new' ? b.p!.createdAt.localeCompare(a.p!.createdAt) : a.p!.createdAt.localeCompare(b.p!.createdAt)) || a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true }));
-  }, [variants, q, cat, f, sort, scope.on, allMatches]);
+      .sort((a, b) => b.p!.createdAt.localeCompare(a.p!.createdAt) || a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true })); // plus récents d'abord
+  }, [variants, q, cat, f, scope.on, allMatches]);
 
   const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
   const totals = allRows.reduce((t, v) => {
@@ -107,8 +106,6 @@ function StockState() {
             <FilterSelect label="Catégorie" value={cat} onChange={setCat} options={categoryOptions(categories, 'Toutes les catégories')} />
           </div>
         </div>
-        <ListDates order={sort} onOrder={setSort} what="Date d’ajout de l’article"
-          extra={[{ value: 'stock', label: 'Plus grand stock d’abord' }, ...(showCost ? [{ value: 'value' as const, label: 'Plus grande valeur d’abord' }] : [])]} />
         {(q || cat) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); }}>Effacer les filtres</Button></div>}
         <div className="row-between">
           <div className="segmented" role="group">

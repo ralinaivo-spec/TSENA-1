@@ -10,7 +10,6 @@ import {
   type Category, type Product, type StockMove, type Variant, searchItems } from '../lib/catalog';
 import { blobToThumb } from '../lib/xlsx';
 import { photoBytes } from '../lib/images';
-import { ListDates, type ListOrder } from '../ui/period';
 import { Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDateTime, navigate, toast, useRoute, MoreMatches, useKeep } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { rootOf } from '../lib/scope';
@@ -72,7 +71,6 @@ function ProductList() {
   const [allMatches, setAllMatches] = useKeep('prod.all', false);
   const [others, setOthers] = useState(0);
   const [dups, setDups] = useState(false);
-  const [order, setOrder] = useKeep<ListOrder>('prod.order', 'new');
 
   const list = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -96,8 +94,8 @@ function ProductList() {
         if (sf === 'incoming') return incoming > 0;
         return true;
       })
-      .sort((a, b) => (order === 'new' ? b.p.createdAt.localeCompare(a.p.createdAt) : a.p.createdAt.localeCompare(b.p.createdAt)) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true }));
-  }, [products, q, cat, sf, showArchived, scope.on, allMatches, order]);
+      .sort((a, b) => b.p.createdAt.localeCompare(a.p.createdAt) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true })); // plus récents d'abord
+  }, [products, q, cat, sf, showArchived, scope.on, allMatches]);
 
   const dupCount = useMemo(() => findDuplicates().length, [products]);
   return (
@@ -123,7 +121,6 @@ function ProductList() {
             </select>
           </div>
         </div>
-        <ListDates order={order} onOrder={setOrder} what="Date d’ajout" />
         {(q || cat || sf) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setSf(''); setLimit(60); }}>Effacer les filtres</Button></div>}
         <MoreMatches n={others} onShow={() => setAllMatches(true)} />
         <div className="row-between">
