@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, categoryPath, groupByCategory } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -40,6 +40,29 @@ const TABS: { key: string; label: string; statuses: OrderStatus[]; match?: (o: O
   { key: 'annulees', label: 'Annulées', statuses: ['cancelled'] },
 ];
 const inTab = (t: (typeof TABS)[number], o: Order) => t.statuses.includes(o.status) && (!t.match || t.match(o));
+/**
+ * Regroupe des commandes ou ventes par page (catégorie principale des articles : Boxer homme, Pyjamas homme…).
+ * Une commande dont les articles sont de plusieurs pages va dans « Plusieurs pages » ; sans article, dans « Sans article ».
+ * L'ordre des commandes dans chaque groupe est gardé ; les pages sont par ordre alphabétique.
+ */
+export function groupOrdersByPage(list: Order[]): { key: string; label: string; items: Order[] }[] {
+  const groups = new Map<string, { key: string; label: string; items: Order[] }>();
+  for (const o of list) {
+    const sold = o.lines.filter((l) => !l.isChoice);
+    const ids = [...new Set((sold.length ? sold : o.lines).map((l) => variantPage(l.variantId)))];
+    const key = ids.length > 1 ? '~multi' : ids.length ? ids[0] || '~none' : '~empty';
+    const label = key === '~multi' ? 'Plusieurs pages' : key === '~empty' ? 'Sans article' : key === '~none' ? 'Sans catégorie' : get<{ name: string }>('categories', key)?.name ?? 'Sans catégorie';
+    if (!groups.has(key)) groups.set(key, { key, label, items: [] });
+    groups.get(key)!.items.push(o);
+  }
+  return [...groups.values()].sort((a, b) => Number(a.key.startsWith('~')) - Number(b.key.startsWith('~')) || a.label.localeCompare(b.label, 'fr', { numeric: true }));
+}
+
+/** En-tête d'un groupe de commandes : nom de la page, nombre et montant. */
+export function OrderGroupHead({ label, count, total }: { label: string; count: number; total: number }) {
+  return <li className="list-group-head row-between"><span>{label} <span className="muted">({count})</span></span><span className="num">{fmtAr(total)}</span></li>;
+}
+
 const hasPage = (o: Order, pageId: string) => o.lines.some((l) => variantPage(l.variantId) === pageId) || (o.lines.length === 0 && pageId === '');
 
 export function OrdersPage() {
@@ -133,12 +156,14 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       )}
       <div className="card card-flush">
         {list.length === 0 ? <Empty icon="list" title={q || courierF || pageF ? 'Aucune commande trouvée dans cet onglet' : regler ? 'Aucune commande à régler' : 'Aucune commande ici'}>{tab.key === 'enregistrees' && can('orders.create') && !q && <Button icon="plus" onClick={() => setCreating(true)}>Saisir une commande</Button>}</Empty> : (
-          <ul className="list">{list.map((o) => regler ? (
+          <ul className="list">{groupOrdersByPage(list).map((g) => [
+            <OrderGroupHead key={'h' + g.key} label={g.label} count={g.items.length} total={g.items.reduce((s, o) => s + (o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o)), 0)} />,
+            ...g.items.map((o) => regler ? (
             <li key={o.id} className="row-check">
               <input type="checkbox" aria-label={`Sélectionner ${o.number}`} checked={sel.includes(o.id)} onChange={(e) => setSel(e.target.checked ? [...sel, o.id] : sel.filter((x) => x !== o.id))} />
               <ul className="list" style={{ flex: 1, minWidth: 0 }}><OrderRow o={o} /></ul>
             </li>
-          ) : <OrderRow key={o.id} o={o} />)}</ul>
+          ) : <OrderRow key={o.id} o={o} />)])}</ul>
         )}
       </div>
       </>}
@@ -456,9 +481,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
   const n = q.trim().toLowerCase();
   const [allMatches, setAllMatches] = useState(false);
   const searched = searchItems(products.filter((p) => p.active !== false && scope.product(p.id) && (isLot(p) ? !!onAddLines && lotOpen(p) : true)), productText, n, allMatches);
-  // Regroupés par catégorie pour s'y retrouver d'un coup d'œil (catégories par ordre alphabétique, codes dans chaque catégorie).
-  const found = searched.list.sort((a, b) => categoryPath(a.categoryId).localeCompare(categoryPath(b.categoryId), 'fr', { numeric: true }) || a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 150);
-  const groups = groupByCategory(found, (p) => p.categoryId);
+  const found = searched.list.sort((a, b) => a.code.localeCompare(b.code, 'fr', { numeric: true })).slice(0, 40);
   // Articles voisins proposés en choix : même modèle seulement (autres tailles / couleurs), et qui répondent à la recherche.
   const family = prod?.attrs ? [prod, ...siblingsOf(prod).filter((x) => !n || (matchExact(productText(prod), n) ? matchExact(productText(x), n) : matchQuery(productText(x), n)))] : prod ? [prod] : [];
   const variants = family.flatMap((p) => productVariants(p.id).filter((v) => v.active !== false));
@@ -478,7 +501,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
           <div className="field"><input autoFocus aria-label="Rechercher un article" placeholder="Rechercher un code ou un nom" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
           <MoreMatches n={searched.others} onShow={() => setAllMatches(true)} />
           <ul className="list card" style={{ padding: 0 }}>
-            {groups.map((g) => [<li key={'h' + g.key} className="list-group-head">{g.label} <span className="muted">({g.items.length})</span></li>, ...g.items.map((p) => {
+            {found.map((p) => {
               const avail = isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
               return (
                 <li key={p.id}><button className="list-item list-link btn-reset" onClick={() => setProd(p)}>
@@ -487,8 +510,7 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
                   <span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span>
                 </button></li>
               );
-            })])}
-            {searched.list.length > found.length && <li className="small muted" style={{ padding: '8px 14px' }}>+ {searched.list.length - found.length} autre(s) : précisez la recherche.</li>}
+            })}
             {!found.length && <Empty icon="search" title="Aucun article trouvé" />}
           </ul>
         </div>
