@@ -151,6 +151,15 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
         )}
         {blockedRows.length > 0 && <div className="notice notice-danger"><Icon name="alert" /><span>{blockedRows.length} colis avec un <strong>choix à préciser</strong> : touchez « Préciser le choix » pour indiquer ce que le client a gardé.</span></div>}
         {rows.length === 0 && <p className="small muted">Aucun colis à régler.</p>}
+        {rows.some((r) => !r.blocked) && (
+          <div className="row-between check-bar">
+            <span className="small"><strong>{on.length}</strong> / {rows.filter((r) => !r.blocked).length} colis cochés{on.length ? <> · le livreur doit verser <strong className="num">{fmtAr(inHand)}</strong></> : ' : cochez les colis à régler'}</span>
+            <div className="row" style={{ gap: 8 }}>
+              <Button variant="ghost" className="btn-sm" icon="check" disabled={on.length === rows.filter((r) => !r.blocked).length} onClick={() => setOff({})}>Tout cocher</Button>
+              <Button variant="ghost" className="btn-sm" icon="x" disabled={!on.length} onClick={() => setOff(Object.fromEntries(rows.map((r) => [r.o.id, true])))}>Tout décocher</Button>
+            </div>
+          </div>
+        )}
       </div>
       {rows.map((r) => (
         <div key={r.o.id} className={`card stack-s parcel ${r.on ? 'is-checked' : 'is-off'}`}>
