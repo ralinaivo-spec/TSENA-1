@@ -481,14 +481,17 @@ export async function reassignCourier(o: Order, newCourierId: string, reason?: s
   await audit('Changement de livreur', `${o.number} : ${from} → ${to}${reason ? ` — ${reason}` : ''}`, 'orders', o.id);
 }
 
-export async function cancelOrder(o: Order, reason: string) {
+export async function cancelOrder(o: Order, reason: string, atGiven?: string) {
+  // Colis déjà parti : l'annulation garde la date réelle (le livreur l'a rapporté ce jour-là), pas la date de saisie.
+  const at = atGiven ?? bizNow();
+  assertOpenAt(at, 'Annulation');
   // Stock remis exactement : on annule le solde de tous les mouvements déjà faits pour cette commande
   // (sortie au livreur, retours partiels, retrait en boutique…), pas seulement le cas « en livraison ».
   const net = new Map<string, number>();
   for (const m of all<StockMove>('stockMoves')) if (m.refType === 'order' && m.refId === o.id) net.set(m.variantId, (net.get(m.variantId) ?? 0) + m.qty);
   const back = [...net.entries()].filter(([, q]) => q);
-  if (back.length) await addMoves(back.map(([variantId, q]) => ({ variantId, qty: -q, type: (o.status === 'out' ? 'delivery_return' : 'return') as StockMove['type'], refType: 'order', refId: o.id, reason: `${o.number} annulée — retour en boutique`, at: bizNow() })));
-  await setStatus(o, 'cancelled', { notes: [o.notes, `Annulée : ${reason}`].filter(Boolean).join('\n') });
+  if (back.length) await addMoves(back.map(([variantId, q]) => ({ variantId, qty: -q, type: (o.status === 'out' ? 'delivery_return' : 'return') as StockMove['type'], refType: 'order', refId: o.id, reason: `${o.number} annulée — retour en boutique`, at })));
+  await setStatus(o, 'cancelled', { notes: [o.notes, `Annulée : ${reason}`].filter(Boolean).join('\n') }, at);
 }
 
 /** Correction d'un paiement (erreur de saisie) par l'admin : tout est gardé dans l'historique. */

@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-15', items: [
+    'Commandes : nouvel onglet « Annulées / refusées » (commandes annulées, colis refusés, ventes sur place annulées), filtré par la date de l’annulation ou du refus ; « Terminées » = livrées. Annuler un colis déjà parti : date réelle (jour de départ par défaut) ; le gérant peut corriger la date d’une annulation déjà saisie.',
     'Retour livreur validé plus tard : le retour (livré, refusé, choix), l’argent, le stock et le compte du livreur gardent la date réelle (par défaut le jour de départ des colis), pas la date de saisie. Le gérant peut corriger la date d’un retour déjà saisi (« Corriger la date du retour » dans la commande, ou « Changer la date » d’un versement).',
     'Stock : colonnes « Réservé » et « Disponible », et dans le détail la liste des commandes en cours qui réservent l’article. Ajouter un article : « 2 dispo · 8 en stock · 6 réservé(s) ».',
     'Le vendeur et le responsable remettent les commandes au livreur depuis « Commandes clients » ; le menu « Livraisons et livreurs » est réservé à l’admin et au gérant. Responsable : dans « Commandes », les pages qu’il tient.',

@@ -319,6 +319,20 @@ export const settlementOf = (o: Order) => all<CourierSettlement>('courierSettlem
  * tout le versement change de date (le compte du livreur reste d'un seul tenant) ; sinon, seulement ce colis.
  */
 export async function redateReturn(o: Order, ymd: string, reason: string) {
+  if (o.status === 'cancelled') {
+    // Commande annulée après le départ chez le livreur : date de l'annulation et retour en stock.
+    const old = o.statusDates?.cancelled;
+    if (!old) throw new Error('Date d’annulation inconnue.');
+    const oldDay = dayOf(old);
+    if (ymd === oldDay) return;
+    const at = returnAtImport(ymd, [o]);
+    assertOpenAt(old, 'Changement de date de l’annulation'); assertOpenAt(at, 'Changement de date de l’annulation');
+    const sm = all<BaseRecord & { refType?: string; refId?: string; type: string; at: string }>('stockMoves').filter((m) => m.refType === 'order' && m.refId === o.id && ['delivery_return', 'return'].includes(m.type) && dayOf(m.at) === oldDay);
+    if (sm.length) await save('stockMoves', sm.map((m) => ({ id: m.id, at })));
+    await save('orders', { id: o.id, statusDates: { ...(o.statusDates || {}), cancelled: at } });
+    await audit('Date d’annulation corrigée', `${o.number} : annulation du ${oldDay} → ${ymd} — ${reason}`, 'orders', o.id, 'high');
+    return;
+  }
   const s = settlementOf(o);
   if (s && o.returnedAt && dayOf(s.at) === dayOf(o.returnedAt)) return redateSettlement(s, ymd, reason);
   if (!o.returnedAt) throw new Error('Cette commande n’a pas encore de retour du livreur.');
@@ -508,7 +522,8 @@ export const FEE_STATE: Record<FeeState, { label: string; tone: 'neutral' | 'ok'
 };
 /** État noté sur la commande (anciennes commandes : retrouvé par la note du versement). */
 function rawFeeState(o: Order): FeeState {
-  if (!o.courierId || isPickupZone(o.zoneId) || !o.dispatchedAt) return 'none';
+  // Commande annulée : hors du compte du livreur, pas de frais à lui régler.
+  if (!o.courierId || isPickupZone(o.zoneId) || !o.dispatchedAt || o.status === 'cancelled') return 'none';
   if (!courierSplit(o).fee) return 'none';
   if (o.feeStatus) return o.feeStatus;
   if (!o.courierSettledAt) return 'pending';

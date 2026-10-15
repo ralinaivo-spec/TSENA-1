@@ -58,5 +58,25 @@ const r7 = await p.evaluate(() => window.__tsena.get('orders', 'C7'));
 ok(dayOf(r7.returnedAt) === D3 && dayOf(r7.statusDates.refused) === D3, `C7 : retour déplacé au ${D3}`);
 const bad = await p.evaluate(() => window.__tsena.all('audit').some((a) => a.action === 'Date de retour corrigée'));
 ok(bad, 'correction notée dans le journal');
+// 3. Colis parti il y a 3 jours, annulé aujourd'hui (« Client a annulé ») : annulation datée du jour de départ
+await p.evaluate(async (at) => { const t = window.__tsena; await t.save('orders', { id: 'C8', number: 'C-C8', kind: 'order', channel: 'facebook', phone: '0320561612', status: 'out', zoneId: 'z1', courierId: 'tina', deliveryFee: 4000, dispatchedAt: at, createdAt: at, lines: [{ id: 'C8l', variantId: 'va', qty: 1, unitPrice: 20000 }], payments: [], discount: 0, createdBy: 'user-superadmin', createdByName: 'Johary' }); await t.save('stockMoves', { variantId: 'va', qty: -1, type: 'dispatch', refType: 'order', refId: 'C8', at }); }, d3.toISOString());
+await p.goto('http://localhost:5173/#/commandes/C8'); await p.waitForTimeout(600);
+await p.getByRole('button', { name: 'Annuler / supprimer' }).click(); await p.waitForTimeout(300);
+ok(await p.getByRole('dialog').getByLabel(/Date réelle de l’annulation/).inputValue() === D3, 'annulation d’un colis parti : jour de départ proposé');
+await p.getByRole('dialog').getByRole('button', { name: 'Annuler la commande' }).click(); await p.waitForTimeout(1200);
+let c8 = await p.evaluate(() => window.__tsena.get('orders', 'C8'));
+ok(c8.status === 'cancelled' && dayOf(c8.statusDates.cancelled) === D3, `annulation datée du ${dayOf(c8.statusDates.cancelled)}`);
+let tx8 = N(await p.locator('main').innerText());
+ok(!tx8.includes('Pas encore réglés'), 'commande annulée : plus de « frais pas encore réglés » pour le livreur');
+// 4. Ancienne annulation saisie aujourd'hui : correction de la date
+await p.evaluate(async () => { const t = window.__tsena; const o = t.get('orders', 'C8'); await t.save('orders', { id: 'C8', statusDates: { ...o.statusDates, cancelled: new Date().toISOString() } }); });
+await p.reload(); await p.waitForTimeout(800);
+await p.getByRole('button', { name: 'Corriger la date de l’annulation' }).click(); await p.waitForTimeout(300);
+await p.getByRole('dialog').getByRole('button', { name: 'Changer la date' }).click(); await p.waitForTimeout(1200);
+c8 = await p.evaluate(() => window.__tsena.get('orders', 'C8'));
+ok(dayOf(c8.statusDates.cancelled) === D3, 'annulation déjà saisie : date corrigée au jour de départ');
+await p.goto('http://localhost:5173/#/commandes/annulees'); await p.waitForTimeout(600);
+let ta = N(await p.locator('main').innerText());
+ok(ta.includes('C-C8') || ta.includes('autre(s) commande(s) de cet onglet sur d’autres dates'), 'onglet Annulées / refusées : C-C8 trouvé ou signalé');
 console.log(fail ? `${fail} ÉCHEC(S)` : 'TOUT EST BON'); await b.close();
 process.exit(fail ? 1 : 0);

@@ -36,9 +36,13 @@ const TABS: { key: string; label: string; statuses: OrderStatus[]; match?: (o: O
   { key: 'attente', label: 'En attente de livraison', statuses: ['ready'] },
   { key: 'livraison', label: 'En livraison', statuses: ['out'] },
   { key: 'regler', label: 'À régler (livreur)', statuses: CLOSED, match: (o) => needsSettlement(o) },
-  { key: 'terminees', label: 'Terminées', statuses: CLOSED, match: (o) => !needsSettlement(o) },
-  { key: 'annulees', label: 'Annulées', statuses: ['cancelled'] },
+  { key: 'terminees', label: 'Terminées', statuses: ['delivered', 'partial'], match: (o) => !needsSettlement(o) },
+  // Annulées : commandes annulées, livraisons refusées / annulées par le client (une fois réglées avec le livreur)
+  // et ventes sur place annulées.
+  { key: 'annulees', label: 'Annulées / refusées', statuses: ['cancelled', 'refused'], match: (o) => o.status === 'cancelled' || !needsSettlement(o) },
 ];
+/** Date qui compte pour une commande terminée ou annulée : le jour où c'est arrivé, pas le jour de la commande. */
+const eventDate = (o: Order) => (o.status === 'cancelled' ? o.statusDates?.cancelled : ['delivered', 'partial', 'refused'].includes(o.status) ? o.returnedAt : undefined) || o.createdAt;
 const inTab = (t: (typeof TABS)[number], o: Order) => t.statuses.includes(o.status) && (!t.match || t.match(o));
 /**
  * Regroupe des commandes ou ventes par page (catégorie principale des articles : Boxer homme, Pyjamas homme…).
@@ -110,12 +114,15 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   // Filtres de l'onglet : livreur, page, recherche (et période pour les commandes terminées / annulées).
   // Recherche : priorité aux correspondances exactes (« PH6 » ne ramène pas « PH60 ») quand il y en a.
   const exactOnly = useMemo(() => !!q.trim() && orders.some((o) => !isWalkIn(o) && matchExact(orderText(o), q)), [orders, q]);
-  const base = (o: Order) => !isWalkIn(o) && scope.mine(o) && (!courierF || o.courierId === courierF) && (!pageF || hasPage(o, pageF)) && (!q.trim() || (exactOnly ? matchExact(orderText(o), q) : matchQuery(orderText(o), q)));
+  // Les ventes sur place ne sont pas des commandes, sauf annulées : elles apparaissent alors dans « Annulées / refusées ».
+  const base = (o: Order) => (!isWalkIn(o) || o.status === 'cancelled') && scope.mine(o) && (!courierF || o.courierId === courierF) && (!pageF || hasPage(o, pageF)) && (!q.trim() || (exactOnly ? matchExact(orderText(o), q) : matchQuery(orderText(o), q)));
   const list = useMemo(() => orders
     .filter((o) => base(o) && inTab(tab, o))
-    .filter((o) => (done && q.trim()) || inPeriod(o.createdAt, period))
-    .sort((a, b) => (order === 'new' ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt))),
+    .filter((o) => (done && q.trim()) || inPeriod(done ? eventDate(o) : o.createdAt, period))
+    .sort((a, b) => { const da = done ? eventDate(a) : a.createdAt, db = done ? eventDate(b) : b.createdAt; return order === 'new' ? db.localeCompare(da) : da.localeCompare(db); }),
   [orders, tab.key, q, period, scope.on, courierF, pageF, order]);
+  // Commandes de l'onglet cachées par la période (ex. annulée hier avec « Aujourd'hui ») : on le signale.
+  const hidden = period.key === 'all' ? 0 : orders.filter((o) => base(o) && inTab(tab, o)).length - list.length;
   // La recherche reste dans l'onglet ; on indique seulement où d'autres commandes correspondent.
   const elsewhere = q.trim() ? TABS.filter((t) => t.key !== tab.key).map((t) => ({ t, n: orders.filter((o) => base(o) && inTab(t, o)).length })).filter((x) => x.n) : [];
   const selected = list.filter((o) => sel.includes(o.id));
@@ -132,7 +139,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       <div className="tabs" role="tablist">
         {(() => { const n = prospects.filter((x) => x.status === 'open' && scope.mine({ createdBy: x.ownerId, createdByName: x.ownerName }) && bucketOf(x) !== 'later').length; return <button role="tab" aria-selected={tabKey === 'suivre'} onClick={() => switchTab('suivre')}>À suivre{n ? <span className="tab-count tab-count-hot">{n}</span> : null}</button>; })()}
         {TABS.map((t) => {
-          const n = orders.filter((o) => !isWalkIn(o) && scope.mine(o) && inTab(t, o)).length;
+          const n = orders.filter((o) => (!isWalkIn(o) || o.status === 'cancelled') && scope.mine(o) && inTab(t, o)).length;
           return <button key={t.key} role="tab" aria-selected={tabKey !== 'suivre' && tab.key === t.key} onClick={() => switchTab(t.key)}>{t.label}{!['terminees', 'annulees'].includes(t.key) && n ? <span className={`tab-count ${t.key === 'regler' ? 'tab-count-hot' : ''}`}>{n}</span> : null}</button>;
         })}
       </div>
@@ -143,7 +150,8 @@ function OrderList({ tabKey }: { tabKey?: string }) {
           <div className="field" style={{ flex: '1 1 160px' }}><FilterSelect label="Livreur" value={courierF} onChange={(v) => { setCourierF(v); setSel([]); }} options={[{ value: '', label: 'Tous les livreurs' }, ...couriers.filter((c) => c.active !== false).sort((a, b) => a.name.localeCompare(b.name, 'fr')).map((c) => ({ value: c.id, label: c.name }))]} /></div>
           {pages.length > 1 && <div className="field" style={{ flex: '1 1 160px' }}><FilterSelect label="Page" value={pageF} onChange={setPageF} options={[{ value: '', label: 'Toutes les pages' }, ...pages.map((p) => ({ value: p.id, label: p.name }))]} /></div>}
         </div>
-        <ListDates period={period} onPeriod={setPeriod} order={order} onOrder={setOrder} what="Date de la commande" />
+        <ListDates period={period} onPeriod={setPeriod} order={order} onOrder={setOrder} what={tab.key === 'annulees' ? 'Date d’annulation ou de refus' : tab.key === 'terminees' ? 'Date de livraison' : 'Date de la commande'} />
+        {hidden > 0 && <p className="small" style={{ margin: 0 }}>{hidden} autre(s) commande(s) de cet onglet sur d’autres dates. <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setPeriod(defaultPeriod('all'))}>Voir toutes les dates</button></p>}
         {(q || courierF || pageF) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCourierF(''); setPageF(''); setSel([]); }}>Effacer les filtres</Button></div>}
         {elsewhere.length > 0 && <p className="small muted" style={{ margin: 0 }}>Aussi trouvé dans : {elsewhere.map(({ t, n }, i) => <span key={t.key}>{i ? ', ' : ''}<button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => switchTab(t.key)}>{t.label} ({n})</button></span>)}</p>}
       </div>
@@ -189,6 +197,7 @@ export function OrderRow({ o }: { o: Order }) {
           <div className="row" style={{ gap: 8 }}>
             <span className="list-item-title">{orderLabel(o)}</span>
             <OrderStatusBadge o={o} />
+            {isWalkIn(o) && <Badge tone="brand">Vente sur place</Badge>}
             {o.outsideHours && ['new', 'confirmed'].includes(o.status) && <Badge>Hors heures</Badge>}
             {isPickupZone(o.zoneId) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status) && <Badge>Sur boutique</Badge>}
           </div>
@@ -567,16 +576,17 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
 // ---------- Correction : date réelle d'un retour livreur saisi en retard ----------
 /** Change la date d'un retour (ou de tout le versement du livreur qui le contient) : gérant seulement. */
 export function RedateModal({ settlement, order, onClose }: { settlement?: CourierSettlement; order?: Order; onClose: () => void }) {
-  const s = settlement ?? (order ? settlementOf(order) : undefined);
+  const cancelled = order?.status === 'cancelled';
+  const s = settlement ?? (order && !cancelled ? settlementOf(order) : undefined);
   const viaSettlement = !!s && (!order || (!!order.returnedAt && dayOfIso(s.at) === dayOfIso(order.returnedAt)));
   const list = viaSettlement ? s!.orderIds.map((id) => get<Order>('orders', id)).filter((x): x is Order => !!x) : order ? [order] : [];
-  const from = viaSettlement ? s!.at : order?.returnedAt ?? '';
+  const from = viaSettlement ? s!.at : cancelled ? order?.statusDates?.cancelled ?? '' : order?.returnedAt ?? '';
   const [day, setDay] = useState(() => defaultReturnDay(list.length ? list : [{ dispatchedAt: from }]));
   const [reason, setReason] = useState('Retour validé en retard : date réelle du retour du livreur');
   let err = '';
   try { returnAt(day, list); } catch (e: any) { err = e.message; }
   return (
-    <Confirm title="Changer la date du retour" confirmLabel="Changer la date" onClose={onClose}
+    <Confirm title={cancelled ? 'Changer la date de l’annulation' : 'Changer la date du retour'} confirmLabel="Changer la date" onClose={onClose}
       onConfirm={async () => {
         if (err) throw new Error(err);
         if (!reason.trim()) throw new Error('Indiquez la raison.');
@@ -584,8 +594,8 @@ export function RedateModal({ settlement, order, onClose }: { settlement?: Couri
         toast(`Date corrigée : ${new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR')}`);
       }}
       message={<div className="stack-s">
-        <p>Enregistré le <strong>{fmtDateTime(from)}</strong>. {viaSettlement ? <>Tout le versement passe à la nouvelle date : l’argent reçu du livreur (caisse), son compte et le retour de {list.length > 1 ? `ces ${list.length} colis` : 'ce colis'} ({list.map((x) => x.number).join(', ') || 'aucun colis'}) : refus, choix, articles revenus en stock.</> : <>Le retour de {order?.number} (refus, choix, argent du livreur, articles revenus en stock) passe à la nouvelle date.</>}</p>
-        <TextField label="Date réelle du retour" type="date" required value={day} onChange={setDay} error={err || null} />
+        <p>Enregistré le <strong>{fmtDateTime(from)}</strong>. {viaSettlement ? <>Tout le versement passe à la nouvelle date : l’argent reçu du livreur (caisse), son compte et le retour de {list.length > 1 ? `ces ${list.length} colis` : 'ce colis'} ({list.map((x) => x.number).join(', ') || 'aucun colis'}) : refus, choix, articles revenus en stock.</> : cancelled ? <>L’annulation de {order?.number} (déduite des ventes de ce jour-là) et le retour des articles en stock passent à la nouvelle date.</> : <>Le retour de {order?.number} (refus, choix, argent du livreur, articles revenus en stock) passe à la nouvelle date.</>}</p>
+        <TextField label={cancelled ? 'Date réelle de l’annulation' : 'Date réelle du retour'} type="date" required value={day} onChange={setDay} error={err || null} />
         <TextField label="Raison" required value={reason} onChange={setReason} />
         <p className="small muted">Rien n’est supprimé ; le changement est noté dans le journal d’activité. Impossible si une des deux semaines est déjà clôturée (versement au patron).</p>
       </div>} />
@@ -662,7 +672,7 @@ function OrderDetail({ id }: { id: string }) {
           {canPostpone(o) && (can('orders.create') || can('deliveries.manage')) && <Button variant="ghost" icon="clock" onClick={() => setModal('postpone')}>{reportCount(o) >= MAX_REPORTS ? `Reportée ${MAX_REPORTS} fois : annuler ?` : `À reporter (${reportCount(o)}/${MAX_REPORTS})`}</Button>}
           {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="danger" icon="trash" onClick={() => setModal('cancel')}>Annuler / supprimer</Button>}
           {closed && isWalkIn(o) && can('records.correct') && <Button variant="ghost" icon="edit" onClick={() => setModal('correct')}>Modifier / corriger la vente</Button>}
-          {!isWalkIn(o) && o.returnedAt && ['delivered', 'partial', 'refused'].includes(o.status) && can('records.correct') && <Button variant="ghost" icon="clock" onClick={() => setModal('redate')}>Corriger la date du retour</Button>}
+          {!isWalkIn(o) && ((o.returnedAt && ['delivered', 'partial', 'refused'].includes(o.status)) || (o.status === 'cancelled' && o.dispatchedAt)) && can('records.correct') && <Button variant="ghost" icon="clock" onClick={() => setModal('redate')}>{o.status === 'cancelled' ? 'Corriger la date de l’annulation' : 'Corriger la date du retour'}</Button>}
           {closed && can('records.correct') && <Button variant="danger" icon="trash" onClick={() => setModal('void')}>Annuler / supprimer la vente</Button>}
           {closed && !can('records.correct') && <span className="small muted">Erreur sur cette vente ? Le gérant ou le super-admin peut la corriger ou l’annuler.</span>}
         </div>
@@ -977,11 +987,17 @@ export function PostponeModal({ order: o, onClose, onDone }: { order: Order; onC
 
 function CancelModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
   const [reason, setReason] = useState('Client injoignable');
+  // Colis déjà parti chez le livreur : date réelle de l'annulation (jour de départ par défaut).
+  const out = o.status === 'out';
+  const [day, setDay] = useState(() => (out ? defaultReturnDay([o]) : ''));
+  let dayError = '';
+  if (out) { try { returnAt(day, [o]); } catch (e: any) { dayError = e.message; } }
   return (
     <Confirm title={`Annuler ${o.number}`} danger confirmLabel="Annuler la commande" onClose={onClose}
       message={<div className="stack"><p>{o.status === 'out' ? 'Les articles partis avec le livreur seront remis en stock.' : 'La commande ne réservera plus de stock.'}</p>
-        <SelectField label="Motif" value={reason} onChange={setReason} options={['Client injoignable', 'Client a annulé', 'Article indisponible', 'Erreur de saisie', 'Doublon', 'Autre'].map((r) => ({ value: r, label: r }))} /></div>}
-      onConfirm={async () => { await cancelOrder(o, reason); toast('Commande annulée'); }} />
+        <SelectField label="Motif" value={reason} onChange={setReason} options={['Client injoignable', 'Client a annulé', 'Article indisponible', 'Erreur de saisie', 'Doublon', 'Autre'].map((r) => ({ value: r, label: r }))} />
+        {out && <TextField label="Date réelle de l’annulation (retour du livreur)" type="date" required value={day} onChange={setDay} error={dayError || null} hint={`Colis parti le ${new Date(o.dispatchedAt!).toLocaleDateString('fr-FR')} : l’annulation est comptée ce jour-là (ventes, caisse, stock), même si vous la saisissez plus tard.`} />}</div>}
+      onConfirm={async () => { if (dayError) throw new Error(dayError); await cancelOrder(o, reason, out ? returnAt(day, [o]) : undefined); toast('Commande annulée'); }} />
   );
 }
 
