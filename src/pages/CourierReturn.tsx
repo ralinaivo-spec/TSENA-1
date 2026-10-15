@@ -8,14 +8,14 @@ import { useCan } from '../lib/auth';
 import { get, save, useTable } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
 import {
-  cancelDeliveryToShop, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
+  cancelDeliveryToShop, MAX_REPORTS, reportCount, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
   type Courier, type Order, type Zone,
 } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
 import { Help, Badge, Choice, Button, Confirm, Empty, SelectField, TextField, fmtDateTime, toast, useKeep } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Icon } from '../ui/icons';
-import { ReturnModal } from './Orders';
+import { PostponeModal, ReturnModal } from './Orders';
 
 type Decision = 'delivered' | 'refused';
 type FeeMode = 'retenue' | 'apart' | 'plustard';
@@ -78,6 +78,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
   const [off, setOff] = useState<Record<string, boolean>>({});
   const [ret, setRet] = useState<Order | null>(null);
   const [toShop, setToShop] = useState<Order | null>(null);
+  const [postpone, setPostpone] = useState<Order | null>(null);
   const [mode, setMode] = useState<FeeMode>('retenue');
   const [amount, setAmount] = useState<string | null>(null);
   const [account, setAccount] = useState<AccountId>('cash');
@@ -168,6 +169,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
                 <div className="row" style={{ gap: 8 }}>
                   <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setRet(r.o)}>En partie / choix…</button>
                   <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setToShop(r.o)}>Client en boutique…</button>
+                  <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setPostpone(r.o)}>À reporter ({reportCount(r.o)}/{MAX_REPORTS})…</button>
                 </div>
               </div>
             )) : <Badge tone={r.o.status === 'refused' ? 'danger' : 'ok'}>{r.o.status === 'refused' ? 'Refusée' : r.o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}
@@ -224,6 +226,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
           </tbody></table>
           <p className="small muted">Après validation, ces colis ne peuvent plus changer de livreur. Une erreur se corrige ensuite par un nouveau versement.</p></div>} />}
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
+      {postpone && <PostponeModal order={postpone} onClose={() => setPostpone(null)} />}
       {toShop && <Confirm title="Le client vient chercher en boutique" confirmLabel="Annuler la livraison" message={<p>Le colis {toShop.number} revient en boutique, réservé pour le client. Pas de frais de livraison, pas de dédommagement pour le livreur. La commande deviendra une vente sur place quand le client passera.</p>}
         onClose={() => setToShop(null)} onConfirm={async () => { await cancelDeliveryToShop(toShop); toast('Livraison annulée : la commande attend le client en boutique'); }} />}
     </>

@@ -83,7 +83,7 @@ export function PosPage() {
   }
 
   const today = todayYmd();
-  const mySales = orders.filter((o) => isWalkIn(o) && o.status !== 'cancelled' && (allSales || o.createdBy === me.id || (!o.createdBy && o.createdByName === me.fullName)));
+  const mySales = orders.filter((o) => isWalkIn(o) && o.status !== 'cancelled' && (allSales ? (!scope.strict || scope.mine(o)) : (o.createdBy === me.id || (!o.createdBy && o.createdByName === me.fullName))));
   const todaySales = mySales.filter((o) => inPeriod(o.createdAt, defaultPeriod('today')));
   const shownSales = applyDates(mySales, (o) => o.createdAt, salesPeriod, salesOrder);
   const shownTotal = shownSales.reduce((s, o) => s + Math.max(0, keptTotal(o) - (o.discount || 0)), 0);
@@ -200,7 +200,7 @@ export function PosPage() {
       </button>}
       <div className="card card-flush">
         <div className="card-pad stack-s"><div className="row-between"><h2>{allSales ? 'Ventes' : 'Mes ventes'} <span className="small muted">({shownSales.length} · {fmtAr(shownTotal)})</span></h2>
-          <div className="segmented" role="group" aria-label="Ventes"><button type="button" aria-pressed={!allSales} onClick={() => setAllSales(false)}>Mes ventes</button><button type="button" aria-pressed={allSales} onClick={() => setAllSales(true)}>Toutes</button></div></div>
+          <div className="segmented" role="group" aria-label="Ventes"><button type="button" aria-pressed={!allSales} onClick={() => setAllSales(false)}>Mes ventes</button><button type="button" aria-pressed={allSales} onClick={() => setAllSales(true)}>{scope.strict ? 'Mes pages' : 'Toutes'}</button></div></div>
           <ListDates period={salesPeriod} onPeriod={setSalesPeriod} order={salesOrder} onOrder={setSalesOrder} what="Date de vente" /></div>
         {shownSales.length === 0 ? <Empty icon="list" title="Aucune vente sur place sur cette période" /> : (
           <ul className="list">

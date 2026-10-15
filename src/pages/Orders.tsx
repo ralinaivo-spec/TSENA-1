@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, type Category } from '../lib/catalog';
 import {
-  addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -78,6 +78,7 @@ export function OrderStatusBadge({ o }: { o: Order }) {
   return <>
     <Badge tone={st.tone}>{o.kind === 'exchange' ? `Échange · ${st.label}` : st.label}</Badge>
     {hasPendingChoice(o) && <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>}
+    {reportCount(o) > 0 && o.status !== 'cancelled' && <Badge tone={reportCount(o) >= MAX_REPORTS ? 'danger' : 'warn'}>Reportée {reportCount(o)}/{MAX_REPORTS}{o.wantedDate && ['new', 'confirmed', 'ready'].includes(o.status) ? ` · au ${new Date(`${o.wantedDate}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}` : ''}</Badge>}
   </>;
 }
 
@@ -127,7 +128,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
     <>
       <PageHead title="Commandes" subtitle="Commandes Facebook, téléphone et autres, jusqu’à la livraison et au règlement du livreur."
         actions={can('orders.create') && <><Button variant="ghost" icon="users" onClick={() => setFollowing(true)}>Client à suivre</Button><Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button></>} />
-      <ScopeBar scope={scope} mineLabel="Mes commandes" text="Vous voyez les commandes que vous avez enregistrées. Les livraisons du jour restent visibles par tous dans Livraisons." />
+      <ScopeBar scope={scope} mineLabel="Mes commandes" text={scope.strict ? 'Vous voyez seulement les commandes de vos pages' : "Vous voyez les commandes que vous avez enregistrées. Les livraisons du jour restent visibles par tous dans Livraisons."} />
       <div className="tabs" role="tablist">
         {(() => { const n = prospects.filter((x) => x.status === 'open' && scope.mine({ createdBy: x.ownerId, createdByName: x.ownerName }) && bucketOf(x) !== 'later').length; return <button role="tab" aria-selected={tabKey === 'suivre'} onClick={() => switchTab('suivre')}>À suivre{n ? <span className="tab-count tab-count-hot">{n}</span> : null}</button>; })()}
         {TABS.map((t) => {
@@ -578,7 +579,7 @@ function OrderDetail({ id }: { id: string }) {
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
   const [editPay, setEditPay] = useState<Payment | null>(null);
-  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle'>('');
+  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle' | 'postpone'>('');
   const [payFee, setPayFee] = useState(false);
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
@@ -627,6 +628,7 @@ function OrderDetail({ id }: { id: string }) {
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
           {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
           {closed && o.status !== 'refused' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>Retour / échange</Button>}
+          {canPostpone(o) && (can('orders.create') || can('deliveries.manage')) && <Button variant="ghost" icon="clock" onClick={() => setModal('postpone')}>{reportCount(o) >= MAX_REPORTS ? `Reportée ${MAX_REPORTS} fois : annuler ?` : `À reporter (${reportCount(o)}/${MAX_REPORTS})`}</Button>}
           {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="danger" icon="trash" onClick={() => setModal('cancel')}>Annuler / supprimer</Button>}
           {closed && isWalkIn(o) && can('records.correct') && <Button variant="ghost" icon="edit" onClick={() => setModal('correct')}>Modifier / corriger la vente</Button>}
           {closed && can('records.correct') && <Button variant="danger" icon="trash" onClick={() => setModal('void')}>Annuler / supprimer la vente</Button>}
@@ -721,6 +723,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'reassign' && <ReassignModal order={o} onClose={() => setModal('')} />}
       {editPay && <EditPaymentModal order={o} payment={editPay} onClose={() => setEditPay(null)} />}
       {modal === 'cancel' && <CancelModal order={o} onClose={() => setModal('')} />}
+      {modal === 'postpone' && <PostponeModal order={o} onClose={() => setModal('')} />}
       {modal === 'void' && <VoidModal order={o} onClose={() => setModal('')} />}
       {modal === 'correct' && <CorrectSaleModal order={o} onClose={() => setModal('')} />}
     </>
@@ -770,6 +773,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [toShop, setToShop] = useState(false);
+  const [postpone, setPostpone] = useState(false);
   const amountVal = amount == null ? toCollect : parseAr(amount) ?? 0;
   const c = o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim);
   const prepaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
@@ -792,7 +796,9 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>{hasChoice ? 'Tout livré, choix tous rendus' : 'Tout livré'}</Button>
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, '0'])))}>Tout refusé</Button>
           {o.status === 'out' && <Button variant="ghost" icon="store" onClick={() => setToShop(true)}>Le client vient chercher en boutique</Button>}
+          {o.status === 'out' && <Button variant="ghost" icon="clock" onClick={() => setPostpone(true)}>À reporter ({reportCount(o)}/{MAX_REPORTS})</Button>}
         </div>
+        {postpone && <PostponeModal order={o} onClose={() => setPostpone(false)} onDone={onClose} />}
         {toShop && <Confirm title="Livraison annulée : retrait en boutique" confirmLabel="Annuler la livraison" message={<div className="stack-s"><p>Le livreur rapporte le colis : les articles reviennent en boutique, <strong>réservés pour ce client</strong>.</p><p>Pas de frais de livraison pour le client, pas de dédommagement pour le livreur. Quand le client passera, ouvrez la commande et touchez « Remise au client en boutique » : elle sera comptée comme <strong>vente sur place</strong>.</p></div>}
           onClose={() => setToShop(false)} onConfirm={async () => { await cancelDeliveryToShop(o); toast('Livraison annulée : la commande attend le client en boutique'); onClose(); }} />}
         <div className="table-wrap">
@@ -890,6 +896,41 @@ function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) 
         {!refund && <p className="small muted">Reste à payer : <strong>{fmtAr(due)}</strong>. Le client peut payer en plusieurs tranches (ex. une partie en espèces, le reste en mobile money).</p>}
         <PayLines lines={lines} onChange={setLines} total={due} mode="select" />
         {o.courierId && <SelectField label="Reçu par" value={by} onChange={(v) => setBy(v as any)} options={[{ value: 'shop', label: 'La boutique' }, { value: 'courier', label: 'Le livreur' }]} />}
+      </div>
+    </Modal>
+  );
+}
+
+const tomorrowYmd = () => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const REPORT_REASONS = ['Client absent', 'Client pas encore prêt à payer', 'Client demande un autre jour', 'Client injoignable', 'Autre'];
+/** « À reporter » : le client demande une autre date. Au plus 3 fois ; ensuite, annulation de la commande. */
+export function PostponeModal({ order: o, onClose, onDone }: { order: Order; onClose: () => void; onDone?: () => void }) {
+  const n = reportCount(o);
+  const [to, setTo] = useState(tomorrowYmd());
+  const [reason, setReason] = useState(REPORT_REASONS[0]);
+  const [other, setOther] = useState('');
+  const why = reason === 'Autre' ? other.trim() : reason;
+  const history = (o.reports || []).map((r, i) => <li key={i} className="small">{i + 1}. {new Date(r.at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}{r.to ? ` → au ${new Date(`${r.to}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}` : ''}{r.reason ? ` — ${r.reason}` : ''}{r.user ? ` (${r.user})` : ''}</li>);
+  if (n >= MAX_REPORTS) return (
+    <Confirm title={`${o.number} : déjà reportée ${n} fois`} danger confirmLabel="Annuler la commande" onClose={onClose}
+      message={<div className="stack-s"><p>Le client a déjà fait reporter cette livraison <strong>{n} fois</strong> sans prendre sa commande. Elle doit maintenant être <strong>annulée</strong> : les articles reviennent exactement en stock.</p><ul className="stack-s" style={{ margin: 0, paddingLeft: 16 }}>{history}</ul>
+        <TextField label="Remarque (facultatif)" value={other} onChange={setOther} /></div>}
+      onConfirm={async () => { await cancelAfterReports(o, other.trim()); toast(`Commande annulée après ${n} reports`); onDone?.(); }} />
+  );
+  return (
+    <Modal title={`Reporter la livraison — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Fermer</Button><Button icon="clock" disabled={!to || (reason === 'Autre' && !why)} onClick={async () => {
+        try { await postponeOrder(o, { to, reason: why }); toast(`Livraison reportée (${n + 1}/${MAX_REPORTS})${o.status === 'out' ? ' : colis revenu en boutique' : ''}`); onDone?.(); onClose(); } catch (e: any) { toast(e.message, 'error'); }
+      }}>Reporter ({n + 1}/{MAX_REPORTS})</Button></>}>
+      <div className="stack">
+        <p className="small">Le client demande de livrer un autre jour. {o.status === 'out' ? <>Le livreur rapporte le colis : <strong>les articles reviennent en boutique</strong>, réservés pour ce client, et la commande repasse « en attente de livraison ».</> : 'La commande garde ses articles réservés et attend la nouvelle date.'}</p>
+        <div className="grid-2">
+          <TextField label="Nouvelle date de livraison" type="date" value={to} onChange={setTo} />
+          <SelectField label="Raison" value={reason} onChange={setReason} options={REPORT_REASONS.map((r) => ({ value: r, label: r }))} />
+        </div>
+        {reason === 'Autre' && <TextField label="Précisez" value={other} onChange={setOther} required />}
+        <div className={`notice ${n + 1 >= MAX_REPORTS ? 'notice-danger' : ''}`}><Icon name="alert" /><span>Report <strong>{n + 1} sur {MAX_REPORTS}</strong>. {n + 1 >= MAX_REPORTS ? 'C’est le dernier report possible : si le client ne prend toujours pas la commande, elle sera annulée.' : `Après ${MAX_REPORTS} reports, la commande devra être annulée.`}</span></div>
+        {n > 0 && <div><strong className="small">Reports précédents</strong><ul className="stack-s" style={{ margin: '4px 0 0', paddingLeft: 16 }}>{history}</ul></div>}
       </div>
     </Modal>
   );
