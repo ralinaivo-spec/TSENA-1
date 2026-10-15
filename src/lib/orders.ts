@@ -261,6 +261,17 @@ export function reservedIndex(excludeOrderId?: string) {
   }
   return m;
 }
+/** Commandes en cours (pas encore remises au livreur ni vendues) qui réservent une variante : pour comprendre stock − disponible. */
+export function reservingOrders(variantId: string): { order: Order; qty: number; choice: number }[] {
+  const out: { order: Order; qty: number; choice: number }[] = [];
+  for (const o of all<Order>('orders')) {
+    if (!['new', 'confirmed', 'ready'].includes(o.status)) continue;
+    const ls = o.lines.filter((l) => l.variantId === variantId);
+    if (!ls.length) continue;
+    out.push({ order: o, qty: ls.filter((l) => !l.isChoice).reduce((s, l) => s + l.qty, 0), choice: ls.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0) });
+  }
+  return out.sort((a, b) => a.order.createdAt.localeCompare(b.order.createdAt));
+}
 export function availableOf(variantId: string, reserved: Map<string, number>) {
   return stockOf(variantId) - (reserved.get(variantId) ?? 0);
 }

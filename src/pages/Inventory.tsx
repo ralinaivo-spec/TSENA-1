@@ -13,6 +13,7 @@ import { Badge, Button, Confirm, Empty, FilterSelect, Help, Modal, MoreMatches, 
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { Thumb } from './Products';
+import { ORDER_STATUS, orderLabel, reportCount, reservingOrders } from '../lib/orders';
 import { printA4, a4Table, arA4, h } from '../lib/a4';
 import { exportTables } from '../ui/table';
 
@@ -254,6 +255,8 @@ export function VariantDetail({ variantId, until, onClose }: { variantId: string
   const v = get<Variant>('variants', variantId);
   if (!v) return null;
   const h = variantHistory(variantId, until);
+  const holds = until ? [] : reservingOrders(variantId);
+  const held = holds.reduce((s, x) => s + x.qty + x.choice, 0);
   return (
     <Modal title={fullName(v)} wide onClose={onClose} footer={<Button onClick={onClose}>Fermer</Button>}>
       <div className="stack">
@@ -265,6 +268,25 @@ export function VariantDetail({ variantId, until, onClose }: { variantId: string
           <div><span className="small muted">Retours</span><strong className="pos">+{fmtNum(h.back)}</strong></div>
           <div><span className="small muted">Ajustements</span><strong>{h.adj > 0 ? '+' : ''}{fmtNum(h.adj)}</strong></div>
         </div>
+        {!until && (
+          <div className="stack-s">
+            <h3>Réservé par des commandes en cours : {fmtNum(held)}{held ? ` · disponible pour une nouvelle commande : ${fmtNum(h.stock - held)}` : ''}</h3>
+            {holds.length === 0 ? <p className="small muted">Aucune commande en cours ne réserve cet article : tout le stock est disponible.</p> : <>
+              <p className="small muted">Ces pièces sont encore en boutique mais promises à ces clients ; elles sortent du stock à la remise au livreur (ou à la vente). Une commande qui ne partira jamais (client disparu, doublon) doit être annulée pour libérer ses pièces.</p>
+              <div className="table-wrap"><table className="table">
+                <thead><tr><th>Commande</th><th>Client</th><th>Statut</th><th>Date</th><th className="t-num">Qté</th><th className="t-num">En choix</th></tr></thead>
+                <tbody>{holds.map(({ order: o, qty, choice }) => (
+                  <tr key={o.id}>
+                    <td><a href={`#/commandes/${o.id}`} onClick={onClose}>{o.number}</a></td><td>{orderLabel(o)}</td>
+                    <td><Badge tone={ORDER_STATUS[o.status].tone}>{ORDER_STATUS[o.status].label}</Badge>{reportCount(o) > 0 && <> <Badge tone="warn">reportée {reportCount(o)}×</Badge></>}</td>
+                    <td className="num" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(o.createdAt)}</td>
+                    <td className="t-num">{qty || '—'}</td><td className="t-num">{choice || '—'}</td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+            </>}
+          </div>
+        )}
         <p className="small muted">Mouvements {h.prev ? 'depuis le dernier comptage' : 'depuis le début'}, du plus récent au plus ancien. Comparez avec ce que vous avez vu en boutique : une vente oubliée, un retour pas enregistré ou une erreur de quantité explique souvent l’écart.</p>
         {h.rows.length === 0 ? <p className="small muted">Aucun mouvement.</p> : (
           <div className="table-wrap"><table className="table">

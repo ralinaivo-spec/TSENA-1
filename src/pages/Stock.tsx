@@ -13,6 +13,7 @@ import { categoryOptions, Thumb } from './Products';
 import { downloadBlob, writeXlsx } from '../lib/xlsx';
 import { cancelMove } from '../lib/corrections';
 import { InventoryTab, VariantDetail } from './Inventory';
+import { reservedIndex, type Order } from '../lib/orders';
 
 const TABS = [
   { key: 'etat', label: 'État du stock', perm: '' },
@@ -58,10 +59,12 @@ function StockState() {
   const [others, setOthers] = useState(0);
   const [detail, setDetail] = useState<string | null>(null);
 
+  const orders = useTable<Order>('orders');
+  const reserved = useMemo(() => reservedIndex(), [orders]);
   const rows = useMemo(() => {
     const n = q.trim().toLowerCase();
     const sr = searchItems(variants
-      .map((v) => ({ v, p: get<Product>('products', v.productId), stock: stockOf(v.id), incoming: incomingOf(v.id) }))
+      .map((v) => ({ v, p: get<Product>('products', v.productId), stock: stockOf(v.id), incoming: incomingOf(v.id), held: reserved.get(v.id) ?? 0 }))
       .filter((r) => r.p && r.p.active !== false && r.v.active !== false)
       .filter((r) => scope.product(r.p!.id))
       .filter((r) => inCategory(r.p, cat)), (r) => `${r.v.sku} ${productText(r.p!)}`, n, allMatches);
@@ -70,7 +73,7 @@ function StockState() {
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
       .map((r) => ({ ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0) }))
       .sort((a, b) => b.p!.createdAt.localeCompare(a.p!.createdAt) || a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true })); // plus récents d'abord
-  }, [variants, q, cat, f, scope.on, allMatches]);
+  }, [variants, q, cat, f, scope.on, allMatches, reserved]);
 
   const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
   const totals = allRows.reduce((t, v) => {
@@ -83,9 +86,9 @@ function StockState() {
   async function exportXlsx() {
     const blob = await writeXlsx([{
       name: 'Stock',
-      columns: [{ header: 'Catégorie', width: 22 }, { header: 'Code article', width: 14 }, { header: 'Article', width: 36 }, { header: 'Couleur', width: 14 }, { header: 'Taille', width: 9 }, { header: 'Code variante', width: 22 }, { header: 'Stock', width: 9, number: true }, { header: 'En arrivage', width: 11, number: true },
+      columns: [{ header: 'Catégorie', width: 22 }, { header: 'Code article', width: 14 }, { header: 'Article', width: 36 }, { header: 'Couleur', width: 14 }, { header: 'Taille', width: 9 }, { header: 'Code variante', width: 22 }, { header: 'Stock', width: 9, number: true }, { header: 'Réservé (commandes en cours)', width: 14, number: true }, { header: 'Disponible', width: 11, number: true }, { header: 'En arrivage', width: 11, number: true },
         ...(showCost ? [{ header: 'Coût moyen (Ar)', width: 14, number: true }, { header: 'Valeur (Ar)', width: 14, number: true }] : [])],
-      rows: rows.map((r) => [categoryPath(r.p!.categoryId), r.p!.code, r.p!.name, r.v.color ?? '', r.v.size ?? '', r.v.sku, r.stock, r.incoming, ...(showCost ? [Math.round(r.v.costAvg ?? 0), Math.round(r.value)] : [])]),
+      rows: rows.map((r) => [categoryPath(r.p!.categoryId), r.p!.code, r.p!.name, r.v.color ?? '', r.v.size ?? '', r.v.sku, r.stock, r.held, r.stock - r.held, r.incoming, ...(showCost ? [Math.round(r.v.costAvg ?? 0), Math.round(r.value)] : [])]),
     }]);
     downloadBlob(blob, `Tresor-en-ligne-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
@@ -119,13 +122,15 @@ function StockState() {
         {rows.length === 0 ? <Empty icon="store" title="Aucune variante ne correspond" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th><th className="t-num">En arrivage</th>{showCost && <th className="t-num">Coût moyen</th>}{showCost && <th className="t-num">Valeur</th>}<th></th></tr></thead>
+              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th><th className="t-num" title="Pièces promises à des commandes pas encore remises au livreur">Réservé</th><th className="t-num">Disponible</th><th className="t-num">En arrivage</th>{showCost && <th className="t-num">Coût moyen</th>}{showCost && <th className="t-num">Valeur</th>}<th></th></tr></thead>
               <tbody>
                 {rows.slice(0, limit).map((r) => (
                   <tr key={r.v.id} className="row-link" onClick={() => navigate('/articles/' + r.p!.id)}>
                     <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={52} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div></div></div></td>
                     <td>{variantLabel(r.v)}</td>
                     <td className="t-num"><span className={`stock-pill ${r.stock <= 0 ? 'is-out' : ''}`}>{fmtNum(r.stock)}</span></td>
+                    <td className="t-num">{r.held ? <button type="button" className="link-btn" style={{ padding: 0 }} title="Voir les commandes qui réservent" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>{fmtNum(r.held)}</button> : '—'}</td>
+                    <td className={`t-num ${r.stock - r.held < 0 ? 'neg' : ''}`}>{r.held ? fmtNum(r.stock - r.held) : fmtNum(r.stock)}</td>
                     <td className="t-num">{r.incoming || '—'}</td>
                     {showCost && <td className="t-num">{fmtAr(r.v.costAvg)}</td>}
                     {showCost && <td className="t-num">{fmtAr(r.value)}</td>}

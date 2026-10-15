@@ -126,7 +126,7 @@ export function PosPage() {
                 <li key={p.id}><button type="button" className={`list-item list-link btn-reset ${avail <= 0 ? 'is-out' : ''}`} onClick={() => { pick(p); setQ(''); }}>
                   <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} size={44} />
                   <div className="list-item-main"><span className="list-item-title">{p.name} {isLot(p) && <Badge tone="brand">Lot</Badge>}</span><p className="small muted">{p.attrs ? attrSummary(p, ', ') : p.code}</p></div>
-                  <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} {isLot(p) ? 'lot(s)' : 'en stock'}</span></div>
+                  <div className="list-item-side"><strong className="num">{fmtAr(Number.isFinite(tilePrice(p) as number) ? tilePrice(p) : undefined)}</strong><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} {isLot(p) ? 'lot(s)' : 'dispo'}</span></div>
                 </button></li>
               ))}
               {searched.others > 0 && <li style={{ padding: '4px 14px' }}><MoreMatches n={searched.others} onShow={() => setAllMatches(true)} /></li>}

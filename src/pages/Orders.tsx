@@ -4,7 +4,7 @@ import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
-import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, type Category } from '../lib/catalog';
+import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
   addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
@@ -523,11 +523,13 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
           <ul className="list card" style={{ padding: 0 }}>
             {found.map((p) => {
               const avail = isLot(p) ? lotAvailable(p, (vid) => availableOf(vid, reserved)) : productVariants(p.id).reduce((s, v) => s + Math.max(0, availableOf(v.id, reserved)), 0);
+              const inStock = isLot(p) ? 0 : productVariants(p.id).reduce((s, v) => s + Math.max(0, stockOf(v.id)), 0);
+              const held = isLot(p) ? 0 : productVariants(p.id).reduce((s, v) => s + (reserved.get(v.id) ?? 0), 0);
               return (
                 <li key={p.id}><button className="list-item list-link btn-reset" onClick={() => setProd(p)}>
                   <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} size={72} zoom alt={p.name} />
                   <div className="list-item-main"><span className="list-item-title">{p.name} {isLot(p) && <Badge tone="brand">Lot</Badge>}</span><p className="small muted">{p.code} · {fmtAr(p.priceRetail)}{isLot(p) ? ' le lot' : ''}{p.priceWholesale ? ` · gros ${fmtAr(p.priceWholesale)}` : ''}</p></div>
-                  <span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail}</span>
+                  <div className="list-item-side"><span className={`stock-pill ${avail <= 0 ? 'is-out' : ''}`}>{avail} dispo</span>{held > 0 && <span className="small muted">{inStock} en stock · {held} réservé(s)</span>}</div>
                 </button></li>
               );
             })}
@@ -543,10 +545,11 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
           <div className="variant-grid">
             {variants.map((v) => {
               const a = availableOf(v.id, reserved);
+              const held = reserved.get(v.id) ?? 0;
               return (
                 <div key={v.id} className={`variant-cell ${a <= 0 ? 'is-out' : ''}`}>
                   {variants.some((x) => x.photo) && <Thumb src={photoOf(v)} size={84} zoom alt={`${prod.code} ${variantLabel(v)}`} />}
-                  <span className="small"><strong>{cellLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span></span>
+                  <span className="small"><strong>{cellLabel(v)}</strong> · <span className={a <= 0 ? 'neg' : 'muted'}>{a > 0 ? `${a} dispo` : 'épuisé'}</span>{held > 0 && <span className="muted" style={{ display: 'block' }}>{stockOf(v.id)} en stock · {held} réservé(s) par des commandes en cours</span>}</span>
                   <label className="small">{noChoice ? 'Quantité' : 'Vendu'}<input className="cell-input" inputMode="numeric" placeholder="0" value={qty[v.id] ?? ''} onChange={(e) => setQty({ ...qty, [v.id]: e.target.value })} /></label>
                   {unknownQty && <label className="small row" style={{ gap: 6 }}><input type="checkbox" checked={!!want[v.id] || !!parseNum(qty[v.id] ?? '')} onChange={(e) => setWant({ ...want, [v.id]: e.target.checked })} /> Intéressé (quantité pas encore connue)</label>}
                   {!noChoice && <label className="small">En choix<input className="cell-input" inputMode="numeric" placeholder="0" value={choice[v.id] ?? ''} onChange={(e) => setChoice({ ...choice, [v.id]: e.target.value })} /></label>}
