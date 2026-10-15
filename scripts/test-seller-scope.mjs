@@ -75,6 +75,6 @@ tx = N(await p.locator('main').innerText());
 ok(tx.includes('Ventes de mes pages') && tx.includes('30 000 Ar') && !tx.includes('50 000 Ar'), 'caisse du jour : ventes de sa page seulement');
 await p.goto('http://localhost:5173/#/livraisons'); await p.waitForTimeout(500);
 tx = N(await p.locator('main').innerText());
-ok(tx.includes('Vous voyez seulement les livraisons de vos pages') && !tx.includes('Comptes livreurs') && !tx.includes('En attente de livraison') && tx.includes('En livraison'), 'vendeur : menu Livraisons avec ses pages seulement, sans comptes livreurs ni remise au livreur');
+ok(!N(await p.locator('aside.sidebar').innerText()).includes('Livraisons et livreurs') && !/Comptes livreurs|Retour livreur/.test(tx), 'vendeur : menu Livraisons réservé à l’admin / gérant');
 const sw = await p.evaluate(() => document.documentElement.scrollWidth); ok(sw <= W + 1, `pas de débordement (${sw})`);
 console.log(fail ? `${fail} ÉCHEC(S)` : 'TOUT EST BON'); await b.close();

@@ -1,5 +1,5 @@
 // Ventes sur place et commandes clients regroupées par page (catégorie principale des articles) ;
-// menu « Livraisons et livreurs » visible pour le responsable (qui assigne les livreurs) et le vendeur (ses pages).
+// menu « Livraisons et livreurs » réservé à l'admin / gérant ; vendeur et responsable remettent au livreur depuis Commandes.
 import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const p = await (await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Indian/Antananarivo' })).newPage();
@@ -47,16 +47,16 @@ heads = (await p.locator('main .list-group-head').allInnerTexts()).map(N);
 ok(heads.length === 3 && heads[0].startsWith('Boxer (1)') && heads[1].startsWith('Pyjamas (1)') && heads[2].startsWith('Plusieurs pages (1)'), `commandes clients : regroupées par page (${heads.join(' | ')})`);
 ok((await navText()).includes('Livraisons et livreurs'), 'admin : menu Livraisons visible');
 await logout(); await login('aina');
-ok((await navText()).includes('Livraisons et livreurs'), 'vendeur : menu Livraisons visible');
+ok(!(await navText()).includes('Livraisons et livreurs'), 'vendeur : menu Livraisons caché');
 await p.goto('http://localhost:5173/#/commandes/R1'); await p.waitForTimeout(500);
 ok(await p.getByRole('button', { name: 'Remettre au livreur (en livraison)' }).count() === 1, 'vendeur : bouton « Remettre au livreur »');
 const perms = await p.evaluate(() => window.__tsena.get('roles', 'role-seller').permissions);
 ok(perms.includes('orders.dispatch'), 'rôle Vendeur : droit « assigner les livreurs »');
 await logout(); await login('resp');
-ok((await navText()).includes('Livraisons et livreurs'), 'responsable : menu Livraisons visible');
+ok(!(await navText()).includes('Livraisons et livreurs'), 'responsable : menu Livraisons caché');
 await p.goto('http://localhost:5173/#/livraisons/a-livrer'); await p.waitForTimeout(500);
 let mt = N(await p.locator('main').innerText());
-ok(mt.includes('En attente de livraison') && mt.includes('Client Boxer') && mt.includes('Client Pyjama'), 'responsable : Livraisons → toutes les commandes à remettre, toutes pages');
+ok(!/Comptes livreurs|Retour livreur/.test(mt), 'responsable : adresse directe sans accès');
 await p.goto('http://localhost:5173/#/commandes/attente'); await p.waitForTimeout(500);
 mt = N(await p.locator('main').innerText());
 ok(mt.includes('Client Boxer') && !mt.includes('Client Pyjama') && await p.locator('.scope-bar button').count() === 0, 'responsable : Commandes → seulement sa page (Boxer), sans « Tout »');

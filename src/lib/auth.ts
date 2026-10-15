@@ -96,6 +96,12 @@ export async function seedAccounts() {
   // (« Remettre au livreur » dans Commandes clients → En attente de livraison). Si l'admin retire ensuite ce droit, il n'est pas redonné.
   const sel2 = get<Role>('roles', 'role-seller');
   if (sel2 && !(sel2.migrations ?? []).includes('dispatch-seller-again')) await save('roles', { id: sel2.id, permissions: [...new Set([...sel2.permissions, 'orders.dispatch'])], migrations: [...(sel2.migrations ?? []), 'dispatch-seller-again'] });
+  // Mise à jour unique (15/10) : le menu « Livraisons et livreurs » est de nouveau réservé à l'admin et au gérant.
+  // Vendeur et responsable remettent au livreur depuis Commandes clients. Si l'admin redonne ensuite ce droit, il n'est pas retiré.
+  for (const id of ['role-seller', 'role-manager']) {
+    const r = get<Role>('roles', id);
+    if (r && !(r.migrations ?? []).includes('deliveries-menu-admin-only')) await save('roles', { id, permissions: r.permissions.filter((p) => p !== 'deliveries.menu'), migrations: [...(r.migrations ?? []), 'deliveries-menu-admin-only'] });
+  }
 }
 
 // ---- Session ----
