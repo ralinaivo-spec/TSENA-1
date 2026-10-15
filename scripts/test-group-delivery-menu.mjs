@@ -49,9 +49,9 @@ ok((await navText()).includes('Livraisons et livreurs'), 'admin : menu Livraison
 await logout(); await login('aina');
 ok((await navText()).includes('Livraisons et livreurs'), 'vendeur : menu Livraisons visible');
 await p.goto('http://localhost:5173/#/commandes/R1'); await p.waitForTimeout(500);
-ok(await p.getByRole('button', { name: 'Remettre au livreur (en livraison)' }).count() === 0 && N(await p.locator('main').innerText()).includes('Le responsable choisira le livreur'), 'vendeur : ne remet pas la commande au livreur');
+ok(await p.getByRole('button', { name: 'Remettre au livreur (en livraison)' }).count() === 1, 'vendeur : bouton « Remettre au livreur »');
 const perms = await p.evaluate(() => window.__tsena.get('roles', 'role-seller').permissions);
-ok(!perms.includes('orders.dispatch'), 'rôle Vendeur : droit « assigner les livreurs » retiré');
+ok(perms.includes('orders.dispatch'), 'rôle Vendeur : droit « assigner les livreurs »');
 await logout(); await login('resp');
 ok((await navText()).includes('Livraisons et livreurs'), 'responsable : menu Livraisons visible');
 await p.goto('http://localhost:5173/#/livraisons/a-livrer'); await p.waitForTimeout(500);

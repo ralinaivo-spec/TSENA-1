@@ -92,6 +92,10 @@ export async function seedAccounts() {
   // Mise à jour unique : seul le responsable remet les commandes au livreur ; le vendeur ne le peut plus.
   const sel = get<Role>('roles', 'role-seller');
   if (sel && !(sel.migrations ?? []).includes('dispatch-manager-only')) await save('roles', { id: sel.id, permissions: sel.permissions.filter((p) => p !== 'orders.dispatch'), migrations: [...(sel.migrations ?? []), 'dispatch-manager-only'] });
+  // Mise à jour unique (15/10, après la précédente) : le vendeur remet de nouveau ses commandes au livreur
+  // (« Remettre au livreur » dans Commandes clients → En attente de livraison). Si l'admin retire ensuite ce droit, il n'est pas redonné.
+  const sel2 = get<Role>('roles', 'role-seller');
+  if (sel2 && !(sel2.migrations ?? []).includes('dispatch-seller-again')) await save('roles', { id: sel2.id, permissions: [...new Set([...sel2.permissions, 'orders.dispatch'])], migrations: [...(sel2.migrations ?? []), 'dispatch-seller-again'] });
 }
 
 // ---- Session ----
