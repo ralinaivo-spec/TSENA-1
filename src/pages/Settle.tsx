@@ -1,9 +1,9 @@
 // Règlement avec le livreur (étape après « retour confirmé ») : une ou plusieurs commandes du même livreur réglées
 // en une fois — articles et frais séparés, frais du livreur (retenus, payés à part, différés), montant remis.
 import { useState } from 'react';
-import { bizNow, save } from '../lib/db';
+import { save } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
-import { courierSplit, orderLabel, type Courier, type Order } from '../lib/orders';
+import { courierSplit, defaultReturnDay, orderLabel, returnAt, type Courier, type Order } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, settleCourier, type AccountId } from '../lib/money';
 import { Button, Modal, SelectField, TextField, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
@@ -40,6 +40,10 @@ export function SettleModal({ courier, orders, onClose, onDone }: { courier: Cou
   const gap = n - expected;
   const tot = { a: rows.reduce((t, r) => t + r.a, 0), b: feeAll, c: rows.reduce((t, r) => t + r.c, 0), d: rows.reduce((t, r) => t + r.prepaid, 0) };
   const feeChoice = mode === 'apart' ? `apart:${feeAccount}` : mode;
+  // Date du règlement : par défaut le jour du retour des colis (l'argent a été remis ce jour-là), modifiable.
+  const [day, setDay] = useState(() => defaultReturnDay(orders.map((o) => ({ dispatchedAt: o.returnedAt ?? o.dispatchedAt }))));
+  let dayError = '';
+  try { returnAt(day, orders); } catch (e: any) { dayError = e.message; }
   const setFeeChoice = (v: string) => { if (v.startsWith('apart:')) { setMode('apart'); setFeeAccount(v.slice(6) as AccountId); } else setMode(v as FeeMode); setAmount(null); };
 
   async function validate() {
@@ -47,9 +51,9 @@ export function SettleModal({ courier, orders, onClose, onDone }: { courier: Cou
     setBusy(true);
     try {
       const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? `frais payés à part (${ACCOUNTS[feeAccount]})` : 'frais différés (compte du livreur)';
-      await settleCourier(courier, rows.map((r) => r.o.id), n, account, [`${rows.length} commande(s)`, label, note.trim()].filter(Boolean).join(' · '));
-      if (payFees > 0) await settleCourier(courier, [], -payFees, feeAccount, 'Frais de livraison payés au livreur');
-      const at = bizNow();
+      const at = returnAt(day, orders);
+      await settleCourier(courier, rows.map((r) => r.o.id), n, account, [`${rows.length} commande(s)`, label, note.trim()].filter(Boolean).join(' · '), at);
+      if (payFees > 0) await settleCourier(courier, [], -payFees, feeAccount, 'Frais de livraison payés au livreur', at);
       const feeUpd = rows.filter((r) => r.x.fee > 0).map((r) => ({ id: r.o.id, feeStatus: mode === 'retenue' || (mode === 'plustard' && after <= 0 && gap <= -feeAll + 1) ? 'kept' as const : mode === 'apart' ? 'paid' as const : 'deferred' as const, ...(mode === 'apart' ? { feePaidAt: at, feePaidHow: ACCOUNTS[feeAccount] } : {}) }));
       if (feeUpd.length) await save('orders', feeUpd);
       toast(`${rows.length} commande(s) réglée(s) avec ${courier.name}`);
@@ -60,7 +64,7 @@ export function SettleModal({ courier, orders, onClose, onDone }: { courier: Cou
 
   return (
     <Modal wide title={`Règlement avec ${courier.name} — ${rows.length} commande(s)`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} icon="check" disabled={!rows.length || (gap !== 0 && !note.trim())} onClick={validate}>Valider le règlement ({fmtAr(n)})</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} icon="check" disabled={!rows.length || (gap !== 0 && !note.trim()) || !!dayError} onClick={validate}>Valider le règlement ({fmtAr(n)})</Button></>}>
       <div className="stack">
         <ul className="settle-list">{rows.map((r) => (
           <li key={r.o.id}>
@@ -89,6 +93,7 @@ export function SettleModal({ courier, orders, onClose, onDone }: { courier: Cou
           <SelectField label="Reçu sur" value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
         </div>
         <TextField label={gap ? 'Remarque (écart)' : 'Remarque (facultatif)'} required={gap !== 0} value={note} onChange={setNote} />
+        <TextField label="Date réelle du règlement" type="date" required value={day} onChange={setDay} error={dayError || null} hint="Par défaut, le jour du retour des colis : l’argent et le compte du livreur restent à cette date." />
         <div className={`notice ${gap === 0 && after === 0 ? 'notice-ok' : gap !== 0 ? 'notice-danger' : ''}`}><Icon name={gap === 0 ? 'check' : 'alert'} />
           <span>{gap !== 0 ? <><strong>Écart : {gap > 0 ? '+' : '−'} {fmtAr(Math.abs(gap))}</strong> par rapport à l’attendu. </> : null}
             {after === 0 ? 'Après validation, le compte du livreur est à zéro.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (au prochain règlement).` : `La boutique lui devra ${fmtAr(-after)} : à payer au plus vite (rappel jusqu’au paiement).`}</span></div>

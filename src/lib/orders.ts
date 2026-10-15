@@ -3,7 +3,7 @@ import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './d
 import { audit, currentUser } from './auth';
 import { addMoves, nextNumber, stockOf, variantLabel, type Product, type StockMove, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
-import { assertOpenNow } from './closed';
+import { assertOpenAt, assertOpenNow } from './closed';
 import { adjustsKeptTotal, adjustsTotal, computeAdjusts, type Adjust } from './lots';
 
 export interface Zone extends BaseRecord { name: string; fee: number; order?: number; active: boolean; pickup?: boolean }
@@ -79,6 +79,8 @@ export interface Order extends BaseRecord {
   courierId?: string;
   dispatchedAt?: string;
   returnedAt?: string;
+  /** Retour saisi plus tard que sa date réelle (date et heure de la saisie). */
+  returnSavedAt?: string;
   cashGiven?: number;             // espèces données par le client (vente sur place), pour la monnaie sur le ticket
   courierSettledAt?: string;      // versement du livreur validé (étape 6) : plus de changement de livreur
   feeStatus?: 'kept' | 'paid' | 'deferred'; // frais du livreur : gardés sur le versement, payés à part, ou différés
@@ -277,8 +279,8 @@ export function availableOf(variantId: string, reserved: Map<string, number>) {
 }
 
 // ---------- Actions ----------
-async function setStatus(o: Order, status: OrderStatus, extra: Partial<Order> = {}) {
-  await save('orders', { id: o.id, status, statusDates: { ...(o.statusDates || {}), [status]: bizNow() }, ...extra });
+async function setStatus(o: Order, status: OrderStatus, extra: Partial<Order> = {}, at?: string) {
+  await save('orders', { id: o.id, status, statusDates: { ...(o.statusDates || {}), [status]: at ?? bizNow() }, ...extra });
   await audit(status === 'cancelled' ? 'Commande annulée' : 'Commande', `${o.number} : ${ORDER_STATUS[status].label}${status === 'cancelled' && extra.notes ? ` — ${String(extra.notes).split('\n').pop()}` : ''}`, 'orders', o.id);
 }
 export const confirmOrder = (o: Order) => setStatus(o, 'confirmed');
@@ -294,9 +296,35 @@ export async function dispatchOrder(o: Order, courierId: string) {
 }
 
 /** Retour du livreur : ce qui est gardé, rendu, l'argent encaissé. */
-export async function recordReturn(o: Order, r: { kept: Record<string, number>; feeCharged: number; collected: { amount: number; method: PayMethod; ref?: string }[]; note?: string }) {
-  assertOpenNow('Retour du livreur');
-  const at = bizNow();
+// ---------- Date réelle du retour du livreur ----------
+// Le livreur rapporte ses colis et l'argent le jour même ; le gérant peut valider plus tard dans l'application.
+// Le retour (refus, choix, argent, stock, compte du livreur) garde la date réelle, pas la date de saisie.
+const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Jour (AAAA-MM-JJ) proposé pour le retour : le jour de départ le plus récent des colis (le livreur revient le jour même). */
+export function defaultReturnDay(list: Pick<Order, 'dispatchedAt'>[]): string {
+  const today = ymdOf(new Date(bizNow()));
+  const days = list.map((o) => (o.dispatchedAt ? ymdOf(new Date(o.dispatchedAt)) : today)).sort();
+  const d = days[days.length - 1] ?? today;
+  return d > today ? today : d;
+}
+/** Jours de départ différents parmi des colis (pour prévenir : un règlement = un jour). */
+export const departureDays = (list: Pick<Order, 'dispatchedAt'>[]) => [...new Set(list.filter((o) => o.dispatchedAt).map((o) => ymdOf(new Date(o.dispatchedAt!))))].sort();
+/**
+ * Heure d'enregistrement pour un jour donné : maintenant si c'est aujourd'hui (date de travail), sinon 18 h ce jour-là,
+ * jamais avant le départ des colis. Refuse un jour avant le départ ou dans le futur.
+ */
+export function returnAt(ymd: string, list: Pick<Order, 'dispatchedAt' | 'number'>[] = []): string {
+  const today = ymdOf(new Date(bizNow()));
+  if (!ymd || ymd >= today) { if (ymd > today) throw new Error('La date du retour ne peut pas être dans le futur.'); return bizNow(); }
+  const early = list.find((o) => o.dispatchedAt && ymdOf(new Date(o.dispatchedAt)) > ymd);
+  if (early) throw new Error(`Le colis ${early.number} est parti le ${new Date(early.dispatchedAt!).toLocaleDateString('fr-FR')} : son retour ne peut pas être daté d'avant.`);
+  const last = Math.max(0, ...list.filter((o) => o.dispatchedAt && ymdOf(new Date(o.dispatchedAt)) === ymd).map((o) => new Date(o.dispatchedAt!).getTime() + 60_000));
+  return new Date(Math.max(new Date(`${ymd}T18:00:00`).getTime(), last)).toISOString();
+}
+
+export async function recordReturn(o: Order, r: { kept: Record<string, number>; feeCharged: number; collected: { amount: number; method: PayMethod; ref?: string }[]; note?: string }, atGiven?: string) {
+  const at = atGiven ?? bizNow();
+  assertOpenAt(at, 'Retour du livreur');
   const lines = o.lines.map((l) => {
     const kept = Math.max(0, Math.min(l.qty, r.kept[l.id] ?? 0));
     return { ...l, qtyKept: kept, qtyReturned: l.qty - kept };
@@ -313,7 +341,8 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
   if (o.kind === 'exchange' && o.returnLines?.length && status !== 'refused') {
     await addMoves(o.returnLines.map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })));
   }
-  await setStatus(o, status, { lines, feeCharged: r.feeCharged, payments: [...(o.payments || []), ...pays], returnedAt: at, notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes });
+  const late = atGiven && ymdOf(new Date(atGiven)) !== ymdOf(new Date(bizNow())) ? { returnSavedAt: new Date().toISOString() } : {};
+  await setStatus(o, status, { lines, feeCharged: r.feeCharged, payments: [...(o.payments || []), ...pays], returnedAt: at, ...late, notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
 }
 
 /** Échange traité directement en boutique (sans livraison). */

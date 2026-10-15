@@ -6,14 +6,14 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
 } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { correctWalkInSale, netMoves, refundSuggested, voidOrder } from '../lib/corrections';
-import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, feeState, payDeferredFees, settleCourier, type AccountId } from '../lib/money';
+import { ACCOUNTS, ACCOUNT_IDS, FEE_STATE, feeState, payDeferredFees, settleCourier, settlementOf, redateReturn, redateSettlement, dayOf as dayOfIso, type AccountId, type CourierSettlement } from '../lib/money';
 import { Help, DiscountField, Badge, Button, Confirm, Empty, FilterSelect, IconButton, Modal, MoreMatches, PageHead, SelectField, TextField, fmtDate, fmtDateTime, navigate, toast, useRoute, DateSort, type DateOrder, useKeep } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PayLines, payLinesSum, splitInTwo, type PayLine } from '../ui/payments';
@@ -564,6 +564,34 @@ export function ItemPicker({ excludeOrderId, onClose, onAdd, onAddLines, noChoic
   );
 }
 
+// ---------- Correction : date réelle d'un retour livreur saisi en retard ----------
+/** Change la date d'un retour (ou de tout le versement du livreur qui le contient) : gérant seulement. */
+export function RedateModal({ settlement, order, onClose }: { settlement?: CourierSettlement; order?: Order; onClose: () => void }) {
+  const s = settlement ?? (order ? settlementOf(order) : undefined);
+  const viaSettlement = !!s && (!order || (!!order.returnedAt && dayOfIso(s.at) === dayOfIso(order.returnedAt)));
+  const list = viaSettlement ? s!.orderIds.map((id) => get<Order>('orders', id)).filter((x): x is Order => !!x) : order ? [order] : [];
+  const from = viaSettlement ? s!.at : order?.returnedAt ?? '';
+  const [day, setDay] = useState(() => defaultReturnDay(list.length ? list : [{ dispatchedAt: from }]));
+  const [reason, setReason] = useState('Retour validé en retard : date réelle du retour du livreur');
+  let err = '';
+  try { returnAt(day, list); } catch (e: any) { err = e.message; }
+  return (
+    <Confirm title="Changer la date du retour" confirmLabel="Changer la date" onClose={onClose}
+      onConfirm={async () => {
+        if (err) throw new Error(err);
+        if (!reason.trim()) throw new Error('Indiquez la raison.');
+        if (viaSettlement) await redateSettlement(s!, day, reason.trim()); else await redateReturn(order!, day, reason.trim());
+        toast(`Date corrigée : ${new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR')}`);
+      }}
+      message={<div className="stack-s">
+        <p>Enregistré le <strong>{fmtDateTime(from)}</strong>. {viaSettlement ? <>Tout le versement passe à la nouvelle date : l’argent reçu du livreur (caisse), son compte et le retour de {list.length > 1 ? `ces ${list.length} colis` : 'ce colis'} ({list.map((x) => x.number).join(', ') || 'aucun colis'}) : refus, choix, articles revenus en stock.</> : <>Le retour de {order?.number} (refus, choix, argent du livreur, articles revenus en stock) passe à la nouvelle date.</>}</p>
+        <TextField label="Date réelle du retour" type="date" required value={day} onChange={setDay} error={err || null} />
+        <TextField label="Raison" required value={reason} onChange={setReason} />
+        <p className="small muted">Rien n’est supprimé ; le changement est noté dans le journal d’activité. Impossible si une des deux semaines est déjà clôturée (versement au patron).</p>
+      </div>} />
+  );
+}
+
 // ---------- Détail d'une commande ----------
 /** Documents imprimables d'une commande : ticket, et bon de livraison si elle part avec un livreur. */
 function printDocs(o: Order, company: ReturnType<typeof useCompany>): DocChoice[] {
@@ -582,7 +610,7 @@ function OrderDetail({ id }: { id: string }) {
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
   const [editPay, setEditPay] = useState<Payment | null>(null);
-  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle' | 'postpone'>('');
+  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle' | 'postpone' | 'redate'>('');
   const [payFee, setPayFee] = useState(false);
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
@@ -634,6 +662,7 @@ function OrderDetail({ id }: { id: string }) {
           {canPostpone(o) && (can('orders.create') || can('deliveries.manage')) && <Button variant="ghost" icon="clock" onClick={() => setModal('postpone')}>{reportCount(o) >= MAX_REPORTS ? `Reportée ${MAX_REPORTS} fois : annuler ?` : `À reporter (${reportCount(o)}/${MAX_REPORTS})`}</Button>}
           {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="danger" icon="trash" onClick={() => setModal('cancel')}>Annuler / supprimer</Button>}
           {closed && isWalkIn(o) && can('records.correct') && <Button variant="ghost" icon="edit" onClick={() => setModal('correct')}>Modifier / corriger la vente</Button>}
+          {!isWalkIn(o) && o.returnedAt && ['delivered', 'partial', 'refused'].includes(o.status) && can('records.correct') && <Button variant="ghost" icon="clock" onClick={() => setModal('redate')}>Corriger la date du retour</Button>}
           {closed && can('records.correct') && <Button variant="danger" icon="trash" onClick={() => setModal('void')}>Annuler / supprimer la vente</Button>}
           {closed && !can('records.correct') && <span className="small muted">Erreur sur cette vente ? Le gérant ou le super-admin peut la corriger ou l’annuler.</span>}
         </div>
@@ -719,6 +748,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'dispatch' && <DispatchModal orders={[o]} onClose={() => setModal('')} />}
       {modal === 'return' && <ReturnModal order={o} onClose={() => setModal('')} />}
       {modal === 'settle' && courier && <SettleModal courier={courier} orders={[o]} onClose={() => setModal('')} />}
+      {modal === 'redate' && <RedateModal order={o} onClose={() => setModal('')} />}
       {modal === 'pay' && <PayModal order={o} onClose={() => setModal('')} />}
       {modal === 'exchange' && <ExchangeStart order={o} onClose={() => setModal('')} />}
       {modal === 'shop' && <ShopExchangeModal order={o} onClose={() => setModal('')} />}
@@ -777,6 +807,10 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const [busy, setBusy] = useState(false);
   const [toShop, setToShop] = useState(false);
   const [postpone, setPostpone] = useState(false);
+  // Date réelle du retour (le jour de départ du colis par défaut), même si la saisie est faite plus tard.
+  const [retDay, setRetDay] = useState(() => defaultReturnDay([o]));
+  let dayError = '';
+  try { returnAt(retDay, [o]); } catch (e: any) { dayError = e.message; }
   const amountVal = amount == null ? toCollect : parseAr(amount) ?? 0;
   const c = o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim);
   const prepaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
@@ -787,9 +821,9 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const toSettle = !!o.courierId && !isPickupZone(o.zoneId);
   return (
     <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0} onClick={async () => {
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0 || !!dayError} onClick={async () => {
         setBusy(true);
-        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }); }
+        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }, returnAt(retDay, [o])); }
         catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
         toast(toSettle ? 'Retour confirmé : la commande passe dans « À régler (livreur) »' : 'Retour enregistré'); setBusy(false); onClose();
       }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : 'Confirmer le retour'}</Button></>}>
@@ -802,6 +836,8 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
           {o.status === 'out' && <Button variant="ghost" icon="clock" onClick={() => setPostpone(true)}>À reporter ({reportCount(o)}/{MAX_REPORTS})</Button>}
         </div>
         {postpone && <PostponeModal order={o} onClose={() => setPostpone(false)} onDone={onClose} />}
+        <TextField label="Date réelle du retour du livreur" type="date" required value={retDay} onChange={setRetDay} error={dayError || null}
+          hint={o.dispatchedAt ? `Colis parti le ${new Date(o.dispatchedAt).toLocaleDateString('fr-FR')}. Le retour et l’argent sont comptés à cette date, même si vous l’enregistrez plus tard.` : undefined} />
         {toShop && <Confirm title="Livraison annulée : retrait en boutique" confirmLabel="Annuler la livraison" message={<div className="stack-s"><p>Le livreur rapporte le colis : les articles reviennent en boutique, <strong>réservés pour ce client</strong>.</p><p>Pas de frais de livraison pour le client, pas de dédommagement pour le livreur. Quand le client passera, ouvrez la commande et touchez « Remise au client en boutique » : elle sera comptée comme <strong>vente sur place</strong>.</p></div>}
           onClose={() => setToShop(false)} onConfirm={async () => { await cancelDeliveryToShop(o); toast('Livraison annulée : la commande attend le client en boutique'); onClose(); }} />}
         <div className="table-wrap">

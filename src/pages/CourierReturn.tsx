@@ -8,7 +8,7 @@ import { useCan } from '../lib/auth';
 import { get, save, useTable } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
 import {
-  cancelDeliveryToShop, MAX_REPORTS, reportCount, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
+  cancelDeliveryToShop, defaultReturnDay, departureDays, returnAt, MAX_REPORTS, reportCount, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
   type Courier, type Order, type Zone,
 } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
@@ -116,22 +116,31 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
   const payFees = mode === 'apart' ? feeAll : 0;
   const after = full.carry + collect - feeOwed - n + payFees; // après validation : + il doit encore ; − la boutique lui doit
   const blockedRows = rows.filter((r) => r.blocked);
+  // Date réelle du retour : par défaut le jour de départ des colis cochés (le livreur revient le jour même), modifiable.
+  const [retDay, setRetDay] = useState<string | null>(null);
+  const autoDay = defaultReturnDay(on.map((r) => r.o));
+  const day = retDay ?? autoDay;
+  const days = departureDays(on.map((r) => r.o));
+  const todayYmd = new Date().toLocaleDateString('sv-SE');
+  let dayError = '';
+  try { returnAt(day, on.map((r) => r.o)); } catch (e: any) { dayError = e.message; }
 
   async function validate() {
     setBusy(true);
     try {
+      const at = returnAt(day, on.map((r) => r.o));
       for (const r of on) {
         if (!r.open) continue;
         const kept = Object.fromEntries(r.o.lines.map((l) => [l.id, r.d === 'delivered' && !l.isChoice ? l.qty : 0]));
         const rest = remaining({ ...r.o, status: r.d, lines: r.o.lines.map((l) => ({ ...l, qtyKept: kept[l.id] })), feeCharged: r.fee } as Order);
-        await recordReturn(r.o, { kept, feeCharged: r.fee, collected: rest > 0 ? [{ amount: rest, method: 'cash' }] : [], note: r.d === 'refused' ? 'Refusée (retour livreur)' : undefined });
+        await recordReturn(r.o, { kept, feeCharged: r.fee, collected: rest > 0 ? [{ amount: rest, method: 'cash' }] : [], note: r.d === 'refused' ? 'Refusée (retour livreur)' : undefined }, at);
       }
       const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? 'frais payés à part' : 'frais à payer plus tard (compte du livreur)';
-      await settleCourier(courier, on.map((r) => r.o.id), n, account, [note.trim(), label].filter(Boolean).join(' · '));
-      if (payFees > 0) await settleCourier(courier, [], -payFees, feeAccount, 'Frais de livraison payés au livreur');
-      for (const r of on) if (r.fee > 0) await save('orders', { id: r.o.id, feeStatus: mode === 'retenue' ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: new Date().toISOString(), feePaidHow: ACCOUNTS[feeAccount] } : {}) });
-      toast(`Retour de ${courier.name} enregistré`);
-      setDec({}); setFees({}); setOff({}); setAmount(null); setNote('');
+      await settleCourier(courier, on.map((r) => r.o.id), n, account, [note.trim(), label].filter(Boolean).join(' · '), at);
+      if (payFees > 0) await settleCourier(courier, [], -payFees, feeAccount, 'Frais de livraison payés au livreur', at);
+      for (const r of on) if (r.fee > 0) await save('orders', { id: r.o.id, feeStatus: mode === 'retenue' ? 'kept' : mode === 'apart' ? 'paid' : 'deferred', ...(mode === 'apart' ? { feePaidAt: at, feePaidHow: ACCOUNTS[feeAccount] } : {}) });
+      toast(`Retour de ${courier.name} enregistré${day !== todayYmd ? ` au ${new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR')}` : ''}`);
+      setDec({}); setFees({}); setOff({}); setAmount(null); setNote(''); setRetDay(null);
     } catch (e: any) { toast(e?.message ?? String(e), 'error'); }
     setBusy(false);
   }
@@ -200,6 +209,12 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
       {on.length > 0 && (
         <div className="card stack">
           <h2>Compte avec {courier.name} ({on.length} colis)</h2>
+          <div className="stack-s">
+            <TextField label="Date réelle du retour du livreur" type="date" required value={day} onChange={(v) => setRetDay(v || null)}
+              hint={day === todayYmd ? 'Aujourd’hui.' : `Le retour, l’argent et le compte de ${courier.name} seront enregistrés au ${new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} (jour de départ des colis), même si vous validez aujourd’hui.`} />
+            {days.length > 1 && <div className="notice notice-warn"><Icon name="alert" /><span>Les colis cochés sont partis à des dates différentes ({days.map((d) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })).join(', ')}). Pour que chaque compte reste à sa date, réglez-les jour par jour : choisissez le jour dans « Période » en haut.</span></div>}
+            {dayError && <div className="notice notice-danger"><Icon name="alert" /><span>{dayError}</span></div>}
+          </div>
           <div className="money-lines">
             <div><span>a. Articles</span><strong className="num">{fmtAr(tot.a)}</strong></div>
             <div><span>b. Frais de livraison</span><strong className="num">{fmtAr(tot.b)}</strong></div>
@@ -223,12 +238,12 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
           <div className={`notice ${gap === 0 && after === 0 ? 'notice-ok' : gap !== 0 ? 'notice-danger' : ''}`}><Icon name={gap === 0 ? 'check' : 'alert'} />
             <span>{gap !== 0 ? <><strong>Écart : {gap > 0 ? '+' : '−'} {fmtAr(Math.abs(gap))}</strong> par rapport à l’attendu. </> : null}
               {after === 0 ? 'Après validation, le compte du livreur est à zéro.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (au prochain retour).` : `La boutique lui devra ${fmtAr(-after)} : à payer au plus vite (rappel jusqu’au paiement).`}</span></div>
-          <div className="row"><Button busy={busy} disabled={!canSettle || (gap !== 0 && !note.trim())} icon="check" onClick={() => setAsk(true)}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
+          <div className="row"><Button busy={busy} disabled={!canSettle || (gap !== 0 && !note.trim()) || !!dayError} icon="check" onClick={() => setAsk(true)}>Valider le retour de {courier.name}</Button>{!canSettle && <span className="small muted">Réservé aux personnes qui font les règlements des livreurs.</span>}</div>
         </div>
       )}
       {payOwed && <PayOwedModal courier={courier} amount={-b.carry} onClose={() => setPayOwed(null)} />}
       {ask && <Confirm title={`Valider le retour de ${courier.name} ?`} confirmLabel="Valider" onClose={() => setAsk(false)} onConfirm={validate}
-        message={<div className="stack-s"><p>{on.length} colis seront enregistrés et réglés : {on.filter((r) => r.open).map((r) => `${r.o.number} ${r.d === 'delivered' ? 'livrée' : 'refusée'}`).join(', ') || 'déjà saisis'}.</p>
+        message={<div className="stack-s"><p><strong>Date du retour : {new Date(`${day}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })}</strong></p><p>{on.length} colis seront enregistrés et réglés : {on.filter((r) => r.open).map((r) => `${r.o.number} ${r.d === 'delivered' ? 'livrée' : 'refusée'}`).join(', ') || 'déjà saisis'}.</p>
           <table className="kv-table"><tbody>
             <tr><td>a. Articles</td><td>{fmtAr(tot.a)}</td></tr><tr><td>b. Frais de livraison</td><td>{fmtAr(tot.b)}</td></tr>
             <tr><td>c. Payé par les clients</td><td>{fmtAr(tot.c)}</td></tr><tr><td>d. Déjà payé à la boutique</td><td>{fmtAr(tot.d)}</td></tr>

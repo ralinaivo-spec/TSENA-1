@@ -3,10 +3,10 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-15', items: [
+    'Retour livreur validé plus tard : le retour (livré, refusé, choix), l’argent, le stock et le compte du livreur gardent la date réelle (par défaut le jour de départ des colis), pas la date de saisie. Le gérant peut corriger la date d’un retour déjà saisi (« Corriger la date du retour » dans la commande, ou « Changer la date » d’un versement).',
+    'Stock : colonnes « Réservé » et « Disponible », et dans le détail la liste des commandes en cours qui réservent l’article. Ajouter un article : « 2 dispo · 8 en stock · 6 réservé(s) ».',
+    'Le vendeur et le responsable remettent les commandes au livreur depuis « Commandes clients » ; le menu « Livraisons et livreurs » est réservé à l’admin et au gérant. Responsable : dans « Commandes », les pages qu’il tient.',
     'En attente de livraison : le livreur se choisit directement dans la liste (par commande ou pour toute une zone), puis une seule validation remet tout, chaque commande à son livreur.',
-    'Responsable : dans « Commandes », seulement les pages qu’il tient ; dans « Livraisons », toutes les commandes à remettre au livreur, toutes pages.',
-    'Seul le responsable remet les commandes au livreur (et change de livreur) ; il voit toutes les pages. Le vendeur ne voit que les livraisons de ses pages.',
-    'Menu « Livraisons » de retour pour le responsable (il assigne les livreurs) et pour le vendeur (seulement les livraisons de ses pages, sans les comptes de tous les livreurs).',
     'Situation par page corrigée : Total commandes − annulé − reporté = Ventes ; Ventes = espèces + MVola + Orange + Airtel + reste à payer. Une livraison reportée passe à sa nouvelle date ; un échange pris compte dans les ventes, un échange non pris est retiré.',
     'Vendeur : il ne voit que ses pages partout (accueil, commandes, ventes, clients, caisse du jour), jamais le total de tous les vendeurs.',
     'Accueil : « Situation par page » — total des ventes, espèces, MVola, Orange Money, Airtel Money, reste à payer, annulé, échange et livraisons reportées, par page et au total.',

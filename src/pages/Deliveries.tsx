@@ -5,12 +5,12 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, parseAr } from '../lib/catalog';
-import { dispatchOrder, orderText, choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { defaultReturnDay, returnAt, dispatchOrder, orderText, choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Help, Badge, FilterSelect, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { matchQuery } from '../lib/catalog';
-import { ReassignModal, ReturnModal, OrderRow } from './Orders';
+import { ReassignModal, ReturnModal, OrderRow, RedateModal } from './Orders';
 import { CourierReturn } from './CourierReturn';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
@@ -317,14 +317,20 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
   const owesShop = expected >= 0;
   const after = owesShop ? expected - n : expected + n;
   const toggle = (id: string) => setChecked(checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id]);
+  const can = useCan();
+  const [retDay, setRetDay] = useState<string | null>(null);
+  const day = retDay ?? defaultReturnDay(sel);
+  let dayError = '';
+  try { returnAt(day, sel); } catch (e: any) { dayError = e.message; }
+  const [redate, setRedate] = useState<CourierSettlement | null>(null);
   return (
     <Modal title={`Versement — ${courier.name}`} onClose={onClose} wide
       footer={<>
         <PrintButton label="Ticket des livraisons" docs={[{ key: 'liste', label: 'Livraisons à verser', build: () => routeSheetDoc(courier, b.pending, company, 'LIVRAISONS À VERSER') }]} />
         <Button variant="ghost" onClick={onClose}>Annuler</Button>
-        <Button busy={busy} disabled={!sel.length && !n} onClick={async () => {
+        <Button busy={busy} disabled={(!sel.length && !n) || !!dayError} onClick={async () => {
           setBusy(true);
-          try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined); toast('Versement enregistré'); onClose(); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); }
+          try { await settleCourier(courier, sel.map((o) => o.id), owesShop ? n : -n, account, note.trim() || undefined, returnAt(day, sel)); toast('Versement enregistré'); onClose(); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); }
         }}>Valider le versement</Button></>}>
       <div className="stack">
         <p className="small">Les frais du livreur ne sont jamais dans le montant à encaisser : il les garde. Cochez les livraisons <strong>réellement effectuées</strong> (d’après le ticket rapporté par le livreur). Les autres restent sur son compte et seront reportées au prochain versement. Pour une livraison pas faite, refusée ou un retour, touchez « Retour / anomalie ».</p>
@@ -364,18 +370,20 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
           <SelectField label={owesShop ? 'Argent reçu sur' : 'Payé depuis'} value={account} onChange={(v) => setAccount(v as AccountId)} options={ACCOUNT_IDS.map((a) => ({ value: a, label: ACCOUNTS[a] }))} />
         </div>
         <TextField label="Note (remarques du ticket, facultatif)" value={note} onChange={setNote} />
+        <TextField label="Date réelle du versement" type="date" required value={day} onChange={(v) => setRetDay(v || null)} error={dayError || null} hint="Par défaut, le jour de départ des livraisons cochées : le compte du livreur et la caisse restent à cette date." />
         <p className="small">{after === 0 ? '✓ Après ce versement, les livraisons cochées sont soldées.' : after > 0 ? `Il restera ${fmtAr(after)} à verser par le livreur (ajouté au prochain versement).` : `La boutique lui devra encore ${fmtAr(-after)}.`}</p>
         {sel.some((o) => o.status === 'out') && <p className="small muted">Les livraisons cochées encore « à confirmer » seront marquées livrées : le client a payé au livreur tout ce qui restait.</p>}
         {settlements.length > 0 && (
           <div className="stack-s">
             <h3>Derniers versements</h3>
             <ul className="list">{settlements.map((s) => (
-              <li key={s.id} className="list-item"><div className="list-item-main"><span className="list-item-title">{s.amount >= 0 ? `Versé ${fmtAr(s.amount)}` : `Payé au livreur ${fmtAr(-s.amount)}`}</span><p className="small muted">{fmtDateTime(s.at)} · {ACCOUNTS[s.account]} · attendu {fmtAr(s.balanceBefore)} · {s.orderIds.length} livraison(s){s.userName ? ` · ${s.userName}` : ''}{s.note ? ` · ${s.note}` : ''}</p></div></li>
+              <li key={s.id} className="list-item"><div className="list-item-main"><span className="list-item-title">{s.amount >= 0 ? `Versé ${fmtAr(s.amount)}` : `Payé au livreur ${fmtAr(-s.amount)}`}</span><p className="small muted">{fmtDateTime(s.at)} · {ACCOUNTS[s.account]} · attendu {fmtAr(s.balanceBefore)} · {s.orderIds.length} livraison(s){s.userName ? ` · ${s.userName}` : ''}{s.note ? ` · ${s.note}` : ''}{s.redatedFrom ? ` · date corrigée (saisi le ${fmtDateTime(s.redatedFrom)})` : ''}</p></div>{can('records.correct') && <Button variant="quiet" className="btn-sm" icon="edit" onClick={() => setRedate(s)}>Changer la date</Button>}</li>
             ))}</ul>
           </div>
         )}
       </div>
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
+      {redate && <RedateModal settlement={redate} onClose={() => setRedate(null)} />}
     </Modal>
   );
 }

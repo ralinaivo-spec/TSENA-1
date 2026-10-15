@@ -5,7 +5,7 @@ import { audit, currentUser, type User } from './auth';
 import { assertOpenAt } from './closed';
 import { variantCost, type Variant } from './catalog';
 import { adjustsKeptTotal, adjustsTotal } from './lots';
-import { courierSplit, isPickupZone, isWalkIn, itemsTotal, keptTotal, recordReturn, remaining, sellingLines, type Courier, type Order, type PayMethod } from './orders';
+import { courierSplit, isPickupZone, isWalkIn, itemsTotal, keptTotal, recordReturn, remaining, returnAt as returnAtImport, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
 // ---------- Comptes ----------
 export type AccountId = PayMethod | 'bank';
@@ -73,7 +73,7 @@ export interface Recurring extends BaseRecord {
   typeId?: string;        // type de dépense (Charge fixe par défaut)
   active: boolean; skipped?: string[];
 }
-export interface CourierSettlement extends BaseRecord { courierId: string; at: string; amount: number; account: AccountId; balanceBefore: number; orderIds: string[]; note?: string; userName?: string }
+export interface CourierSettlement extends BaseRecord { courierId: string; at: string; amount: number; account: AccountId; balanceBefore: number; orderIds: string[]; note?: string; userName?: string; redatedFrom?: string; redatedReason?: string }
 // ---------- Dates (heure de Madagascar = heure de l'appareil) ----------
 const pad = (n: number) => String(n).padStart(2, '0');
 export const dayOf = (iso?: string) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
@@ -274,25 +274,86 @@ export function courierBalance(courierId: string, until?: string) {
  * (sans articles en choix) est marquée livrée : le client a payé au livreur tout ce qui restait.
  * amount + : le livreur remet l'argent ; − : la boutique lui verse ses frais.
  */
-export async function settleCourier(c: Courier, orderIds: string[], amount: number, account: AccountId, note?: string) {
+export async function settleCourier(c: Courier, orderIds: string[], amount: number, account: AccountId, note?: string, atGiven?: string) {
   const blocked = orderIds.map((id) => get<Order>('orders', id)).filter((o): o is Order => !!o && o.status === 'out' && o.lines.some((l) => l.isChoice));
   if (blocked.length) throw new Error(`Choix du client à préciser avant le versement : ${blocked.map((o) => o.number).join(', ')}`);
   for (const id of orderIds) {
     const o = get<Order>('orders', id);
     if (o && o.status === 'out' && !o.lines.some((l) => l.isChoice)) {
-      await recordReturn(o, { kept: Object.fromEntries(o.lines.map((l) => [l.id, l.qty])), feeCharged: o.deliveryFee || 0, collected: remaining(o) > 0 ? [{ amount: remaining(o), method: 'cash' }] : [], note: 'Livrée (cochée au versement)' });
+      await recordReturn(o, { kept: Object.fromEntries(o.lines.map((l) => [l.id, l.qty])), feeCharged: o.deliveryFee || 0, collected: remaining(o) > 0 ? [{ amount: remaining(o), method: 'cash' }] : [], note: 'Livrée (cochée au versement)' }, atGiven);
     }
   }
   const before = courierBalance(c.id);
   const checked = orderIds.map((id) => get<Order>('orders', id)!).filter(Boolean);
   const expected = before.carry + checked.reduce((t, o) => t + deliveryNet(o).net, 0);
-  const at = bizNow();
+  const at = atGiven ?? bizNow();
+  assertOpenAt(at, 'Versement du livreur');
   const [s] = await save('courierSettlements', { courierId: c.id, at, amount, account, balanceBefore: expected, orderIds, note, userName: who() });
   if (amount) await save('cashMoves', { at, account, amount, type: 'courier_settlement', label: `${amount > 0 ? 'Versement de' : 'Frais versés à'} ${c.name}`, note, refType: 'courierSettlements', refId: s.id, userName: who() });
   // Les commandes réglées ne peuvent plus changer de livreur.
   if (orderIds.length) await save('orders', orderIds.map((id) => ({ id, courierSettledAt: at })));
   await audit('Versement livreur', `${c.name} : ${amount >= 0 ? 'remis ' + amount : 'versé ' + -amount} Ar (${ACCOUNTS[account]}) — attendu ${expected} Ar, ${orderIds.length} livraison(s) cochée(s)`, 'courierSettlements', s.id);
   return s as CourierSettlement;
+}
+
+/** Déplace le retour d'un colis (enregistré le jour `oldDay`) à la date `at` : statut, argent du livreur, stock, frais. */
+async function moveReturn(o: Order, oldDay: string, at: string, extra: Partial<Order> = {}) {
+  const same = (iso?: string) => !!iso && dayOf(iso) === oldDay;
+  const patch: Partial<Order> & { id: string } = { id: o.id, ...extra };
+  if (same(o.returnedAt)) {
+    patch.returnedAt = at;
+    patch.statusDates = Object.fromEntries(Object.entries(o.statusDates || {}).map(([k, v]) => [k, same(v as string) && ['delivered', 'partial', 'refused'].includes(k) ? at : v])) as Order['statusDates'];
+    patch.payments = (o.payments || []).map((p) => (p.receivedBy === 'courier' && same(p.at) ? { ...p, at } : p));
+    const sm = all<BaseRecord & { refType?: string; refId?: string; type: string; at: string }>('stockMoves').filter((m) => m.refType === 'order' && m.refId === o.id && ['delivery_return', 'exchange_in'].includes(m.type) && same(m.at));
+    if (sm.length) await save('stockMoves', sm.map((m) => ({ id: m.id, at })));
+  }
+  if (same(o.feePaidAt)) patch.feePaidAt = at;
+  await save('orders', patch);
+}
+
+/** Versement du livreur qui contient ce colis (le dernier), s'il y en a un. */
+export const settlementOf = (o: Order) => all<CourierSettlement>('courierSettlements').filter((s) => s.orderIds.includes(o.id)).sort((a, b) => b.at.localeCompare(a.at))[0];
+
+/**
+ * Correction (gérant) depuis la commande : date réelle du retour. Si le colis a été réglé avec d'autres dans un versement,
+ * tout le versement change de date (le compte du livreur reste d'un seul tenant) ; sinon, seulement ce colis.
+ */
+export async function redateReturn(o: Order, ymd: string, reason: string) {
+  const s = settlementOf(o);
+  if (s && o.returnedAt && dayOf(s.at) === dayOf(o.returnedAt)) return redateSettlement(s, ymd, reason);
+  if (!o.returnedAt) throw new Error('Cette commande n’a pas encore de retour du livreur.');
+  const oldDay = dayOf(o.returnedAt);
+  if (ymd === oldDay) return;
+  const at = returnAtImport(ymd, [o]);
+  assertOpenAt(o.returnedAt, 'Changement de date du retour'); assertOpenAt(at, 'Changement de date du retour');
+  await moveReturn(o, oldDay, at);
+  await audit('Date de retour corrigée', `${o.number} : retour du ${oldDay} → ${ymd} — ${reason}`, 'orders', o.id, 'high');
+}
+
+/**
+ * Correction (gérant) : un retour livreur validé en retard, à la date de la saisie au lieu du jour réel.
+ * Le règlement, son mouvement de caisse et, pour chaque colis réglé, le retour (refus / choix, argent encaissé par
+ * le livreur, retour en stock, frais payés) passent au jour choisi. Rien n'est supprimé ; le journal garde la trace.
+ */
+export async function redateSettlement(s: CourierSettlement, ymd: string, reason: string) {
+  const oldDay = dayOf(s.at);
+  if (ymd === oldDay) return;
+  const orders = s.orderIds.map((id) => get<Order>('orders', id)).filter((o): o is Order => !!o);
+  const at = returnAtImport(ymd, orders);
+  assertOpenAt(s.at, 'Changement de date du versement'); assertOpenAt(at, 'Changement de date du versement');
+  await save('courierSettlements', { id: s.id, at, redatedFrom: s.at, redatedReason: reason });
+  const moves = all<BaseRecord & { refType?: string; refId?: string; at: string }>('cashMoves').filter((m) => m.refType === 'courierSettlements' && m.refId === s.id);
+  if (moves.length) await save('cashMoves', moves.map((m) => ({ id: m.id, at })));
+  // Frais du livreur payés à part au même moment (versement sans colis, juste après) : même date.
+  const t0 = new Date(s.at).getTime();
+  const fees = all<CourierSettlement>('courierSettlements').filter((x) => x.id !== s.id && x.courierId === s.courierId && !x.orderIds.length && Math.abs(new Date(x.at).getTime() - t0) < 120_000);
+  for (const f of fees) {
+    await save('courierSettlements', { id: f.id, at, redatedFrom: f.at, redatedReason: reason });
+    const fm = all<BaseRecord & { refType?: string; refId?: string; at: string }>('cashMoves').filter((m) => m.refType === 'courierSettlements' && m.refId === f.id);
+    if (fm.length) await save('cashMoves', fm.map((m) => ({ id: m.id, at })));
+  }
+  for (const o of orders) await moveReturn(o, oldDay, at, { courierSettledAt: at });
+  await audit('Date de versement corrigée', `Versement ${s.userName ? `de ${s.userName} ` : ''}du ${oldDay} → ${ymd} (${orders.map((o) => o.number).join(', ') || 'sans colis'}) — ${reason}`, 'courierSettlements', s.id, 'high');
 }
 
 /** Ce qui empêche de supprimer un livreur : colis encore chez lui, argent pas réglé, frais encore dus. */
@@ -482,10 +543,10 @@ export function feeState(o: Order): FeeState {
   return deferredOrders(o.courierId!).some((x) => x.id === o.id) ? 'deferred' : 'settled';
 }
 /** Payer des frais différés au livreur : enregistre le paiement et marque les commandes concernées (les plus anciennes d'abord). */
-export async function payDeferredFees(c: Courier, amount: number, account: AccountId, only?: Order[]) {
+export async function payDeferredFees(c: Courier, amount: number, account: AccountId, only?: Order[], atGiven?: string) {
   const list = (only ?? deferredOrders(c.id)).sort((a, b) => (a.courierSettledAt || '').localeCompare(b.courierSettledAt || ''));
-  await settleCourier(c, [], -amount, account, `Frais de livraison différés payés${list.length ? ' : ' + list.map((o) => o.number).join(', ') : ''}`);
-  let left = amount; const at = bizNow();
+  await settleCourier(c, [], -amount, account, `Frais de livraison différés payés${list.length ? ' : ' + list.map((o) => o.number).join(', ') : ''}`, atGiven);
+  let left = amount; const at = atGiven ?? bizNow();
   for (const o of list) {
     const f = courierSplit(o).fee; if (left + 0.5 < f) break;
     left -= f;
