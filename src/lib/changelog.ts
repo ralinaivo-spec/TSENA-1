@@ -5,6 +5,8 @@ export const CHANGELOG: Release[] = [
   { date: '2026-10-16', items: [
     'Commandes « En livraison » : le vendeur et le responsable voient toujours leurs colis en livraison, mais seul le gérant (droit « Faire les règlements des livreurs ») confirme le retour du livreur, au moment de faire le compte du livreur.',
     'Caisse du jour : chaque vendeur voit le total de toutes les ventes et dépenses de la journée (tous les vendeurs), plus de filtre par vendeur.',
+    'Échange pendant la livraison : sur une commande « En livraison », le vendeur touche « Le client veut échanger », indique ce que le client rend puis ce qu’il prend à la place (autre modèle, autre taille) : une commande échange liée est créée. Au retour du livreur, les articles rendus sont déjà marqués et reviennent en stock ; ce que le client avait déjà payé passe sur l’échange.',
+    'Commande refusée : bouton « Échange (autre modèle / taille) » pour renvoyer autre chose au même client.',
   ] },
   { date: '2026-10-15', items: [
     'Commandes : nouvel onglet « Annulées / refusées » (commandes annulées, colis refusés, ventes sur place annulées), filtré par la date de l’annulation ou du refus ; « Terminées » = livrées. Annuler un colis déjà parti : date réelle (jour de départ par défaut) ; le gérant peut corriger la date d’une annulation déjà saisie.',

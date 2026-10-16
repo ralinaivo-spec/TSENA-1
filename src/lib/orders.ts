@@ -52,6 +52,8 @@ export interface Order extends BaseRecord {
   number: string;
   kind: 'order' | 'exchange';
   parentId?: string;              // commande d'origine (échange)
+  /** Échange demandé par le client pendant la livraison : ce qu'il rend (par ligne) et la commande échange créée. */
+  exchangeRequest?: { at: string; by?: string; returns: Record<string, number>; childId: string; childNumber: string };
   channel: 'facebook' | 'phone' | 'shop' | 'other';
   customerId?: string;
   phone: string;
@@ -343,6 +345,28 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
   }
   const late = atGiven && ymdOf(new Date(atGiven)) !== ymdOf(new Date(bizNow())) ? { returnSavedAt: new Date().toISOString() } : {};
   await setStatus(o, status, { lines, feeCharged: r.feeCharged, payments: [...(o.payments || []), ...pays], returnedAt: at, ...late, notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
+  await moveExchangeCredit(o.id, at);
+}
+
+/**
+ * Échange demandé pendant la livraison : si le client avait déjà payé à la boutique (ex. MVola) plus que ce qu'il garde
+ * de la première commande, le trop-payé passe sur la commande échange (il ne paie que la différence).
+ */
+export async function moveExchangeCredit(orderId: string, at: string) {
+  const o = get<Order>('orders', orderId);
+  const child = o?.exchangeRequest ? get<Order>('orders', o.exchangeRequest.childId) : undefined;
+  if (!o || !child || child.status === 'cancelled') return;
+  const over = -remaining(o);
+  const shopPaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
+  const x = Math.min(over, shopPaid);
+  if (x <= 0) return;
+  const method = (o.payments || []).find((p) => p.receivedBy === 'shop')?.method ?? 'cash';
+  const u = currentUser()?.fullName;
+  await save('orders', [
+    { id: o.id, payments: [...(o.payments || []), { id: newId(), at, amount: -x, method, receivedBy: 'shop' as const, note: `Reporté sur l’échange ${child.number}`, userName: u }], events: [...(o.events || []), { at, text: `${x.toLocaleString('fr-FR')} Ar déjà payés reportés sur l’échange ${child.number}`, user: u }] },
+    { id: child.id, payments: [...(child.payments || []), { id: newId(), at, amount: x, method, receivedBy: 'shop' as const, note: `Déjà payé sur ${o.number}`, userName: u }], events: [...(child.events || []), { at, text: `${x.toLocaleString('fr-FR')} Ar déjà payés sur ${o.number} (avant l’échange)`, user: u }] },
+  ]);
+  await audit('Échange', `${o.number} → ${child.number} : ${x} Ar déjà payés reportés`, 'orders', child.id);
 }
 
 /** Échange traité directement en boutique (sans livraison). */

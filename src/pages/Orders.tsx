@@ -323,7 +323,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
     if (!zoneId) return setError('Le lieu de livraison est obligatoire : choisissez une zone (ou « Sur boutique »).');
     if (!pickup) {
       if (!place.trim()) return setError('Indiquez le lieu précis de livraison.');
-      if (!((parseNum(fee) ?? 0) > 0)) return setError('Les frais de livraison sont obligatoires pour une livraison.');
+      if (!exchangeOf && !((parseNum(fee) ?? 0) > 0)) return setError('Les frais de livraison sont obligatoires pour une livraison.');
       if (!courierId || (courierId === '__new' && !newCourier.trim())) return setError('Choisissez le livreur de cette commande.');
     }
     if (!priced.length && !exchangeOf) return setError('Ajoutez au moins un article.');
@@ -386,8 +386,11 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
         </div>
         <p className="small muted">Zone manquante ou frais à changer ? <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setZonesOpen(true)}>Gérer les zones de livraison</button> (la commande en cours est gardée)</p>
 
-        {exchangeOf && (
+        {exchangeOf && exchangeOf.returnLines.length > 0 && (
           <div className="notice"><Icon name="refresh" /><span>Articles repris au client : {exchangeOf.returnLines.map((r) => `${r.qty} × ${variantLabel(get<Variant>('variants', r.variantId))}`).join(', ')} — valeur {fmtAr(draft.credit)} déduite.</span></div>
+        )}
+        {exchangeOf && exchangeOf.returnLines.length === 0 && (
+          <div className="notice"><Icon name="refresh" /><span>Échange de <strong>{exchangeOf.parent.number}</strong> : ajoutez ce que le client prend à la place (autre modèle, autre taille). Ce qu’il rend revient en stock avec le retour du livreur de {exchangeOf.parent.number} ; ce qu’il avait déjà payé à la boutique passe sur cet échange. Frais de livraison : mettez 0 si l’échange est offert.</span></div>
         )}
 
         <div className="row-between"><h3>{exchangeOf ? 'Nouveaux articles' : 'Articles'}</h3><Button variant="ghost" icon="plus" onClick={() => setPicking(true)}>Ajouter un article</Button></div>
@@ -620,7 +623,7 @@ function OrderDetail({ id }: { id: string }) {
   useTable<Zone>('zones');
   const o = orders.find((x) => x.id === id);
   const [editPay, setEditPay] = useState<Payment | null>(null);
-  const [modal, setModal] = useState<'' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle' | 'postpone' | 'redate'>('');
+  const [modal, setModal] = useState<'' | 'dlvexchange' | 'edit' | 'dispatch' | 'return' | 'pay' | 'cancel' | 'exchange' | 'shop' | 'pickup' | 'reassign' | 'settle' | 'postpone' | 'redate'>('');
   const [payFee, setPayFee] = useState(false);
   if (!o) return <Empty icon="list" title="Commande introuvable"><Button variant="ghost" onClick={() => navigate('/commandes')}>Retour</Button></Empty>;
   const zone = get<Zone>('zones', o.zoneId || '');
@@ -656,6 +659,7 @@ function OrderDetail({ id }: { id: string }) {
         {o.notes && <p className="small" style={{ whiteSpace: 'pre-line' }}><strong>Observations :</strong> {o.notes}</p>}
         {parent && <p className="small">Échange de la commande <a href={`#/commandes/${parent.id}`}>{parent.number}</a></p>}
         {children.map((c) => <p key={c.id} className="small">Échange lié : <a href={`#/commandes/${c.id}`}>{c.number}</a> ({ORDER_STATUS[c.status].label})</p>)}
+        {o.exchangeRequest && <div className="notice"><Icon name="refresh" /><span><strong>Échange demandé par le client</strong> pendant la livraison : il rend {o.lines.filter((l) => o.exchangeRequest!.returns[l.id]).map((l) => `${o.exchangeRequest!.returns[l.id]} × ${get<Product>('products', get<Variant>('variants', l.variantId)?.productId || '')?.name ?? ''} ${variantLabel(get<Variant>('variants', l.variantId))}`).join(', ') || 'rien'} ; à la place : <a href={`#/commandes/${o.exchangeRequest.childId}`}>{o.exchangeRequest.childNumber}</a>.{o.status === 'out' ? ' Au retour du livreur, ces articles sont déjà marqués « rendus ».' : ''}</span></div>}
         {hasPendingChoice(o) && <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}><strong>Choix du client à préciser</strong> : {choiceQty(o)} pièce(s) sont parties en choix. Dès que le livreur revient, touchez « Préciser le choix du client » et indiquez ce que le client a gardé. Tant que ce n’est pas fait, le versement du livreur pour cette livraison est bloqué.</span></div>}
 
         <div className="action-bar">
@@ -665,10 +669,11 @@ function OrderDetail({ id }: { id: string }) {
           {['new', 'confirmed', 'ready'].includes(o.status) && can('orders.create') && <Button variant={isPickupZone(o.zoneId) ? 'primary' : 'ghost'} icon="store" onClick={() => setModal('pickup')}>{isPickupZone(o.zoneId) ? 'Remise au client en boutique' : 'Retrait en boutique (le client vient la chercher)'}</Button>}
           {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Commande revenue à « enregistrée »')}>Revenir à « enregistrée »</Button>}
           {o.status === 'out' && can('couriers.settle') && <Button icon="inbox" onClick={() => setModal('return')}>{hasPendingChoice(o) ? 'Préciser le choix du client' : 'Confirmer le retour du livreur'}</Button>}
+          {o.status === 'out' && !o.exchangeRequest && o.kind !== 'exchange' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('dlvexchange')}>Le client veut échanger</Button>}
           {needsSettlement(o) && courier && can('couriers.settle') && <Button icon="wallet" onClick={() => setModal('settle')}>Régler avec {courier.name}</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
           {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
-          {closed && o.status !== 'refused' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>Retour / échange</Button>}
+          {closed && can('returns.manage') && !children.some((c) => c.status !== 'cancelled' && c.id === o.exchangeRequest?.childId) && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>{o.status === 'refused' ? 'Échange (autre modèle / taille)' : 'Retour / échange'}</Button>}
           {canPostpone(o) && (can('orders.create') || can('deliveries.manage')) && <Button variant="ghost" icon="clock" onClick={() => setModal('postpone')}>{reportCount(o) >= MAX_REPORTS ? `Reportée ${MAX_REPORTS} fois : annuler ?` : `À reporter (${reportCount(o)}/${MAX_REPORTS})`}</Button>}
           {!closed && o.status !== 'cancelled' && can('orders.create') && <Button variant="danger" icon="trash" onClick={() => setModal('cancel')}>Annuler / supprimer</Button>}
           {closed && isWalkIn(o) && can('records.correct') && <Button variant="ghost" icon="edit" onClick={() => setModal('correct')}>Modifier / corriger la vente</Button>}
@@ -757,6 +762,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'edit' && <OrderForm order={o} onClose={() => setModal('')} />}
       {modal === 'dispatch' && <DispatchModal orders={[o]} onClose={() => setModal('')} />}
       {modal === 'return' && <ReturnModal order={o} onClose={() => setModal('')} />}
+      {modal === 'dlvexchange' && <DeliveryExchange order={o} onClose={() => setModal('')} />}
       {modal === 'settle' && courier && <SettleModal courier={courier} orders={[o]} onClose={() => setModal('')} />}
       {modal === 'redate' && <RedateModal order={o} onClose={() => setModal('')} />}
       {modal === 'pay' && <PayModal order={o} onClose={() => setModal('')} />}
@@ -801,7 +807,7 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
 }
 
 export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, l.isChoice ? '' : String(l.qty)])));
+  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, o.exchangeRequest && !l.isChoice ? String(Math.max(0, l.qty - (o.exchangeRequest.returns[l.id] ?? 0))) : l.isChoice ? '' : String(l.qty)])));
   const hasChoice = o.lines.some((l) => l.isChoice);
   const choiceMissing = o.lines.filter((l) => l.isChoice && (kept[l.id] ?? '').trim() === '');
   const keptNum = Object.fromEntries(o.lines.map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(kept[l.id]) ?? 0))]));
@@ -1075,7 +1081,7 @@ function ExchangeStart({ order: o, onClose }: { order: Order; onClose: () => voi
   const [next, setNext] = useState<{ variantId: string; qty: number; unitPrice: number }[] | null>(null);
   const keptLines = o.lines.filter((l) => (l.qtyKept ?? 0) > 0);
   const returnLines = keptLines.map((l) => ({ variantId: l.variantId, qty: Math.min(l.qtyKept ?? 0, parseNum(ret[l.id]) ?? 0), unitPrice: l.unitPrice })).filter((r) => r.qty > 0);
-  if (next) return <OrderForm exchangeOf={{ parent: o, returnLines: next }} onClose={onClose} onSaved={(x) => navigate('/commandes/' + x.id)} />;
+  if (next || !keptLines.length) return <OrderForm exchangeOf={{ parent: o, returnLines: next ?? [] }} onClose={onClose} onSaved={(x) => navigate('/commandes/' + x.id)} />;
   return (
     <Modal title={`Retour / échange — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!returnLines.length} onClick={() => setNext(returnLines)}>Continuer</Button></>}>
@@ -1088,6 +1094,37 @@ function ExchangeStart({ order: o, onClose }: { order: Order; onClose: () => voi
               <Thumb src={p?.photo} size={40} />
               <div style={{ flex: 1 }}><strong>{p?.code}</strong> {variantLabel(v)}<div className="small muted">acheté {l.qtyKept} × {fmtAr(l.unitPrice)}</div></div>
               <input className="cell-input" style={{ width: 90 }} inputMode="numeric" placeholder="0" aria-label="Quantité rendue" value={ret[l.id] ?? ''} onChange={(e) => setRet({ ...ret, [l.id]: e.target.value })} />
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
+/** Échange demandé pendant la livraison : ce que le client rend (revient avec le retour du livreur), puis ce qu'il prend à la place. */
+function DeliveryExchange({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const [ret, setRet] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.filter((l) => !l.isChoice).map((l) => [l.id, String(l.qty)])));
+  const [step, setStep] = useState(1);
+  const returns = Object.fromEntries(o.lines.filter((l) => !l.isChoice).map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(ret[l.id]) ?? 0))]).filter(([, n]) => (n as number) > 0)) as Record<string, number>;
+  if (step === 2) return <OrderForm exchangeOf={{ parent: o, returnLines: [] }} onClose={onClose} onSaved={async (x) => {
+    const at = bizNow(); const u = currentUser()?.fullName;
+    await save('orders', { id: o.id, exchangeRequest: { at, by: u, returns, childId: x.id, childNumber: x.number }, events: [...(o.events || []), { at, text: `Échange demandé par le client : nouvelle commande ${x.number}`, user: u }] });
+    await audit('Échange', `${o.number} : échange demandé pendant la livraison → ${x.number}`, 'orders', o.id);
+    navigate('/commandes/' + x.id);
+  }} />;
+  return (
+    <Modal title={`Le client veut échanger — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!Object.keys(returns).length} onClick={() => setStep(2)}>Continuer : ce qu’il prend à la place</Button></>}>
+      <div className="stack">
+        <Help>1. Indiquez ce que le client rend au livreur (autre taille, autre modèle, pas à son goût). 2. À l’étape suivante, choisissez ce qu’il prend à la place : une commande « échange » est créée, liée à celle-ci. Ce qui est rendu revient en stock quand le gérant confirme le retour du livreur ; ce que le client avait déjà payé passe sur l’échange.</Help>
+        {o.lines.filter((l) => !l.isChoice).map((l) => {
+          const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId);
+          return (
+            <div key={l.id} className="row" style={{ flexWrap: 'nowrap' }}>
+              <Thumb src={photoOf(v)} size={40} />
+              <div style={{ flex: 1, minWidth: 0 }}><strong>{p?.name}</strong> <span className="small muted">{variantLabel(v)}</span><div className="small muted">parti : {l.qty} × {fmtAr(l.unitPrice)}</div></div>
+              <label className="small">Rendu<input className="cell-input" style={{ width: 80 }} inputMode="numeric" aria-label={`Quantité rendue ${p?.name ?? ''}`} value={ret[l.id] ?? ''} onChange={(e) => setRet({ ...ret, [l.id]: e.target.value.replace(/\D/g, '') })} /></label>
             </div>
           );
         })}

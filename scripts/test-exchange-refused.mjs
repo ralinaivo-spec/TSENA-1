@@ -1,0 +1,21 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+let fail = 0; const ok = (c, m) => { console.log((c ? 'OK   ' : 'FAIL ') + m); if (!c) fail++; };
+const p = await (await b.newContext({ viewport: { width: 390, height: 860 } })).newPage();
+p.on('pageerror', (e) => { console.log('ERR', e.message); fail++; });
+await p.goto('http://localhost:5173/'); await p.waitForTimeout(600);
+await p.getByLabel("Nom d'utilisateur").fill('super-adm'); await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter'); await p.waitForTimeout(500);
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(300);
+await p.evaluate(async () => { const t = window.__tsena; const at = new Date().toISOString();
+  await t.save('products', [{ id: 'p1', code: 'S', name: 'Sandale', priceRetail: 25000, active: true }]);
+  await t.save('variants', [{ id: 'v38', productId: 'p1', sku: 'S38', size: '38', active: true }]);
+  await t.save('couriers', { id: 'k1', name: 'Rado', active: true });
+  await t.save('orders', { id: 'o2', number: 'C-2', kind: 'order', channel: 'facebook', phone: '0341112233', name: 'Fara', zoneId: 'zone-centre', place: 'Analakely', courierId: 'k1', status: 'refused', dispatchedAt: at, returnedAt: at,
+    lines: [{ id: 'l1', variantId: 'v38', qty: 1, unitPrice: 25000, qtyKept: 0, qtyReturned: 1 }], payments: [], discount: 0, deliveryFee: 3000, feeCharged: 0, createdAt: at }); });
+await p.goto('http://localhost:5173/#/commandes/o2'); await p.waitForTimeout(500);
+const btn = p.getByRole('button', { name: 'Échange (autre modèle / taille)' });
+ok(await btn.count() === 1, 'commande refusée : bouton échange');
+await btn.click(); await p.waitForTimeout(400);
+ok((await p.getByRole('dialog').innerText()).includes('Échange de'), 'ouvre directement le formulaire échange');
+const sw = await p.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 391, 'pas de débordement');
+console.log(fail ? `${fail} ÉCHEC(S)` : 'TOUT EST BON'); await b.close();
