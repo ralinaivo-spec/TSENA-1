@@ -2,6 +2,10 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-16', items: [
+    'Commandes « En livraison » : le vendeur et le responsable voient toujours leurs colis en livraison, mais seul le gérant (droit « Faire les règlements des livreurs ») confirme le retour du livreur, au moment de faire le compte du livreur.',
+    'Caisse du jour : chaque vendeur voit le total de toutes les ventes et dépenses de la journée (tous les vendeurs), plus de filtre par vendeur.',
+  ] },
   { date: '2026-10-15', items: [
     'Commandes : nouvel onglet « Annulées / refusées » (commandes annulées, colis refusés, ventes sur place annulées), filtré par la date de l’annulation ou du refus ; « Terminées » = livrées. Annuler un colis déjà parti : date réelle (jour de départ par défaut) ; le gérant peut corriger la date d’une annulation déjà saisie.',
     'Retour livreur validé plus tard : le retour (livré, refusé, choix), l’argent, le stock et le compte du livreur gardent la date réelle (par défaut le jour de départ des colis), pas la date de saisie. Le gérant peut corriger la date d’un retour déjà saisi (« Corriger la date du retour » dans la commande, ou « Changer la date » d’un versement).',

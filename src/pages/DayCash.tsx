@@ -30,7 +30,9 @@ export function DayCashPage() {
   if (!can('cashday.use')) return <Empty icon="lock" title="Accès réservé" />;
   const isToday = date === today();
   const scope = useMyScope();
-  const only = scope.strict ? { pages: scope.pages, userName: user?.fullName } : undefined;
+  // Caisse du jour : chaque vendeur voit le total de toutes les ventes et dépenses de la journée (pas de filtre par vendeur).
+  const only = undefined;
+  void scope;
   const r = dayRecap(date, only);
   const text = dayRecapText(date, company.name, user?.fullName, only);
   const longDate = new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -128,7 +130,8 @@ const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2
 function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap>; text: string }) {
   const company = useCompany();
   const scope = useMyScope();
-  const { rows, warnings } = dayReview(date, scope.strict ? scope.pages : undefined);
+  const { rows, warnings } = dayReview(date);
+  void scope;
   // Empreinte des chiffres : si une vente ou une dépense change après la vérification, il faut revérifier.
   const sig = `${date}|${rows.length}|${Math.round(r.sales)}|${r.g.expenseMoves.length}|${r.expenses}`;
   const [checks, setChecks] = useState({ sales: false, expenses: false, totals: false });

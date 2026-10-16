@@ -182,7 +182,8 @@ function BatchDispatch({ orders, onClose, onDone }: { orders: Order[]; onClose: 
 }
 
 function OutNow() {
-  const canDispatch = useCan()('orders.dispatch');
+  const can = useCan();
+  const canDispatch = can('orders.dispatch');
   const company = useCompany();
   const orders = useTable<Order>('orders');
   const couriers = useTable<Courier>('couriers');
@@ -220,7 +221,7 @@ function OutNow() {
                   </a>
                   <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                     {canDispatch && <Button variant="quiet" onClick={() => setMove(o)}>Changer de livreur</Button>}
-                    <Button variant={hasPendingChoice(o) ? 'primary' : 'ghost'} onClick={() => setRet(o)}>{hasPendingChoice(o) ? 'Préciser le choix' : 'Retour'}</Button>
+                    {can('couriers.settle') && <Button variant={hasPendingChoice(o) ? 'primary' : 'ghost'} onClick={() => setRet(o)}>{hasPendingChoice(o) ? 'Préciser le choix' : 'Retour'}</Button>}
                   </div>
                 </li>
               ))}
@@ -351,7 +352,7 @@ function SettleModal({ courier, onClose }: { courier: Courier; onClose: () => vo
                     <td><strong>{o.number}</strong> <span className="small muted">{orderLabel(o)} · {get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · partie le {fmtDateTime(o.dispatchedAt)}</span></td>
                     <td>{o.status === 'out' ? (ok ? <Badge tone="warn">À confirmer</Badge> : <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>) : <Badge tone={o.status === 'refused' ? 'danger' : 'ok'}>{o.status === 'refused' ? 'Refusée' : o.status === 'partial' ? 'Livrée en partie' : 'Livrée'}</Badge>}</td>
                     <td className="t-num"><strong>{fmtAr(d.collect)}</strong>{d.collect === 0 && o.payments.some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé par Mobile Money</div> : null}</td><td className="t-num muted">{fmtAr(d.fee)}</td><td className="t-num">{d.feeOwed ? fmtAr(d.feeOwed) : '—'}</td>
-                    <td>{o.status === 'out' && (ok ? <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button> : <Button onClick={() => setRet(o)}>Préciser le choix</Button>)}</td>
+                    <td>{o.status === 'out' && can('couriers.settle') && (ok ? <Button variant="quiet" onClick={() => setRet(o)}>Retour / anomalie</Button> : <Button onClick={() => setRet(o)}>Préciser le choix</Button>)}</td>
                   </tr>
                 );
               })}

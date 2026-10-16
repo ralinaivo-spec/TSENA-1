@@ -683,3 +683,10 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 | Lecture | « Masquer les périodes vides » (coché par défaut), petite barre de CA sur chaque ligne, première colonne fixe à l'écran large. |
 | Export | Excel (avec sous-totaux et total général) et PDF A4 (résumé, tableau, CA par page). |
 | Non repris | L'onglet « Details » du cahier : le détail est déjà dans les ventes et les dépenses enregistrées. |
+
+## Rectifications du 16/10/2026
+
+| Point | Règle |
+|---|---|
+| Confirmer le retour du livreur | Le vendeur et le responsable gardent l'accès à « En livraison » (voir leurs colis), mais le bouton « Confirmer le retour du livreur » (et les boutons « Retour » des Livraisons) n'apparaît que pour qui a le droit « Faire les règlements des livreurs » (admin / gérant) : il le fait en faisant le compte du livreur. |
+| Caisse du jour | Plus de filtre par vendeur : chaque vendeur voit le total de toutes les ventes et de toutes les dépenses de la caisse commune de la journée, et l'aperçu de toutes les ventes. |
