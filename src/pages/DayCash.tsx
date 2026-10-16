@@ -1,7 +1,8 @@
 // Caisse du jour (vendeurs) : une seule caisse commune pour tous les vendeurs.
 // - saisie des dépenses du jour payées avec la caisse commune (compte « Caisse espèces ») ;
 // - récapitulatif global du jour (tous les vendeurs) à envoyer par WhatsApp au gérant et au patron.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { recapSent, recapTime, scrollToRecap } from '../ui/eveningRecap';
 import { audit, useCan, useCurrentUser } from '../lib/auth';
 import { useTable } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
@@ -12,7 +13,7 @@ import { closedBy } from '../lib/closed';
 import { fmtPhone, normPhone } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
-import { Help, Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, toast } from '../ui/kit';
+import { Help, Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import type { CashMove } from '../lib/money';
 
@@ -25,8 +26,11 @@ export function DayCashPage() {
   const can = useCan();
   const user = useCurrentUser();
   const company = useCompany();
-  useTable('orders'); useTable('cashMoves'); useTable('categories'); useTable('products'); useTable('variants'); useTable('payouts');
+  useTable('orders'); useTable('cashMoves'); useTable('categories'); useTable('products'); useTable('variants'); useTable('payouts'); useTable('audit');
   const [date, setDate] = useState(today());
+  const route = useRoute();
+  // Raccourci « Récap du soir » (#/caisse-du-jour/envoyer) : on arrive directement sur « 3. Vérifier puis envoyer ».
+  useEffect(() => { if (route.endsWith('/envoyer')) { setDate(today()); scrollToRecap(); } }, [route]);
   if (!can('cashday.use')) return <Empty icon="lock" title="Accès réservé" />;
   const isToday = date === today();
   const scope = useMyScope();
@@ -144,7 +148,8 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
     await audit('Récapitulatif du jour vérifié', `${fmtDate(date)} : ${rows.length} opération(s) de vente, ventes ${fmtAr(r.sales)}, ${r.g.expenseMoves.length} dépense(s) ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`);
     toast('Vérification confirmée : vous pouvez envoyer le récapitulatif');
   };
-  const sent = (to: string) => { void audit('Récapitulatif du jour envoyé', `${fmtDate(date)} → ${to} : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`); };
+  const sent = (to: string) => { void audit('Récapitulatif du jour envoyé', `${fmtDate(date)} → ${to} : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}`, 'dayRecap', date); };
+  const already = recapSent(date);
   const box = (k: keyof typeof checks, label: string) => (
     <label className="row small review-check"><input type="checkbox" checked={checks[k]} onChange={(e) => { setChecks({ ...checks, [k]: e.target.checked }); setVerified(null); }} /> {label}</label>
   );
@@ -186,6 +191,7 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
 
       <div className="card stack-s daycash-send">
         <h2>3. Vérifier puis envoyer</h2>
+        {already && <div className="notice notice-ok"><Icon name="check" /><span>Récapitulatif de ce jour déjà envoyé à {recapTime(already.at)} par {already.userName ?? '—'}. Vous pouvez le renvoyer si un chiffre a changé.</span></div>}
         {warnings.length > 0 && <div className="notice"><Icon name="alert" /><div className="stack-s"><strong>Points à contrôler avant l’envoi</strong>{warnings.map((w) => <span key={w} className="small">• {w}</span>)}</div></div>}
         {stale && <div className="notice notice-danger"><Icon name="alert" /><span>Les chiffres ont changé depuis votre vérification (vente ou dépense ajoutée, modifiée ou supprimée). Vérifiez à nouveau.</span></div>}
         <div className="stack-s">

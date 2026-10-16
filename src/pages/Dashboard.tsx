@@ -27,6 +27,7 @@ import { DEFAULT_COMPANY, useCompany } from '../lib/settings';
 import { useSyncStatus } from '../lib/sync';
 import { Choice, IconButton, PageHead, timeAgo } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { EveningRecapBanner, RECAP_HREF } from '../ui/eveningRecap';
 
 export function DashboardPage() {
   const me = useMe();
@@ -77,6 +78,7 @@ function Board() {
         </div>
       )}
 
+      <EveningRecapBanner />
       {(can('reports.view') || can('treasury.view')) ? <><ManagerSummary /><SituationCard /><ManagerSales /><SalesExtras /><ManagerMoney /></> : can('orders.create') || can('pos.sell') ? <SellerBoard name={me.fullName} /> : null}
       {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
@@ -84,7 +86,7 @@ function Board() {
           <div><h3>Caisse du jour</h3><p className="small muted">Saisir une dépense de la caisse commune ou envoyer le récapitulatif global du jour.</p></div>
           <div className="row" style={{ gap: 8 }}>
             <a className="btn btn-ghost" href="#/caisse-du-jour"><Icon name="wallet" />Dépense</a>
-            <a className="btn btn-primary" href="#/caisse-du-jour"><Icon name="share" />Récap WhatsApp</a>
+            <a className="btn btn-primary" href={RECAP_HREF}><Icon name="share" />Récap WhatsApp</a>
           </div>
         </div>
       )}

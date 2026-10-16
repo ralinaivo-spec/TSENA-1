@@ -1,5 +1,6 @@
 // Structure de l'application : démarrage, accès, menu adapté au rôle, pages.
 import { useEffect, useState, type ReactNode } from 'react';
+import { RecapShortcut } from './ui/eveningRecap';
 import { usePrintStationWorker } from './lib/print';
 import { TreasuryPage } from './pages/Treasury';
 import { RecapPage } from './pages/Recap';
@@ -169,6 +170,7 @@ function Shell() {
           <BrandLogo />
           <span className="brand-name">{company.name}</span>
         </div>
+        <RecapShortcut />
         <nav className="nav">
           {groups.map((g) => (
             <div key={g || 'main'} className="nav">
@@ -200,6 +202,7 @@ function Shell() {
         <header className="topbar">
           <IconButton icon="menu" label="Ouvrir le menu" onClick={() => setOpen(true)} />
           <div className="brand"><BrandLogo /><span className="brand-name">{company.name}</span></div>
+          <RecapShortcut compact />
           <NotifBell />
           <SyncPill />
         </header>

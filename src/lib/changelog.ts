@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-16', items: [
+    'Récap du soir : bouton « Récap du soir » toujours visible (en haut du menu, et « Récap » dans la barre du haut sur téléphone) pour chaque vendeur ; il ouvre directement « Vérifier puis envoyer » de la Caisse du jour. À partir de 16 h, tant que le récap du jour n’est pas parti, le bouton passe en vert et un rappel apparaît sur l’accueil ; une fois envoyé, il affiche « Récap envoyé » (heure et nom de celui qui l’a envoyé).',
     'Commandes « En livraison » : le vendeur et le responsable voient toujours leurs colis en livraison, mais seul le gérant (droit « Faire les règlements des livreurs ») confirme le retour du livreur, au moment de faire le compte du livreur.',
     'Caisse du jour : chaque vendeur voit le total de toutes les ventes et dépenses de la journée (tous les vendeurs), plus de filtre par vendeur.',
     'Échange pendant la livraison : sur une commande « En livraison », le vendeur touche « Le client veut échanger », indique ce que le client rend puis ce qu’il prend à la place (autre modèle, autre taille) : une commande échange liée est créée. Au retour du livreur, les articles rendus sont déjà marqués et reviennent en stock ; ce que le client avait déjà payé passe sur l’échange.',
