@@ -13,6 +13,11 @@ export function rootOf(categoryId?: string): string {
 }
 export const productPage = (productId?: string) => rootOf(productId ? get<Product>('products', productId)?.categoryId : undefined);
 export const variantPage = (variantId: string) => productPage(get<Variant>('variants', variantId)?.productId);
+/** Pages (catégories principales) des articles d'une commande, ex. « SANDALE, LAMPE » (pour repérer vite un colis). */
+export function linesPages(lines: { variantId: string }[]) {
+  const names = [...new Set(lines.map((l) => variantPage(l.variantId)).filter(Boolean))].map((id) => get<Category>('categories', id)?.name).filter(Boolean);
+  return names.join(', ');
+}
 
 export const userPages = (u?: User): string[] => (u?.pageIds || []).filter((id) => { const c = get<Category>('categories', id); return !!c && !c.removed; });
 export const pageNames = (ids: string[]) => ids.map((id) => get<Category>('categories', id)?.name).filter(Boolean).join(', ');

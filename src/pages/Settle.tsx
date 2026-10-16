@@ -1,5 +1,6 @@
 // Règlement avec le livreur (étape après « retour confirmé ») : une ou plusieurs commandes du même livreur réglées
 // en une fois — articles et frais séparés, frais du livreur (retenus, payés à part, différés), montant remis.
+import { linesPages } from '../lib/scope';
 import { useState } from 'react';
 import { save } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
@@ -68,7 +69,7 @@ export function SettleModal({ courier, orders, onClose, onDone }: { courier: Cou
       <div className="stack">
         <ul className="settle-list">{rows.map((r) => (
           <li key={r.o.id}>
-            <div><strong>{r.o.number}</strong> <span className="small muted">{orderLabel(r.o)}</span>
+            <div><strong>{r.o.number}</strong>{linesPages(r.o.lines) ? <span className="page-hint"> ({linesPages(r.o.lines)})</span> : null} <span className="small muted">{orderLabel(r.o)}</span>
               <div className="small muted">articles {fmtAr(r.a)} · frais {fmtAr(r.x.fee)}{r.prepaid ? ` · déjà payé ${fmtAr(r.prepaid)}` : ''}</div></div>
             <strong className="num">{fmtAr(r.e)}</strong>
           </li>

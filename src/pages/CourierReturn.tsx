@@ -3,6 +3,7 @@
 // modifiables (client qui paie moins) ; ce qui est déjà payé (MVola…) n'est pas demandé au livreur.
 // Puis : prix des articles et frais de livraison séparés, et règlement des frais du livreur
 // (retenus sur l'argent versé, payés à part, ou plus tard sur son compte).
+import { linesPages } from '../lib/scope';
 import { useMemo, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { get, save, useTable } from '../lib/db';
@@ -178,7 +179,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
           <div className="row-between" style={{ alignItems: 'flex-start' }}>
             <label className="row" style={{ gap: 10, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
               <input type="checkbox" className="perm-check" checked={r.on} disabled={r.blocked} onChange={(e) => setOff({ ...off, [r.o.id]: !e.target.checked })} aria-label={`Régler ${r.o.number}`} />
-              <span><a href={`#/commandes/${r.o.id}`}><strong>{r.o.number}</strong></a> {orderLabel(r.o)}
+              <span><a href={`#/commandes/${r.o.id}`}><strong>{r.o.number}</strong></a>{linesPages(r.o.lines) ? <span className="page-hint"> ({linesPages(r.o.lines)})</span> : null} {orderLabel(r.o)}
                 <span className="small muted" style={{ display: 'block' }}>{get<Zone>('zones', r.o.zoneId || '')?.name}{r.o.place ? ` — ${r.o.place}` : ''} · parti le {fmtDateTime(r.o.dispatchedAt)}</span></span>
             </label>
             {r.open ? (r.blocked ? <Button onClick={() => setRet(r.o)}>Préciser le choix ({choiceQty(r.o)})</Button> : (
