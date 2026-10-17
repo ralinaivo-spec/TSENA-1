@@ -28,6 +28,9 @@ import { useSyncStatus } from '../lib/sync';
 import { Choice, IconButton, PageHead, timeAgo } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { EveningRecapBanner, RECAP_HREF } from '../ui/eveningRecap';
+import { HEALTH, SALES_DAYS, healthOf, soldByVariant } from '../lib/stockRank';
+import { stockOf, type Variant } from '../lib/catalog';
+import { Badge } from '../ui/kit';
 
 export function DashboardPage() {
   const me = useMe();
@@ -92,7 +95,7 @@ function Board() {
       )}
 
       {(can('orders.create') || can('pos.sell')) && <BestSellers />}
-      {(can('reports.view') || can('treasury.view')) && <><ManagerChart /><h2 className="dash-title">Argent, stock et alertes</h2><Watchlist /><ManagerMore /></>}
+      {(can('reports.view') || can('treasury.view')) && <><ManagerChart /><h2 className="dash-title">Argent, stock et alertes</h2><Watchlist />{can('costs.view') && <MoneyInStock />}<ManagerMore /></>}
       {can('catalog.view') && <LowStock />}
       {steps.length > 0 && doneCount < steps.length && (
         <div className="card stack">
@@ -511,6 +514,33 @@ function Watchlist() {
         <table className="kv-table"><tbody>{roi.map((r) => <tr key={r.pageId}><td>{r.name} <span className="muted small">· 1 $ rapporte {fmtAr(r.perUsd)} de CA</span></td><td className="neg">{fmtAr(r.profit)}</td></tr>)}</tbody></table></div>}
       {an.length > 0 && <div><strong className="small">À vérifier (7 derniers jours)</strong>
         <ul className="plain-list small">{an.slice(0, 8).map((a, i) => <li key={i}><a href={a.href}>{a.text}</a></li>)}</ul></div>}
+    </div>
+  );
+}
+
+/** Top 5 des articles qui immobilisent le plus d'argent (stock × prix de revient), avec leur marque. */
+function MoneyInStock() {
+  const orders = useTable<Order>('orders'); const variants = useTable<Variant>('variants'); useTable('stockMoves');
+  const top = useMemo(() => {
+    const sold = soldByVariant();
+    const by = new Map<string, { id: string; name: string; value: number; pcs: number; sold: number }>();
+    for (const v of variants) {
+      const p = get<Product>('products', v.productId); if (!p || p.active === false || v.active === false || p.kind === 'lot') continue;
+      const s = Math.max(0, stockOf(v.id)); if (!s) continue;
+      const r = by.get(p.id) ?? { id: p.id, name: p.name, value: 0, pcs: 0, sold: 0 };
+      r.value += s * (v.costAvg ?? 0); r.pcs += s; r.sold += sold.get(v.id) ?? 0; by.set(p.id, r);
+    }
+    return [...by.values()].sort((a, b) => b.value - a.value).slice(0, 5);
+  }, [orders, variants]);
+  if (!top.length) return null;
+  return (
+    <div className="card stack-s money-in-stock">
+      <div className="row-between"><h2>Top 5 — argent qui dort dans le stock</h2><a className="small" href="#/stock/etat">Voir tout le stock</a></div>
+      <ul className="list">{top.map((r) => { const h = healthOf(r.pcs, r.sold); return (
+        <li key={r.id}><a className="row-between" href={`#/articles/${r.id}`} style={{ textDecoration: 'none', color: 'inherit', gap: 10 }}>
+          <span><strong>{r.name}</strong><span className="small muted"> · {fmtNum(r.pcs)} pièce(s) · {fmtNum(r.sold)} vendue(s) en {SALES_DAYS} j</span></span>
+          <span className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>{h && <Badge tone={HEALTH[h].tone}>{HEALTH[h].label}</Badge>}<strong className="num">{fmtAr(r.value)}</strong></span>
+        </a></li>); })}</ul>
     </div>
   );
 }

@@ -1244,3 +1244,10 @@ a.bell { text-decoration: none; }
 @keyframes recap-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(37,211,102,.55); } 50% { box-shadow: 0 0 0 6px rgba(37,211,102,0); } }
 @media (prefers-reduced-motion: reduce) { .recap-shortcut.is-due { animation: none; } }
 .evening-recap { border-color: #25d366; background: color-mix(in srgb, #25d366 10%, var(--surface, #fff)); align-items: center; flex-wrap: wrap; }
+
+/* Stock : tri / marque, résumé par page, top 5 sur l'accueil */
+.stock-sortbar { align-items: flex-end; gap: 10px; }
+.stock-sortbar .field select { width: 100%; }
+.money-in-stock .list li { padding: 8px 0; border-bottom: 1px solid var(--border, rgba(0,0,0,.08)); }
+.money-in-stock .list li:last-child { border-bottom: 0; }
+.money-in-stock .list { list-style: none; margin: 0; padding: 0; }

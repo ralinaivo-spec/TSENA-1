@@ -2,6 +2,10 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-17', items: [
+    'Stock : bouton « Trier par » (valeur en stock, quantité, moins vendus, plus récents, nom) ; par défaut, les articles qui immobilisent le plus d’argent en premier. Nouvelles colonnes « Vendus 30 j » et « Pour écouler », et marque Dormant / À booster / Rotation OK sous chaque article (avec filtre).',
+    'Stock : carte « Stock par page » (valeur, ventes 30 j, boosts actifs, conseil « Mettre un boost » ou « Promotion à envisager ») pour choisir vos publicités. Accueil : « Top 5 — argent qui dort dans le stock ».',
+  ] },
   { date: '2026-10-16', items: [
     'Récap du soir : bouton « Récap du soir » toujours visible (en haut du menu, et « Récap » dans la barre du haut sur téléphone) pour chaque vendeur ; il ouvre directement « Vérifier puis envoyer » de la Caisse du jour. À partir de 16 h, tant que le récap du jour n’est pas parti, le bouton passe en vert et un rappel apparaît sur l’accueil ; une fois envoyé, il affiche « Récap envoyé » (heure et nom de celui qui l’a envoyé).',
     'Commandes « En livraison » : le vendeur et le responsable voient toujours leurs colis en livraison, mais seul le gérant (droit « Faire les règlements des livreurs ») confirme le retour du livreur, au moment de faire le compte du livreur.',

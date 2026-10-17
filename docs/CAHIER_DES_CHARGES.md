@@ -138,6 +138,12 @@ Menu **Stock → Pages et variantes**.
 - **Inventaire physique** : comptage (par scan ou saisie), comparaison avec le théorique, validation des écarts par l'admin.
 - Alertes : stock bas, rupture, articles dormants (pas vendus depuis X jours), articles les plus vendus.
 - Valeur du stock au coût de revient et au prix de vente.
+- **Tri et aide à la décision** *(ajout du 17/10/2026)* — État du stock :
+  - **Trier par** : Valeur en stock (par défaut, stock × prix de revient, pour qui voit les coûts), Quantité, Moins vendus (30 j), Plus récents, Nom.
+  - Colonnes **Vendus 30 j** et **Pour écouler** (jours au rythme des 30 derniers jours).
+  - Marque sous chaque article, avec filtre « Marque » : **Dormant** (en stock, aucune vente en 30 j), **À booster** (plus de 60 jours pour écouler), **Rotation OK**.
+  - Carte **Stock par page** : valeur, pièces, vendus 30 j, jours pour écouler, valeur dormante, boosts actifs aujourd'hui (Boosts pub) et conseil : « Mettre un boost » (lent et sans boost), « Promotion à envisager » (lent malgré un boost), « OK ».
+  - Export Excel avec ces colonnes. Accueil (gérant/admin avec les coûts) : **Top 5 — argent qui dort dans le stock**.
 
 ---
 

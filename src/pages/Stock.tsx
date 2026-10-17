@@ -14,6 +14,11 @@ import { downloadBlob, writeXlsx } from '../lib/xlsx';
 import { cancelMove } from '../lib/corrections';
 import { InventoryTab, VariantDetail } from './Inventory';
 import { reservedIndex, type Order } from '../lib/orders';
+import { Badge, Help } from '../ui/kit';
+import { ADVICE, BOOST_DAYS, HEALTH, SALES_DAYS, coverDays, healthOf, soldByVariant, stockByPage, type Health } from '../lib/stockRank';
+
+type SortKey = 'value' | 'qty' | 'slow' | 'new' | 'name';
+const coverText = (d: number) => d === Infinity ? 'aucune vente' : d <= 0 ? '—' : d > 365 ? '> 1 an' : `${d} j`;
 
 const TABS = [
   { key: 'etat', label: 'État du stock', perm: '' },
@@ -58,9 +63,12 @@ function StockState() {
   const [allMatches, setAllMatches] = useKeep('stock.all', false);
   const [others, setOthers] = useState(0);
   const [detail, setDetail] = useState<string | null>(null);
+  const [sort, setSort] = useKeep<SortKey>('stock.sort', showCost ? 'value' : 'qty');
+  const [health, setHealth] = useKeep<'' | Health>('stock.health', '');
 
   const orders = useTable<Order>('orders');
   const reserved = useMemo(() => reservedIndex(), [orders]);
+  const sold = useMemo(() => soldByVariant(), [orders]);
   const rows = useMemo(() => {
     const n = q.trim().toLowerCase();
     const sr = searchItems(variants
@@ -71,9 +79,17 @@ function StockState() {
     queueMicrotask(() => setOthers(sr.others));
     return sr.list
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
-      .map((r) => ({ ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0) }))
-      .sort((a, b) => b.p!.createdAt.localeCompare(a.p!.createdAt) || a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true })); // plus récents d'abord
-  }, [variants, q, cat, f, scope.on, allMatches, reserved]);
+      .map((r) => { const s30 = sold.get(r.v.id) ?? 0; return { ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0), sold: s30, cover: coverDays(r.stock, s30), health: healthOf(r.stock, s30) }; })
+      .filter((r) => !health || r.health === health)
+      .sort((a, b) => {
+        const bySku = a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true });
+        if (sort === 'value') return b.value - a.value || b.stock - a.stock || bySku;
+        if (sort === 'qty') return b.stock - a.stock || b.value - a.value || bySku;
+        if (sort === 'slow') return a.sold - b.sold || b.value - a.value || b.stock - a.stock || bySku;
+        if (sort === 'name') return a.p!.name.localeCompare(b.p!.name, 'fr') || bySku;
+        return b.p!.createdAt.localeCompare(a.p!.createdAt) || bySku; // plus récents d'abord
+      });
+  }, [variants, q, cat, f, scope.on, allMatches, reserved, sold, sort, health]);
 
   const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
   const totals = allRows.reduce((t, v) => {
@@ -86,9 +102,9 @@ function StockState() {
   async function exportXlsx() {
     const blob = await writeXlsx([{
       name: 'Stock',
-      columns: [{ header: 'Catégorie', width: 22 }, { header: 'Code article', width: 14 }, { header: 'Article', width: 36 }, { header: 'Couleur', width: 14 }, { header: 'Taille', width: 9 }, { header: 'Code variante', width: 22 }, { header: 'Stock', width: 9, number: true }, { header: 'Réservé (commandes en cours)', width: 14, number: true }, { header: 'Disponible', width: 11, number: true }, { header: 'En arrivage', width: 11, number: true },
+      columns: [{ header: 'Catégorie', width: 22 }, { header: 'Code article', width: 14 }, { header: 'Article', width: 36 }, { header: 'Couleur', width: 14 }, { header: 'Taille', width: 9 }, { header: 'Code variante', width: 22 }, { header: 'Stock', width: 9, number: true }, { header: 'Réservé (commandes en cours)', width: 14, number: true }, { header: 'Disponible', width: 11, number: true }, { header: 'En arrivage', width: 11, number: true }, { header: `Vendus ${SALES_DAYS} j`, width: 11, number: true }, { header: 'Jours pour écouler', width: 12 }, { header: 'Marque', width: 14 },
         ...(showCost ? [{ header: 'Coût moyen (Ar)', width: 14, number: true }, { header: 'Valeur (Ar)', width: 14, number: true }] : [])],
-      rows: rows.map((r) => [categoryPath(r.p!.categoryId), r.p!.code, r.p!.name, r.v.color ?? '', r.v.size ?? '', r.v.sku, r.stock, r.held, r.stock - r.held, r.incoming, ...(showCost ? [Math.round(r.v.costAvg ?? 0), Math.round(r.value)] : [])]),
+      rows: rows.map((r) => [categoryPath(r.p!.categoryId), r.p!.code, r.p!.name, r.v.color ?? '', r.v.size ?? '', r.v.sku, r.stock, r.held, r.stock - r.held, r.incoming, r.sold, coverText(r.cover), r.health ? HEALTH[r.health].label : '', ...(showCost ? [Math.round(r.v.costAvg ?? 0), Math.round(r.value)] : [])]),
     }]);
     downloadBlob(blob, `Tresor-en-ligne-stock-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
@@ -102,6 +118,7 @@ function StockState() {
         <div className="card stat"><span className="muted small">Variantes en rupture</span><span className="stat-value">{fmtNum(totals.out)}</span></div>
         {totals.neg > 0 && <button className="card stat stat-warn" onClick={() => setF('neg')}><span className="muted small">Stocks négatifs à corriger</span><span className="stat-value">{totals.neg}</span></button>}
       </div>
+      <PageStockCard showCost={showCost} keep={(p) => scope.product(p.id)} />
       <div className="card stack">
         <div className="row">
           <div className="field" style={{ flex: '1 1 220px' }}><input aria-label="Rechercher" placeholder="Rechercher un code ou un article" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
@@ -109,7 +126,23 @@ function StockState() {
             <FilterSelect label="Catégorie" value={cat} onChange={setCat} options={categoryOptions(categories, 'Toutes les catégories')} />
           </div>
         </div>
-        {(q || cat) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); }}>Effacer les filtres</Button></div>}
+        <div className="row stock-sortbar">
+          <label className="field" style={{ flex: '0 1 230px' }}><span className="small muted">Trier par</span>
+            <select aria-label="Trier par" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+              {showCost && <option value="value">Valeur en stock (le plus d’argent)</option>}
+              <option value="qty">Quantité en stock</option>
+              <option value="slow">Moins vendus ({SALES_DAYS} j)</option>
+              <option value="new">Plus récents</option>
+              <option value="name">Nom (A → Z)</option>
+            </select></label>
+          <label className="field" style={{ flex: '0 1 230px' }}><span className="small muted">Marque</span>
+            <select aria-label="Marque" value={health} onChange={(e) => setHealth(e.target.value as '' | Health)}>
+              <option value="">Toutes</option>
+              {(Object.keys(HEALTH) as Health[]).map((h) => <option key={h} value={h}>{HEALTH[h].label}</option>)}
+            </select></label>
+          <Help>« Dormant » : en stock, aucune vente depuis {SALES_DAYS} jours (promotion, ou ne plus en racheter). « À booster » : il faudrait plus de {BOOST_DAYS} jours pour écouler le stock au rythme actuel (faire de la publicité). « Rotation OK » : se vend bien.</Help>
+        </div>
+        {(q || cat || health) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setHealth(''); }}>Effacer les filtres</Button></div>}
         <div className="row-between">
           <div className="segmented" role="group">
             {([['in', 'En stock'], ['out', 'En rupture'], ['neg', 'Négatifs'], ['', 'Tout']] as const).map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)}>{l}</button>)}
@@ -122,18 +155,20 @@ function StockState() {
         {rows.length === 0 ? <Empty icon="store" title="Aucune variante ne correspond" /> : (
           <div className="table-wrap">
             <table className="table">
-              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th><th className="t-num" title="Pièces promises à des commandes pas encore remises au livreur">Réservé</th><th className="t-num">Disponible</th><th className="t-num">En arrivage</th>{showCost && <th className="t-num">Coût moyen</th>}{showCost && <th className="t-num">Valeur</th>}<th></th></tr></thead>
+              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th><th className="t-num" title="Pièces promises à des commandes pas encore remises au livreur">Réservé</th><th className="t-num">Disponible</th><th className="t-num">En arrivage</th>{showCost && <th className="t-num">Coût moyen</th>}{showCost && <th className="t-num">Valeur</th>}<th className="t-num">Vendus {SALES_DAYS} j</th><th className="t-num" title="Au rythme des ventes des 30 derniers jours">Pour écouler</th><th></th></tr></thead>
               <tbody>
                 {rows.slice(0, limit).map((r) => (
                   <tr key={r.v.id} className="row-link" onClick={() => navigate('/articles/' + r.p!.id)}>
-                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={52} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div></div></div></td>
+                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={52} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div>{r.health ? <span title={HEALTH[r.health].hint}><Badge tone={HEALTH[r.health].tone}>{HEALTH[r.health].label}</Badge></span> : null}</div></div></td>
                     <td>{variantLabel(r.v)}</td>
                     <td className="t-num"><span className={`stock-pill ${r.stock <= 0 ? 'is-out' : ''}`}>{fmtNum(r.stock)}</span></td>
                     <td className="t-num">{r.held ? <button type="button" className="link-btn" style={{ padding: 0 }} title="Voir les commandes qui réservent" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>{fmtNum(r.held)}</button> : '—'}</td>
                     <td className={`t-num ${r.stock - r.held < 0 ? 'neg' : ''}`}>{r.held ? fmtNum(r.stock - r.held) : fmtNum(r.stock)}</td>
                     <td className="t-num">{r.incoming || '—'}</td>
                     {showCost && <td className="t-num">{fmtAr(r.v.costAvg)}</td>}
-                    {showCost && <td className="t-num">{fmtAr(r.value)}</td>}
+                    {showCost && <td className="t-num"><strong>{fmtAr(r.value)}</strong></td>}
+                    <td className="t-num">{fmtNum(r.sold)}</td>
+                    <td className="t-num small">{coverText(r.cover)}</td>
                     <td><Button variant="quiet" className="btn-sm" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>Détail</Button></td>
                   </tr>
                 ))}
@@ -145,6 +180,38 @@ function StockState() {
       {rows.length > limit && <Button variant="ghost" onClick={() => setLimit(limit + 300)}>Afficher plus ({rows.length - limit})</Button>}
       {detail && <VariantDetail variantId={detail} onClose={() => setDetail(null)} />}
     </>
+  );
+}
+
+/** Résumé par page : où dort l'argent, et quelles pages mériteraient un boost. */
+function PageStockCard({ showCost, keep }: { showCost: boolean; keep: (p: Product) => boolean }) {
+  const orders = useTable<Order>('orders'); const boosts = useTable('boosts'); const moves = useTable('stockMoves');
+  const [open, setOpen] = useKeep('stock.pages.open', true);
+  const list = useMemo(() => stockByPage(keep), [orders, boosts, moves]);
+  if (!list.length) return null;
+  return (
+    <div className="card card-flush page-stock">
+      <div className="card-pad row-between">
+        <div><h2>Stock par page — pour décider et choisir les publicités</h2>
+          <p className="small muted">Valeur au prix de revient · ventes des {SALES_DAYS} derniers jours · boosts actifs aujourd’hui.</p></div>
+        <Button variant="ghost" className="btn-sm" onClick={() => setOpen(!open)}>{open ? 'Masquer' : 'Afficher'}</Button>
+      </div>
+      {open && <div className="table-wrap"><table className="table">
+        <thead><tr><th>Page</th>{showCost && <th className="t-num">Valeur stock</th>}<th className="t-num">Pièces</th><th className="t-num">Vendus {SALES_DAYS} j</th><th className="t-num">Pour écouler</th>{showCost && <th className="t-num">Dont dormant</th>}<th>Boost</th><th>Conseil</th></tr></thead>
+        <tbody>{list.map((r) => (
+          <tr key={r.id}>
+            <td><strong>{r.name}</strong></td>
+            {showCost && <td className="t-num"><strong>{fmtAr(r.value)}</strong></td>}
+            <td className="t-num">{fmtNum(r.pieces)}</td>
+            <td className="t-num">{fmtNum(r.sold)}</td>
+            <td className="t-num small">{coverText(r.cover)}</td>
+            {showCost && <td className={`t-num ${r.dormantValue ? 'neg' : ''}`}>{r.dormantValue ? fmtAr(r.dormantValue) : '—'}</td>}
+            <td>{r.boosts ? <Badge tone="brand">{r.boosts} actif(s)</Badge> : <span className="small muted">Aucun</span>}</td>
+            <td><Badge tone={ADVICE[r.advice].tone}>{ADVICE[r.advice].label}</Badge></td>
+          </tr>
+        ))}</tbody>
+      </table></div>}
+    </div>
   );
 }
 
