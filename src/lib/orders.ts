@@ -195,7 +195,13 @@ export function keptTotal(o: Pick<Order, 'lines' | 'adjusts'>) { return o.lines.
 export const paidTotal = (o: Order) => (o.payments || []).reduce((s, p) => s + p.amount, 0);
 const isClosed = (o: Order) => ['delivered', 'partial', 'refused'].includes(o.status);
 /** Montant total à payer par le client (articles − remise − reprise + frais). */
+/** Commande refusée par le client : tout est à 0 (articles et frais), rien à régler avec le livreur.
+ *  (Les refus déjà réglés avant cette règle gardent leurs frais, pour ne pas changer l'historique du livreur.) */
+export const refusedZero = (o: Pick<Order, 'status' | 'courierSettledAt'>) => o.status === 'refused' && !o.courierSettledAt;
+/** Montant de la commande avant le retour (ce qui avait été commandé), pour l'affichage barré des annulées / refusées. */
+export function orderedTotal(o: Order) { return Math.max(0, itemsTotal(o) - (o.discount || 0)) + (o.deliveryFee || 0); }
 export function orderTotal(o: Order) {
+  if (o.status === 'cancelled' || refusedZero(o)) return o.status === 'cancelled' ? orderedTotal(o) : 0;
   const items = isClosed(o) ? keptTotal(o) : itemsTotal(o);
   const fee = isClosed(o) ? (o.feeCharged ?? o.deliveryFee) : o.deliveryFee;
   return Math.max(0, items - (o.discount || 0)) + (fee || 0);
@@ -219,7 +225,7 @@ export function remaining(o: Order) {
  */
 export function courierSplit(o: Order) {
   const closed = ['delivered', 'partial', 'refused'].includes(o.status);
-  const fee = closed ? (o.feeCharged ?? o.deliveryFee ?? 0) : (o.deliveryFee || 0);
+  const fee = refusedZero(o) ? 0 : closed ? (o.feeCharged ?? o.deliveryFee ?? 0) : (o.deliveryFee || 0);
   const shopPaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((s, p) => s + p.amount, 0);
   const got = (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId).reduce((s, p) => s + p.amount, 0);
   const itemsDue = Math.max(0, (o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o)) - fee);
@@ -231,7 +237,7 @@ export function courierSplit(o: Order) {
   return { clientPays, toCollect, fee, feeKept, feeOwed, net: toCollect - feeOwed, closed };
 }
 /** Commande revenue du livreur (retour confirmé) mais pas encore réglée avec lui. */
-export const needsSettlement = (o: Order) => ['delivered', 'partial', 'refused'].includes(o.status) && !!o.courierId && !!o.dispatchedAt && !o.courierSettledAt && !isPickupZone(o.zoneId) && !isWalkIn(o);
+export const needsSettlement = (o: Order) => ['delivered', 'partial', 'refused'].includes(o.status) && !(o.status === 'refused' && courierSplit(o).clientPays === 0) && !!o.courierId && !!o.dispatchedAt && !o.courierSettledAt && !isPickupZone(o.zoneId) && !isWalkIn(o);
 export const totalQty = (o: Order) => sellingLines(o).reduce((s, l) => s + l.qty, 0);
 
 /** Prix de gros : automatique à partir du seuil (3 pièces), ou forcé par le vendeur. */
@@ -356,11 +362,13 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
   const keptAny = lines.some((l) => (l.qtyKept ?? 0) > 0);
   const allKept = lines.filter((l) => !l.isChoice).every((l) => (l.qtyKept ?? 0) >= l.qty);
   const status: OrderStatus = !keptAny && !(o.kind === 'exchange' && !o.lines.length) ? 'refused' : allKept ? 'delivered' : 'partial';
+  // Refusée : 0 partout (articles et frais), le livreur n'a rien encaissé → rien à régler avec lui.
+  const refusedNow = status === 'refused';
   if (o.kind === 'exchange' && o.returnLines?.length && status !== 'refused') {
     await addMoves(o.returnLines.map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })));
   }
   const late = atGiven && ymdOf(new Date(atGiven)) !== ymdOf(new Date(bizNow())) ? { returnSavedAt: new Date().toISOString() } : {};
-  await setStatus(o, status, { lines, feeCharged: r.feeCharged, payments: [...(o.payments || []), ...pays], returnedAt: at, ...late, notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
+  await setStatus(o, status, { lines, feeCharged: refusedNow ? 0 : r.feeCharged, payments: [...(o.payments || []), ...(refusedNow ? [] : pays)], returnedAt: at, ...late, ...(refusedNow ? { courierSettledAt: at, feeStatus: undefined } : {}), notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
   await moveExchangeCredit(o.id, at);
 }
 

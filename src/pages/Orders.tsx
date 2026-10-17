@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -166,7 +166,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       <div className="card card-flush">
         {list.length === 0 ? <Empty icon="list" title={q || courierF || pageF ? 'Aucune commande trouvée dans cet onglet' : regler ? 'Aucune commande à régler' : 'Aucune commande ici'}>{tab.key === 'enregistrees' && can('orders.create') && !q && <Button icon="plus" onClick={() => setCreating(true)}>Saisir une commande</Button>}</Empty> : (
           <ul className="list">{groupOrdersByPage(list).map((g) => [
-            <OrderGroupHead key={'h' + g.key} label={g.label} count={g.items.length} total={g.items.reduce((s, o) => s + (o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o)), 0)} />,
+            <OrderGroupHead key={'h' + g.key} label={g.label} count={g.items.length} total={g.items.reduce((s, o) => s + (o.status === 'cancelled' || o.status === 'refused' ? 0 : o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o)), 0)} />,
             ...g.items.map((o) => regler ? (
             <li key={o.id} className="row-check">
               <input type="checkbox" aria-label={`Sélectionner ${o.number}`} checked={sel.includes(o.id)} onChange={(e) => setSel(e.target.checked ? [...sel, o.id] : sel.filter((x) => x !== o.id))} />
@@ -207,7 +207,9 @@ export function OrderRow({ o }: { o: Order }) {
           {['delivered', 'partial', 'refused'].includes(o.status) && (() => { const fs = feeState(o); return fs !== 'none' ? <p className="small fee-line">Frais livreur {fmtAr(courierSplit(o).fee)} · <Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge></p> : null; })()}
         </div>
         <div className="list-item-side">
-          <strong className="num">{fmtAr(o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o))}</strong>
+          {o.status === 'cancelled' || o.status === 'refused'
+            ? <><s className="small muted num" title="Montant de la commande (pas vendu)">{fmtAr(orderedTotal(o))}</s><strong className="num" title="Annulée / refusée : rien n’est vendu, aucun frais">{fmtAr(0)}</strong></>
+            : <strong className="num">{fmtAr(o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o))}</strong>}
           {paidTotal(o) > 0 && <span className="small muted">payé {fmtAr(paidTotal(o))}</span>}
           {rest > 0 && !['cancelled', 'refused'].includes(o.status) && <span className="small">reste {fmtAr(rest)}</span>}
         </div>
@@ -816,7 +818,8 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const keptNum = Object.fromEntries(o.lines.map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(kept[l.id]) ?? 0))]));
   const anyKept = Object.values(keptNum).some((n) => n > 0);
   const [fee, setFee] = useState<string | null>(null);
-  const feeVal = fee == null ? (anyKept || (o.kind === 'exchange' && !o.lines.length) ? o.deliveryFee : 0) : parseNum(fee) ?? 0;
+  const refusedAll = !anyKept && !(o.kind === 'exchange' && !o.lines.length);
+  const feeVal = refusedAll ? 0 : fee == null ? o.deliveryFee : parseNum(fee) ?? 0;
   const sim = { ...o, status: 'delivered', lines: o.lines.map((l) => ({ ...l, qtyKept: keptNum[l.id] })), feeCharged: feeVal } as Order;
   const toCollect = Math.max(0, (o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim)) - paidTotal(o));
   const [amount, setAmount] = useState<string | null>(null);
@@ -842,9 +845,9 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
     <Modal title={hasChoice ? `Préciser le choix du client — ${o.number}` : `Retour du livreur — ${o.number}`} onClose={onClose} wide
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={choiceMissing.length > 0 || !!dayError} onClick={async () => {
         setBusy(true);
-        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }, returnAt(retDay, [o])); }
+        try { await recordReturn(o, { kept: keptNum, feeCharged: feeVal, collected: refusedAll ? [] : [{ amount: amountVal, method, ref: ref.trim() || undefined }], note: note.trim() || undefined }, returnAt(retDay, [o])); }
         catch (e: any) { toast(e.message, 'error'); setBusy(false); return; }
-        toast(toSettle ? 'Retour confirmé : la commande passe dans « À régler (livreur) »' : 'Retour enregistré'); setBusy(false); onClose();
+        toast(refusedAll ? 'Commande refusée : 0 Ar, rien à régler avec le livreur' : toSettle ? 'Retour confirmé : la commande passe dans « À régler (livreur) »' : 'Retour enregistré'); setBusy(false); onClose();
       }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : 'Confirmer le retour'}</Button></>}>
       <div className="stack">
         {hasChoice && !o.choiceNote && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues).</span></div>}
@@ -887,17 +890,17 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
           <h3>Ce que le client a payé</h3>
           <div className="money-lines">
             <div><span>a. Articles (après le choix du client)</span><strong className="num">{fmtAr(c - feeVal)}</strong></div>
-            <div><span>b. Frais de livraison</span><input className="cell-input num-input" inputMode="numeric" aria-label="Frais de livraison facturés (Ar)" value={fee ?? String(feeVal)} onChange={(e) => setFee(e.target.value)} /></div>
-            {!anyKept && <div className="small muted"><span>Commande refusée : mettez les frais seulement si le client les a payés.</span></div>}
+            <div><span>b. Frais de livraison</span>{refusedAll ? <strong className="num">0 Ar</strong> : <input className="cell-input num-input" inputMode="numeric" aria-label="Frais de livraison facturés (Ar)" value={fee ?? String(feeVal)} onChange={(e) => setFee(e.target.value)} />}</div>
+            {refusedAll && <div className="small"><span><strong>Commande refusée : tout est à 0</strong> (articles et frais). Aucun frais pour le livreur, rien à régler avec lui : la commande va directement dans « Annulées / refusées ».</span></div>}
             <div className="ml-total"><span>= À payer par le client (a + b)</span><strong className="num">{fmtAr(c)}</strong></div>
             <div><span>c. Déjà payé à la boutique{paidHow ? ` (${paidHow})` : ''}</span><strong className="num">{prepaid ? '− ' + fmtAr(prepaid) : '—'}</strong></div>
             <div className="ml-strong"><span>e. Reste à verser par le livreur (frais compris)</span><strong className="num">{fmtAr(eDue)}</strong></div>
           </div>
-          <div className="grid-2">
+          {!refusedAll && <div className="grid-2">
             <TextField label="Encaissé par le livreur auprès du client (Ar)" value={amount ?? String(amountVal)} onChange={setAmount} inputMode="numeric" hint={amountVal !== toCollect ? `Prévu : ${fmtAr(toCollect)}` : 'Normalement : le reste à payer par le client.'} />
             <SelectField label="Le client a payé le livreur en" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
             {method !== 'cash' && <TextField label="Référence de la transaction" value={ref} onChange={setRef} />}
-          </div>
+          </div>}
         </div>
         <TextField label="Remarque (motif de refus, etc.)" value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
         {toSettle && <p className="small muted">Étape suivante : le règlement avec le livreur (onglet « À régler »), pour une ou plusieurs commandes à la fois.</p>}

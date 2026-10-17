@@ -97,7 +97,8 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
     const open = o.status === 'out';
     const blocked = open && choiceBlocking(o);
     const d: Decision = dec[o.id] ?? 'delivered';
-    const fee = open ? (fees[o.id] != null ? parseNum(fees[o.id]) ?? 0 : d === 'refused' ? 0 : o.deliveryFee || 0) : (o.feeCharged ?? o.deliveryFee ?? 0);
+    // Refusée : 0 partout (articles et frais), rien à régler avec le livreur.
+    const fee = open ? (d === 'refused' ? 0 : fees[o.id] != null ? parseNum(fees[o.id]) ?? 0 : o.deliveryFee || 0) : courierSplit(o).fee;
     const sim = open && !blocked ? simulate(o, d, fee) : o;
     const x = courierSplit(sim);
     const shopPays = (o.payments || []).filter((p) => p.receivedBy === 'shop');
@@ -201,7 +202,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
           </div>
           {!r.blocked && <div className="money-lines">
             <div><span>a. Articles (après le choix du client)</span><strong className="num">{fmtAr(r.a)}</strong></div>
-            <div><span>b. Frais de livraison</span>{r.open ? <input className="cell-input num-input" inputMode="numeric" aria-label={`Frais ${r.o.number}`} value={fees[r.o.id] ?? String(r.fee)} onChange={(e) => setFees({ ...fees, [r.o.id]: e.target.value })} /> : <strong className="num">{fmtAr(r.fee)}</strong>}</div>
+            <div><span>b. Frais de livraison</span>{r.open && r.d !== 'refused' ? <input className="cell-input num-input" inputMode="numeric" aria-label={`Frais ${r.o.number}`} value={fees[r.o.id] ?? String(r.fee)} onChange={(e) => setFees({ ...fees, [r.o.id]: e.target.value })} /> : <strong className="num">{fmtAr(r.fee)}</strong>}</div>
             {r.open && r.fee !== (r.o.deliveryFee || 0) && <div className="small muted"><span>prévu</span><span>{fmtAr(r.o.deliveryFee)}</span></div>}
             <div className="ml-total"><span>c. À payer par le client (a + b)</span><strong className="num">{fmtAr(r.c)}</strong></div>
             <div><span>d. Déjà payé à la boutique{r.paidHow ? ` (${r.paidHow})` : ''}</span><strong className="num">{r.prepaid ? '− ' + fmtAr(r.prepaid) : '—'}</strong></div>

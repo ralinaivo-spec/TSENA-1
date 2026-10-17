@@ -258,6 +258,8 @@ export function courierBalance(courierId: string, until?: string) {
     if (o.courierId !== courierId || o.status === 'cancelled' || !o.dispatchedAt || isPickupZone(o.zoneId)) continue;
     if (until && o.dispatchedAt > until) continue;
     const d = deliveryNet(o);
+    // Refusée sans rien encaissé par le livreur : 0 partout, rien à régler (même les anciennes pas encore réglées).
+    if (o.status === 'refused' && !o.courierSettledAt && d.clientPays === 0) continue;
     const settledThen = o.courierSettledAt && (!until || o.courierSettledAt <= until);
     if (settledThen) carry += d.net;
     else { pending.push(o); pendingNet += d.net; pendingCollect += d.collect; pendingFeeOwed += d.feeOwed; }

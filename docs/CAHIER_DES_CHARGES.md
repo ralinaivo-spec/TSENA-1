@@ -710,3 +710,8 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - La fiche affiche « Choix du client indiqué par … le … » ; badge « Choix indiqué » dans les listes ; le choix reste modifiable jusqu'au retour.
 - Gérant : au **Retour livreur**, le colis n'est plus bloqué (le choix est repris) et peut être coché et réglé directement ; dans « Confirmer le retour du livreur », les quantités gardées sont pré-remplies. Les alertes « choix à préciser » ne comptent plus ces commandes.
 
+### Annulée / refusée : 0 partout *(ajout du 17/10/2026)*
+- **Annulée** : décidée par la boutique (avant le départ ou colis rapporté). **Refusée** : le client refuse au moment de la livraison. Dans les deux cas le stock revient et rien n'est compté dans les ventes.
+- **Refusée = 0 partout** : articles 0, frais de livraison 0 (aucune saisie possible), rien d'encaissé par le livreur ; la commande est réglée d'office avec le livreur et ne passe pas par « À régler (livreur) » ni par le Retour livreur. Les anciennes refusées pas encore réglées (sans argent encaissé) sortent aussi de ces listes ; les refus déjà réglés gardent leur historique.
+- Liste « Annulées / refusées » : montant de la commande barré, **0 Ar** affiché ; total des groupes 0 Ar. Un acompte payé à la boutique reste à rendre au client (« Rendre l'argent au client »).
+
