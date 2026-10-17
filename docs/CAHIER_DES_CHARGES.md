@@ -144,6 +144,7 @@ Menu **Stock → Pages et variantes**.
   - Marque sous chaque article, avec filtre « Marque » : **Dormant** (en stock, aucune vente en 30 j), **À booster** (plus de 60 jours pour écouler), **Rotation OK**.
   - Carte **Stock par page** : valeur, pièces, vendus 30 j, jours pour écouler, valeur dormante, boosts actifs aujourd'hui (Boosts pub) et conseil : « Mettre un boost » (lent et sans boost), « Promotion à envisager » (lent malgré un boost), « OK ».
   - Export Excel avec ces colonnes. Accueil (gérant/admin avec les coûts) : **Top 5 — argent qui dort dans le stock**.
+  - **Tri gardé** : même « Trier par » dans **Articles** (valeur en stock affichée à droite). Le tri ne change jamais avec les filtres (catégorie, recherche, état du stock) ; il est gardé sur l'appareil, même après fermeture, jusqu'à un changement manuel. « Trié par : … » affiché ; bouton « Revenir au tri par défaut » (valeur en stock ↓, ou quantité ↓ pour qui ne voit pas les coûts).
 
 ---
 

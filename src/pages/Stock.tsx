@@ -16,8 +16,7 @@ import { InventoryTab, VariantDetail } from './Inventory';
 import { reservedIndex, type Order } from '../lib/orders';
 import { Badge, Help } from '../ui/kit';
 import { ADVICE, BOOST_DAYS, HEALTH, SALES_DAYS, coverDays, healthOf, soldByVariant, stockByPage, type Health } from '../lib/stockRank';
-
-type SortKey = 'value' | 'qty' | 'slow' | 'new' | 'name';
+import { SortSelect, compareBy, useSortPref } from '../ui/stockSort';
 const coverText = (d: number) => d === Infinity ? 'aucune vente' : d <= 0 ? '—' : d > 365 ? '> 1 an' : `${d} j`;
 
 const TABS = [
@@ -63,7 +62,7 @@ function StockState() {
   const [allMatches, setAllMatches] = useKeep('stock.all', false);
   const [others, setOthers] = useState(0);
   const [detail, setDetail] = useState<string | null>(null);
-  const [sort, setSort] = useKeep<SortKey>('stock.sort', showCost ? 'value' : 'qty');
+  const [sort, setSort, sortDef] = useSortPref('stock', showCost);
   const [health, setHealth] = useKeep<'' | Health>('stock.health', '');
 
   const orders = useTable<Order>('orders');
@@ -81,14 +80,9 @@ function StockState() {
       .filter((r) => f === 'in' ? r.stock > 0 : f === 'out' ? r.stock === 0 : f === 'neg' ? r.stock < 0 : true)
       .map((r) => { const s30 = sold.get(r.v.id) ?? 0; return { ...r, value: Math.max(0, r.stock) * (r.v.costAvg ?? 0), sold: s30, cover: coverDays(r.stock, s30), health: healthOf(r.stock, s30) }; })
       .filter((r) => !health || r.health === health)
-      .sort((a, b) => {
-        const bySku = a.v.sku.localeCompare(b.v.sku, 'fr', { numeric: true });
-        if (sort === 'value') return b.value - a.value || b.stock - a.stock || bySku;
-        if (sort === 'qty') return b.stock - a.stock || b.value - a.value || bySku;
-        if (sort === 'slow') return a.sold - b.sold || b.value - a.value || b.stock - a.stock || bySku;
-        if (sort === 'name') return a.p!.name.localeCompare(b.p!.name, 'fr') || bySku;
-        return b.p!.createdAt.localeCompare(a.p!.createdAt) || bySku; // plus récents d'abord
-      });
+      .map((r) => ({ r, k: { value: r.value, qty: r.stock, sold: r.sold, createdAt: r.p!.createdAt, name: r.p!.name, code: r.v.sku } }))
+      .sort((a, b) => compareBy(sort)(a.k, b.k))
+      .map((x) => x.r);
   }, [variants, q, cat, f, scope.on, allMatches, reserved, sold, sort, health]);
 
   const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
@@ -127,14 +121,7 @@ function StockState() {
           </div>
         </div>
         <div className="row stock-sortbar">
-          <label className="field" style={{ flex: '0 1 230px' }}><span className="small muted">Trier par</span>
-            <select aria-label="Trier par" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-              {showCost && <option value="value">Valeur en stock (le plus d’argent)</option>}
-              <option value="qty">Quantité en stock</option>
-              <option value="slow">Moins vendus ({SALES_DAYS} j)</option>
-              <option value="new">Plus récents</option>
-              <option value="name">Nom (A → Z)</option>
-            </select></label>
+          <SortSelect value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
           <label className="field" style={{ flex: '0 1 230px' }}><span className="small muted">Marque</span>
             <select aria-label="Marque" value={health} onChange={(e) => setHealth(e.target.value as '' | Health)}>
               <option value="">Toutes</option>

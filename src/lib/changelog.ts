@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-17', items: [
+    'Articles : nouveau « Trier par », comme dans le Stock ; par défaut, les articles qui immobilisent le plus d’argent en premier (valeur affichée à droite). Dans Stock et Articles, le tri reste le même quand vous changez de catégorie, de recherche ou de filtre, et il est gardé sur l’appareil (même après fermeture) jusqu’à ce que vous le changiez ; « Trié par : … » rappelle le tri en cours et « Revenir au tri par défaut » le remet.',
     'Stock : bouton « Trier par » (valeur en stock, quantité, moins vendus, plus récents, nom) ; par défaut, les articles qui immobilisent le plus d’argent en premier. Nouvelles colonnes « Vendus 30 j » et « Pour écouler », et marque Dormant / À booster / Rotation OK sous chaque article (avec filtre).',
     'Stock : carte « Stock par page » (valeur, ventes 30 j, boosts actifs, conseil « Mettre un boost » ou « Promotion à envisager ») pour choisir vos publicités. Accueil : « Top 5 — argent qui dort dans le stock ».',
   ] },

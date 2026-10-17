@@ -1251,3 +1251,6 @@ a.bell { text-decoration: none; }
 .money-in-stock .list li { padding: 8px 0; border-bottom: 1px solid var(--border, rgba(0,0,0,.08)); }
 .money-in-stock .list li:last-child { border-bottom: 0; }
 .money-in-stock .list { list-style: none; margin: 0; padding: 0; }
+.sort-select { align-items: flex-end; gap: 10px; flex: 1 1 auto; }
+.sort-select .field select { width: 100%; }
+.sort-now { padding-bottom: 10px; }

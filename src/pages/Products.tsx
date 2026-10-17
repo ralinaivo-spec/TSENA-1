@@ -1,5 +1,7 @@
 // Articles : liste, fiche article, variantes (couleur/taille), catégories, ajustements de stock.
 import { useMyScope } from '../lib/scope';
+import { SortSelect, compareBy, useSortPref } from '../ui/stockSort';
+import { soldByVariant } from '../lib/stockRank';
 import { ScopeBar } from '../ui/scope';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
@@ -71,6 +73,10 @@ function ProductList() {
   const [allMatches, setAllMatches] = useKeep('prod.all', false);
   const [others, setOthers] = useState(0);
   const [dups, setDups] = useState(false);
+  const showCost = can('costs.view');
+  const [sort, setSort, sortDef] = useSortPref('articles', showCost);
+  const orders = useTable('orders'); const smoves = useTable('stockMoves');
+  const sold = useMemo(() => soldByVariant(), [orders]);
 
   const list = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -86,7 +92,11 @@ function ProductList() {
       .filter(inCat), productText, n, allMatches);
     queueMicrotask(() => setOthers(sr.others));
     return sr.list
-      .map((p) => ({ p, stock: isLot(p) ? lotAvailable(p, stockOf) : productStock(p.id), incoming: isLot(p) ? 0 : productIncoming(p.id) }))
+      .map((p) => {
+        const vs = isLot(p) ? [] : productVariants(p.id);
+        return { p, stock: isLot(p) ? lotAvailable(p, stockOf) : productStock(p.id), incoming: isLot(p) ? 0 : productIncoming(p.id),
+          value: vs.reduce((t, v) => t + Math.max(0, stockOf(v.id)) * (v.costAvg ?? 0), 0), sold: vs.reduce((t, v) => t + (sold.get(v.id) ?? 0), 0) };
+      })
       .filter(({ p, stock, incoming }) => {
         if (sf === 'in') return stock > 0;
         if (sf === 'out') return stock <= 0;
@@ -94,8 +104,10 @@ function ProductList() {
         if (sf === 'incoming') return incoming > 0;
         return true;
       })
-      .sort((a, b) => b.p.createdAt.localeCompare(a.p.createdAt) || a.p.code.localeCompare(b.p.code, 'fr', { numeric: true })); // plus récents d'abord
-  }, [products, q, cat, sf, showArchived, scope.on, allMatches]);
+      .sort((a, b) => compareBy(sort)(
+        { value: a.value, qty: a.stock, sold: a.sold, createdAt: a.p.createdAt, name: a.p.name, code: a.p.code },
+        { value: b.value, qty: b.stock, sold: b.sold, createdAt: b.p.createdAt, name: b.p.name, code: b.p.code }));
+  }, [products, q, cat, sf, showArchived, scope.on, allMatches, sort, sold, smoves]);
 
   const dupCount = useMemo(() => findDuplicates().length, [products]);
   return (
@@ -121,6 +133,7 @@ function ProductList() {
             </select>
           </div>
         </div>
+        <SortSelect value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
         {(q || cat || sf) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setSf(''); setLimit(60); }}>Effacer les filtres</Button></div>}
         <MoreMatches n={others} onShow={() => setAllMatches(true)} />
         <div className="row-between">
@@ -143,7 +156,7 @@ function ProductList() {
           </Empty>
         ) : (
           <ul className="list">
-            {list.slice(0, limit).map(({ p, stock, incoming }) => (
+            {list.slice(0, limit).map(({ p, stock, incoming, value }) => (
               <li key={p.id}>
                 <a className="list-item list-link" href={`#/articles/${p.id}`}>
                   <Thumb src={isLot(p) ? lotPhoto(p) : p.photo} />
@@ -160,6 +173,7 @@ function ProductList() {
                     <span className={`stock-pill ${stock <= 0 ? 'is-out' : stock <= (p.alertQty ?? 3) ? 'is-low' : ''}`}>{fmtNum(stock)}</span>
                     {incoming > 0 && <span className="small muted">+{fmtNum(incoming)} en route</span>}
                     {p.priceRetail ? <span className="small">{fmtAr(p.priceRetail)}</span> : null}
+                    {showCost && value > 0 && (sort === 'value' || sort === 'qty') ? <span className="small muted" title="Valeur en stock (prix de revient)">{fmtAr(value)} en stock</span> : null}
                   </div>
                 </a>
               </li>
