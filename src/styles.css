@@ -488,7 +488,8 @@ a.btn { text-decoration: none; }
 .th-sort:hover { color: var(--ink); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .filters .field { min-width: 160px; flex: 1; max-width: 240px; }
-.table-report td { white-space: nowrap; } .table-report td:nth-child(n) { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+/* Rapports : chiffres sur une ligne ; textes longs à la ligne (jamais coupés par « … »). */
+.table-report td { white-space: nowrap; } .table-report td:not(.t-num) { white-space: normal; max-width: 280px; overflow-wrap: anywhere; }
 .pin-input { font-size: 1.6rem; letter-spacing: .5em; text-align: center; }
 .workdate-banner { align-items: center; border: 2px solid var(--gold); position: sticky; top: 8px; z-index: 20; }
 .synth { border: 2px solid var(--brand); }
@@ -1320,3 +1321,7 @@ a.bell { text-decoration: none; }
 /* Tableaux en grille : le sous-texte de la 1re colonne (pages, adresse…) passe à la ligne au lieu d'élargir le tableau. */
 .table-grid td:first-child .small, .table-grid td:first-child .muted { white-space: normal; min-width: 140px; max-width: 230px; }
 .handover-table td:first-child { white-space: normal; }
+/* Tableaux de rapport : une cellule « cell-wrap » passe à la ligne au lieu d'être coupée (…). */
+.table-report td:has(> .cell-wrap) { white-space: normal; max-width: none; overflow: visible; text-overflow: clip; }
+.cell-wrap.nowrap { white-space: nowrap; }
+.exp-desc { min-width: 200px; max-width: 420px; }

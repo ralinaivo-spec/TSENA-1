@@ -271,13 +271,15 @@ function ExpenseList() {
   const group = (key: (m: CashMove) => string) => { const g = new Map<string, number>(); for (const m of list) g.set(key(m), (g.get(key(m)) ?? 0) - m.amount); return [...g.entries()].sort((a, b) => b[1] - a[1]); };
   const byCat = group((m) => name(m.categoryId));
   const byType = group((m) => name(typeOf(m)));
+  // Affichage lisible sans rien de coupé : date sur 2 lignes, catégorie et type sous la description, saisi par sous le compte.
+  // (Catégorie, Type et Saisi par restent des colonnes à part dans l'export Excel.)
   const cols: Col<CashMove>[] = [
-    { key: 'd', label: 'Date', value: (m) => m.at, render: (m) => <span className="num" style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(m.at)}</span>, width: 18 },
-    { key: 'l', label: 'Description', value: (m) => m.label ?? '', render: (m) => <><strong>{m.label || '—'}</strong>{m.note ? <div className="small muted">{m.note}</div> : null}</>, width: 30 },
-    { key: 'c', label: 'Catégorie', value: (m) => name(m.categoryId), width: 22 },
-    { key: 't', label: 'Type', value: (m) => name(typeOf(m)), width: 18 },
-    { key: 'a', label: 'Compte', value: (m) => ACCOUNTS[m.account], width: 16 },
-    { key: 'u', label: 'Saisi par', value: (m) => m.userName ?? '', width: 16 },
+    { key: 'd', label: 'Date', value: (m) => m.at, render: (m) => <div className="cell-wrap nowrap"><strong className="num">{fmtDate(dayOf(m.at))}</strong><div className="small muted num">{new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div></div>, width: 18 },
+    { key: 'l', label: 'Description', value: (m) => m.label ?? '', render: (m) => <div className="cell-wrap exp-desc"><strong>{m.label || '—'}</strong><div className="small muted">{[name(m.categoryId), name(typeOf(m))].filter(Boolean).join(' · ')}</div>{m.note ? <div className="small muted">{m.note}</div> : null}</div>, width: 30 },
+    { key: 'c', label: 'Catégorie', value: (m) => name(m.categoryId), width: 22, hide: true },
+    { key: 't', label: 'Type', value: (m) => name(typeOf(m)), width: 18, hide: true },
+    { key: 'a', label: 'Compte', value: (m) => ACCOUNTS[m.account], render: (m) => <div className="cell-wrap">{ACCOUNTS[m.account]}{m.userName ? <div className="small muted">par {m.userName}</div> : null}</div>, width: 16 },
+    { key: 'u', label: 'Saisi par', value: (m) => m.userName ?? '', width: 16, hide: true },
     { key: 'm', label: 'Montant', value: (m) => -m.amount, money: true, total: true, width: 14 },
     { key: 'x', label: '', value: () => '', render: (m) => <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>{m.photo && <IconButton icon="eye" label="Voir le reçu" onClick={() => setPhoto(m.photo!)} />}{can('expenses.manage') && <IconButton icon="trash" label="Supprimer" onClick={() => setDel(m)} />}</span> },
   ];
@@ -300,7 +302,7 @@ function ExpenseList() {
       </div>
       <div className="card card-flush">
         <div className="card-pad row-between"><h2>Liste des dépenses</h2>
-          <Button variant="ghost" icon="download" disabled={!list.length} onClick={() => exportTables(`depenses_${period.from ?? 'debut'}_${period.to ?? today()}.xlsx`, [{ name: 'Dépenses', cols: cols.slice(0, 7).map((c) => ({ ...c, value: c.key === 'd' ? (m: CashMove) => fmtDateTime(m.at) : c.value })), rows: list }, { name: 'Par catégorie', cols: [{ key: 'n', label: 'Catégorie', value: (r: [string, number]) => r[0], width: 26 }, { key: 'v', label: 'Total', value: (r: [string, number]) => r[1], money: true, total: true, width: 16 }], rows: byCat }])}>Excel</Button></div>
+          <Button variant="ghost" icon="download" disabled={!list.length} onClick={() => exportTables(`depenses_${period.from ?? 'debut'}_${period.to ?? today()}.xlsx`, [{ name: 'Dépenses', cols: cols.slice(0, 7).map((c) => ({ ...c, hide: false, value: c.key === 'd' ? (m: CashMove) => fmtDateTime(m.at) : c.value })), rows: list }, { name: 'Par catégorie', cols: [{ key: 'n', label: 'Catégorie', value: (r: [string, number]) => r[0], width: 26 }, { key: 'v', label: 'Total', value: (r: [string, number]) => r[1], money: true, total: true, width: 16 }], rows: byCat }])}>Excel</Button></div>
         <SortTable key={order} rowKey={(m) => m.id} rows={list} cols={cols} initialSort={{ key: 'd', desc: order === 'new' }} limit={100} empty="Aucune dépense sur la période." />
       </div>
       {del && <Confirm title="Supprimer cette dépense ?" danger confirmLabel="Supprimer" onClose={() => setDel(null)} onConfirm={async () => { await deleteMove(del); toast('Dépense supprimée'); }}

@@ -1,0 +1,15 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await (await b.newContext({ viewport: { width: 1430, height: 860 } })).newPage();
+p.on('pageerror', (e) => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/'); await p.waitForTimeout(600);
+await p.getByLabel("Nom d'utilisateur").fill('super-adm'); await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(400);
+await p.evaluate(async () => { const t = window.__tsena; const at = new Date().toISOString();
+  const L = ['Connexion Tafita & Fah an trano tamin\'ny alina sy ny maraina', 'Frais (4jrs)', 'Sakafo (4jrs)', 'Connexion Tafita am-piasana', 'First premium', 'Achat scotch'];
+  await t.save('cashMoves', L.map((l, i) => ({ at, account: 'cash', amount: -(2000 + i * 1000), type: 'expense', categoryId: i % 2 ? 'fc-transport' : 'fc-internet', label: l, userName: 'Gerant' }))); });
+await p.goto('http://localhost:5173/#/depenses'); await p.waitForTimeout(800);
+const r = await p.evaluate(() => { const w = [...document.querySelectorAll('.table-wrap')].map((x) => x.scrollWidth - x.clientWidth); const cut = [...document.querySelectorAll('.table-report td')].filter((td) => td.scrollWidth > td.clientWidth + 1).length; return { w, cut }; });
+console.log(JSON.stringify(r));
+await p.locator('.table-report').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: '/tmp/claude-0/t/xp.png' });
+await b.close();
