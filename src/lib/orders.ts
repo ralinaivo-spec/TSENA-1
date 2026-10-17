@@ -54,6 +54,8 @@ export interface Order extends BaseRecord {
   parentId?: string;              // commande d'origine (échange)
   /** Échange demandé par le client pendant la livraison : ce qu'il rend (par ligne) et la commande échange créée. */
   exchangeRequest?: { at: string; by?: string; returns: Record<string, number>; childId: string; childNumber: string };
+  /** Choix du client (articles partis « en choix ») indiqué par le vendeur avant le retour du livreur ; repris par le gérant au règlement. */
+  choiceNote?: { at: string; by?: string; kept: Record<string, number>; note?: string };
   channel: 'facebook' | 'phone' | 'shop' | 'other';
   customerId?: string;
   phone: string;
@@ -172,6 +174,20 @@ export function isOutsideHours(d: Date, c: Company) {
 export const sellingLines = (o: Order) => o.lines.filter((l) => !l.isChoice);
 /** Livraison partie avec des articles « en choix » dont le client n'a pas encore dit ce qu'il garde. */
 export const hasPendingChoice = (o: Pick<Order, 'status' | 'lines'>) => o.status === 'out' && o.lines.some((l) => l.isChoice);
+/** Le vendeur a déjà indiqué ce que le client a gardé pour chaque ligne en choix. */
+export const choiceGiven = (o: Pick<Order, 'lines' | 'choiceNote'>) => !!o.choiceNote && o.lines.filter((l) => l.isChoice).every((l) => o.choiceNote!.kept[l.id] != null);
+/** Choix encore à indiquer (personne ne l'a précisé). */
+export const choiceBlocking = (o: Pick<Order, 'status' | 'lines' | 'choiceNote'>) => hasPendingChoice(o) && !choiceGiven(o);
+/** Pièces gardées par le client pour une ligne en choix, d'après la saisie du vendeur (0 sinon). */
+export const choiceKept = (o: Pick<Order, 'choiceNote'>, l: { id: string; qty: number }) => Math.max(0, Math.min(l.qty, o.choiceNote?.kept[l.id] ?? 0));
+/** Le vendeur indique le choix du client : enregistré sur la commande, sans confirmer le retour (fait par le gérant). */
+export async function saveChoice(o: Order, kept: Record<string, number>, note?: string) {
+  const u = currentUser();
+  const at = new Date().toISOString();
+  const text = `Choix du client indiqué : ${o.lines.filter((l) => l.isChoice).map((l) => `${kept[l.id] ?? 0}/${l.qty} gardé(s)`).join(', ')}${note ? ` — ${note}` : ''}`;
+  await save('orders', { id: o.id, choiceNote: { at, by: u?.fullName, kept, note: note || undefined }, events: [...(o.events || []), { at, text, user: u?.fullName }] });
+  await audit('Choix du client indiqué', `${o.number} : ${text}`, 'orders', o.id);
+}
 export const choiceQty = (o: Pick<Order, 'lines'>) => o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0);
 export function itemsTotal(o: Pick<Order, 'lines' | 'adjusts'>) { return o.lines.filter((l) => !l.isChoice).reduce((s, l) => s + l.qty * l.unitPrice, 0) + adjustsTotal(o); }
 /** Montant des articles gardés : le prix du lot ne compte que pour les lots complets, le reste au prix normal. */

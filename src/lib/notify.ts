@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 import { useCan } from './auth';
 import { getMeta, setMeta, useMeta, useTable } from './db';
 import { productStock, type Product } from './catalog';
-import { hasPendingChoice, type Order } from './orders';
+import { choiceBlocking, type Order } from './orders';
 import { courierBalance, dueRecurring, mondayOf, today, type Recurring } from './money';
 import type { Courier } from './orders';
 import { unpaidWeeks } from './payouts';
@@ -83,7 +83,7 @@ export function useNotifications() {
       }
     }
     if (can('deliveries.manage')) {
-      const ch = orders.filter((o) => hasPendingChoice(o));
+      const ch = orders.filter((o) => choiceBlocking(o));
       if (ch.length) out.push({ id: 'choix', level: 'urgent', title: `${ch.length} livraison(s) avec un choix à préciser`, text: ch.slice(0, 4).map((o) => o.number).join(', '), href: can('deliveries.menu') ? '#/livraisons/retour' : '#/commandes/livraison' });
     }
     if (can('orders.create')) {

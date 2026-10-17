@@ -11,7 +11,7 @@ import { salesLedger } from './analytics';
 import { rootOf } from './scope';
 import { addDays, dayOf, type AccountId, type CashMove, type FinanceCategory } from './money';
 import { variantLabel, type Category, type Product, type Variant } from './catalog';
-import { hasPendingChoice, orderLabel, type Order } from './orders';
+import { choiceBlocking, orderLabel, type Order } from './orders';
 import { allDeltas } from './boosts';
 import { payoutId, type Payout } from './closed';
 import { DEFAULT_COMPANY, type Company } from './settings';
@@ -199,7 +199,7 @@ export function dayReview(ymd: string, pages?: string[]) {
   const orders = all<Order>('orders');
   const warnings: string[] = [];
   const out = orders.filter((o) => o.status === 'out');
-  const pend = out.filter((o) => hasPendingChoice(o));
+  const pend = out.filter((o) => choiceBlocking(o));
   if (out.length) warnings.push(`${out.length} livraison(s) encore chez les livreurs (pas encore confirmées livrées ou refusées) : leurs retours éventuels ne sont pas encore déduits.`);
   if (pend.length) warnings.push(`${pend.length} livraison(s) avec un « choix à préciser » : le choix gardé par le client n’est pas encore compté.`);
   const ready = orders.filter((o) => (o.status === 'confirmed' || o.status === 'ready') && dayOf(o.createdAt) <= ymd);

@@ -9,7 +9,7 @@ import { useCan } from '../lib/auth';
 import { get, save, useTable } from '../lib/db';
 import { fmtAr, parseNum, parseAr } from '../lib/catalog';
 import {
-  cancelDeliveryToShop, defaultReturnDay, departureDays, returnAt, MAX_REPORTS, reportCount, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
+  choiceBlocking, choiceKept, cancelDeliveryToShop, defaultReturnDay, departureDays, returnAt, MAX_REPORTS, reportCount, choiceQty, courierSplit, fmtPhone, hasPendingChoice, orderLabel, recordReturn, remaining, PAY_METHODS,
   type Courier, type Order, type Zone,
 } from '../lib/orders';
 import { ACCOUNTS, ACCOUNT_IDS, courierBalance, payDeferredFees, settleCourier, type AccountId, type CourierSettlement } from '../lib/money';
@@ -24,7 +24,9 @@ type FeeMode = 'retenue' | 'apart' | 'plustard';
 
 /** Ce que donnerait le retour d'un colis encore « en livraison », sans rien enregistrer. */
 function simulate(o: Order, d: Decision, fee: number): Order {
-  const lines = o.lines.map((l) => ({ ...l, qtyKept: d === 'delivered' && !l.isChoice ? l.qty : 0, qtyReturned: d === 'delivered' && !l.isChoice ? 0 : l.qty }));
+  // Ligne en choix : ce que le vendeur a indiqué (choix du client) ; sinon livrée = tout gardé, refusée = tout rendu.
+  const keep = (l: Order['lines'][number]) => d !== 'delivered' ? 0 : l.isChoice ? choiceKept(o, l) : l.qty;
+  const lines = o.lines.map((l) => ({ ...l, qtyKept: keep(l), qtyReturned: l.qty - keep(l) }));
   const sim = { ...o, status: d, lines, feeCharged: fee } as Order;
   const rest = remaining(sim);
   if (rest > 0) sim.payments = [...(o.payments || []), { id: 'sim', at: '', amount: rest, method: 'cash', receivedBy: 'courier', courierId: o.courierId }];
@@ -93,7 +95,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
 
   const rows = useMemo(() => b.pending.map((o) => {
     const open = o.status === 'out';
-    const blocked = open && hasPendingChoice(o);
+    const blocked = open && choiceBlocking(o);
     const d: Decision = dec[o.id] ?? 'delivered';
     const fee = open ? (fees[o.id] != null ? parseNum(fees[o.id]) ?? 0 : d === 'refused' ? 0 : o.deliveryFee || 0) : (o.feeCharged ?? o.deliveryFee ?? 0);
     const sim = open && !blocked ? simulate(o, d, fee) : o;
@@ -132,7 +134,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
       const at = returnAt(day, on.map((r) => r.o));
       for (const r of on) {
         if (!r.open) continue;
-        const kept = Object.fromEntries(r.o.lines.map((l) => [l.id, r.d === 'delivered' && !l.isChoice ? l.qty : 0]));
+        const kept = Object.fromEntries(r.o.lines.map((l) => [l.id, r.d !== 'delivered' ? 0 : l.isChoice ? choiceKept(r.o, l) : l.qty]));
         const rest = remaining({ ...r.o, status: r.d, lines: r.o.lines.map((l) => ({ ...l, qtyKept: kept[l.id] })), feeCharged: r.fee } as Order);
         await recordReturn(r.o, { kept, feeCharged: r.fee, collected: rest > 0 ? [{ amount: rest, method: 'cash' }] : [], note: r.d === 'refused' ? 'Refusée (retour livreur)' : undefined }, at);
       }
@@ -180,7 +182,8 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
             <label className="row" style={{ gap: 10, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
               <input type="checkbox" className="perm-check" checked={r.on} disabled={r.blocked} onChange={(e) => setOff({ ...off, [r.o.id]: !e.target.checked })} aria-label={`Régler ${r.o.number}`} />
               <span><a href={`#/commandes/${r.o.id}`}><strong>{r.o.number}</strong></a>{linesPages(r.o.lines) ? <span className="page-hint"> ({linesPages(r.o.lines)})</span> : null} {orderLabel(r.o)}
-                <span className="small muted" style={{ display: 'block' }}>{get<Zone>('zones', r.o.zoneId || '')?.name}{r.o.place ? ` — ${r.o.place}` : ''} · parti le {fmtDateTime(r.o.dispatchedAt)}</span></span>
+                <span className="small muted" style={{ display: 'block' }}>{get<Zone>('zones', r.o.zoneId || '')?.name}{r.o.place ? ` — ${r.o.place}` : ''} · parti le {fmtDateTime(r.o.dispatchedAt)}</span>
+                {r.open && r.o.choiceNote && r.o.lines.some((l) => l.isChoice) && <span className="small pos" style={{ display: 'block' }}>Choix indiqué{r.o.choiceNote.by ? ` par ${r.o.choiceNote.by}` : ''} : {r.o.lines.filter((l) => l.isChoice).map((l) => `${choiceKept(r.o, l)}/${l.qty}`).join(', ')} gardé(s) en choix</span>}</span>
             </label>
             {r.open ? (r.blocked ? <Button onClick={() => setRet(r.o)}>Préciser le choix ({choiceQty(r.o)})</Button> : (
               <div className="stack-s" style={{ alignItems: 'flex-end' }}>

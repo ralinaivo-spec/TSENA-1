@@ -5,12 +5,12 @@ import { useMemo, useState } from 'react';
 import { audit, useCan } from '../lib/auth';
 import { get, remove, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, parseNum, parseAr } from '../lib/catalog';
-import { defaultReturnDay, returnAt, dispatchOrder, orderText, choiceQty, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
+import { defaultReturnDay, returnAt, dispatchOrder, orderText, choiceQty, choiceGiven, hasPendingChoice, courierAccount, courierSplit, fmtPhone, isPickupZone, orderLabel, remaining, totalQty, type Courier, type Order, type Zone } from '../lib/orders';
 import { Help, Badge, FilterSelect, MultiPick, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, Toggle, fmtDateTime, navigate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { matchQuery } from '../lib/catalog';
-import { ReassignModal, ReturnModal, OrderRow, RedateModal } from './Orders';
+import { ChoiceModal, ReassignModal, ReturnModal, OrderRow, RedateModal } from './Orders';
 import { CourierReturn } from './CourierReturn';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
@@ -189,6 +189,7 @@ function OutNow() {
   const couriers = useTable<Courier>('couriers');
   useTable<Zone>('zones');
   const [ret, setRet] = useState<Order | null>(null);
+  const [choice, setChoice] = useState<Order | null>(null);
   const [move, setMove] = useState<Order | null>(null);
   const f = useDelivFilters('all');
   const scope = useMyScope();
@@ -216,12 +217,13 @@ function OutNow() {
               {list.map((o) => (
                 <li key={o.id} className="list-item">
                   <a className="list-item-main" href={`#/commandes/${o.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                    <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span>{hasPendingChoice(o) && <> <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge></>}</span>
+                    <span className="list-item-title">{orderLabel(o)} <span className="muted small">{o.number}</span>{hasPendingChoice(o) && (choiceGiven(o) ? <> <Badge tone="ok">Choix indiqué</Badge></> : <> <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge></>)}</span>
                     <p className="small muted">{get<Zone>('zones', o.zoneId || '')?.name}{o.place ? ` — ${o.place}` : ''} · à encaisser <strong>{fmtAr(courierSplit(o).toCollect)}</strong>{courierSplit(o).toCollect === 0 ? ' (déjà payé)' : ''} · frais livreur {fmtAr(courierSplit(o).fee)}{courierSplit(o).feeOwed ? ` (payés par Mobile Money : à lui reverser)` : ''}</p>
                   </a>
                   <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                     {canDispatch && <Button variant="quiet" onClick={() => setMove(o)}>Changer de livreur</Button>}
-                    {can('couriers.settle') && <Button variant={hasPendingChoice(o) ? 'primary' : 'ghost'} onClick={() => setRet(o)}>{hasPendingChoice(o) ? 'Préciser le choix' : 'Retour'}</Button>}
+                    {can('couriers.settle') && <Button variant={hasPendingChoice(o) && !choiceGiven(o) ? 'primary' : 'ghost'} onClick={() => setRet(o)}>{hasPendingChoice(o) && !choiceGiven(o) ? 'Préciser le choix' : 'Retour'}</Button>}
+                    {!can('couriers.settle') && hasPendingChoice(o) && can('returns.manage') && <Button variant={choiceGiven(o) ? 'ghost' : 'primary'} onClick={() => setChoice(o)}>{choiceGiven(o) ? 'Modifier le choix' : 'Préciser le choix'}</Button>}
                   </div>
                 </li>
               ))}
@@ -229,6 +231,7 @@ function OutNow() {
           </div>
         );
       })}
+      {choice && <ChoiceModal order={choice} onClose={() => setChoice(null)} />}
       {ret && <ReturnModal order={ret} onClose={() => setRet(null)} />}
       {move && <ReassignModal order={move} onClose={() => setMove(null)} />}
     </>

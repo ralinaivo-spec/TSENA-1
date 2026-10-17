@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -81,7 +81,7 @@ export function OrderStatusBadge({ o }: { o: Order }) {
   const st = ORDER_STATUS[o.status];
   return <>
     <Badge tone={st.tone}>{o.kind === 'exchange' ? `Échange · ${st.label}` : st.label}</Badge>
-    {hasPendingChoice(o) && <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>}
+    {hasPendingChoice(o) && (choiceGiven(o) ? <Badge tone="ok">Choix indiqué</Badge> : <Badge tone="danger">Choix à préciser ({choiceQty(o)})</Badge>)}
     {reportCount(o) > 0 && o.status !== 'cancelled' && <Badge tone={reportCount(o) >= MAX_REPORTS ? 'danger' : 'warn'}>Reportée {reportCount(o)}/{MAX_REPORTS}{o.wantedDate && ['new', 'confirmed', 'ready'].includes(o.status) ? ` · au ${new Date(`${o.wantedDate}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}` : ''}</Badge>}
   </>;
 }
@@ -660,7 +660,8 @@ function OrderDetail({ id }: { id: string }) {
         {parent && <p className="small">Échange de la commande <a href={`#/commandes/${parent.id}`}>{parent.number}</a></p>}
         {children.map((c) => <p key={c.id} className="small">Échange lié : <a href={`#/commandes/${c.id}`}>{c.number}</a> ({ORDER_STATUS[c.status].label})</p>)}
         {o.exchangeRequest && <div className="notice"><Icon name="refresh" /><span><strong>Échange demandé par le client</strong> pendant la livraison : il rend {o.lines.filter((l) => o.exchangeRequest!.returns[l.id]).map((l) => `${o.exchangeRequest!.returns[l.id]} × ${get<Product>('products', get<Variant>('variants', l.variantId)?.productId || '')?.name ?? ''} ${variantLabel(get<Variant>('variants', l.variantId))}`).join(', ') || 'rien'} ; à la place : <a href={`#/commandes/${o.exchangeRequest.childId}`}>{o.exchangeRequest.childNumber}</a>.{o.status === 'out' ? ' Au retour du livreur, ces articles sont déjà marqués « rendus ».' : ''}</span></div>}
-        {hasPendingChoice(o) && <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}><strong>Choix du client à préciser</strong> : {choiceQty(o)} pièce(s) sont parties en choix. Dès que le livreur revient, touchez « Préciser le choix du client » et indiquez ce que le client a gardé. Tant que ce n’est pas fait, le versement du livreur pour cette livraison est bloqué.</span></div>}
+        {hasPendingChoice(o) && !choiceGiven(o) && <div className="notice notice-danger"><Icon name="alert" /><span style={{ flex: 1 }}><strong>Choix du client à préciser</strong> : {choiceQty(o)} pièce(s) sont parties en choix. Dès que vous savez ce que le client a gardé, touchez « Préciser le choix du client ». Tant que ce n’est pas fait, le versement du livreur pour cette livraison est bloqué.</span></div>}
+        {hasPendingChoice(o) && choiceGiven(o) && <div className="notice notice-ok"><Icon name="check" /><span style={{ flex: 1 }}><strong>Choix du client indiqué</strong>{o.choiceNote!.by ? ` par ${o.choiceNote!.by}` : ''} le {fmtDateTime(o.choiceNote!.at)} : {o.lines.filter((l) => l.isChoice).map((l) => `${choiceKept(o, l)}/${l.qty} × ${get<Product>('products', get<Variant>('variants', l.variantId)?.productId || '')?.name ?? ''} ${variantLabel(get<Variant>('variants', l.variantId))}`).join(', ')} gardé(s){o.choiceNote!.note ? ` — ${o.choiceNote!.note}` : ''}. Le gérant le retrouve au retour du livreur.</span></div>}
 
         <div className="action-bar">
           {['new', 'confirmed'].includes(o.status) && !isWalkIn(o) && can('orders.prepare') && <Button icon="package" onClick={act(async () => { await markReady(o); }, 'Commande préparée : en attente de livraison')}>{isPickupZone(o.zoneId) ? 'Préparée — le client vient la chercher' : 'Préparée — en attente de livraison'}</Button>}
@@ -668,7 +669,8 @@ function OrderDetail({ id }: { id: string }) {
           {o.status === 'ready' && !isPickupZone(o.zoneId) && !can('orders.dispatch') && <span className="small muted row" style={{ gap: 6 }}><Icon name="truck" size={16} />Le responsable choisira le livreur.</span>}
           {['new', 'confirmed', 'ready'].includes(o.status) && can('orders.create') && <Button variant={isPickupZone(o.zoneId) ? 'primary' : 'ghost'} icon="store" onClick={() => setModal('pickup')}>{isPickupZone(o.zoneId) ? 'Remise au client en boutique' : 'Retrait en boutique (le client vient la chercher)'}</Button>}
           {o.status === 'ready' && can('orders.prepare') && <Button variant="ghost" onClick={act(async () => { await backToPrepare(o); }, 'Commande revenue à « enregistrée »')}>Revenir à « enregistrée »</Button>}
-          {o.status === 'out' && can('couriers.settle') && <Button icon="inbox" onClick={() => setModal('return')}>{hasPendingChoice(o) ? 'Préciser le choix du client' : 'Confirmer le retour du livreur'}</Button>}
+          {o.status === 'out' && can('couriers.settle') && <Button icon="inbox" onClick={() => setModal('return')}>{hasPendingChoice(o) && !choiceGiven(o) ? 'Préciser le choix du client' : 'Confirmer le retour du livreur'}</Button>}
+          {hasPendingChoice(o) && can('returns.manage') && <Button variant={can('couriers.settle') ? 'ghost' : 'primary'} icon="edit" onClick={() => setModal('choice')}>{choiceGiven(o) ? 'Modifier le choix du client' : can('couriers.settle') ? 'Indiquer le choix seulement' : 'Préciser le choix du client'}</Button>}
           {o.status === 'out' && !o.exchangeRequest && o.kind !== 'exchange' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('dlvexchange')}>Le client veut échanger</Button>}
           {needsSettlement(o) && courier && can('couriers.settle') && <Button icon="wallet" onClick={() => setModal('settle')}>Régler avec {courier.name}</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
@@ -762,6 +764,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'edit' && <OrderForm order={o} onClose={() => setModal('')} />}
       {modal === 'dispatch' && <DispatchModal orders={[o]} onClose={() => setModal('')} />}
       {modal === 'return' && <ReturnModal order={o} onClose={() => setModal('')} />}
+      {modal === 'choice' && <ChoiceModal order={o} onClose={() => setModal('')} />}
       {modal === 'dlvexchange' && <DeliveryExchange order={o} onClose={() => setModal('')} />}
       {modal === 'settle' && courier && <SettleModal courier={courier} orders={[o]} onClose={() => setModal('')} />}
       {modal === 'redate' && <RedateModal order={o} onClose={() => setModal('')} />}
@@ -807,7 +810,7 @@ export function DispatchModal({ orders, onClose }: { orders: Order[]; onClose: (
 }
 
 export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, o.exchangeRequest && !l.isChoice ? String(Math.max(0, l.qty - (o.exchangeRequest.returns[l.id] ?? 0))) : l.isChoice ? '' : String(l.qty)])));
+  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.map((l) => [l.id, o.exchangeRequest && !l.isChoice ? String(Math.max(0, l.qty - (o.exchangeRequest.returns[l.id] ?? 0))) : l.isChoice ? (o.choiceNote?.kept[l.id] != null ? String(choiceKept(o, l)) : '') : String(l.qty)])));
   const hasChoice = o.lines.some((l) => l.isChoice);
   const choiceMissing = o.lines.filter((l) => l.isChoice && (kept[l.id] ?? '').trim() === '');
   const keptNum = Object.fromEntries(o.lines.map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(kept[l.id]) ?? 0))]));
@@ -844,7 +847,8 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         toast(toSettle ? 'Retour confirmé : la commande passe dans « À régler (livreur) »' : 'Retour enregistré'); setBusy(false); onClose();
       }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : 'Confirmer le retour'}</Button></>}>
       <div className="stack">
-        {hasChoice && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues).</span></div>}
+        {hasChoice && !o.choiceNote && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues).</span></div>}
+        {hasChoice && o.choiceNote && <div className="notice notice-ok"><Icon name="check" /><span>Choix du client déjà indiqué{o.choiceNote.by ? ` par ${o.choiceNote.by}` : ''} le {fmtDateTime(o.choiceNote.at)}{o.choiceNote.note ? ` — ${o.choiceNote.note}` : ''} : les quantités « gardé » sont reprises ci-dessous. Vérifiez avec le livreur puis confirmez.</span></div>}
         <div className="row">
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, String(l.isChoice ? 0 : l.qty)])))}>{hasChoice ? 'Tout livré, choix tous rendus' : 'Tout livré'}</Button>
           <Button variant="ghost" onClick={() => setKept(Object.fromEntries(o.lines.map((l) => [l.id, '0'])))}>Tout refusé</Button>
@@ -897,6 +901,38 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         </div>
         <TextField label="Remarque (motif de refus, etc.)" value={note} onChange={setNote} placeholder="Ex. taille trop petite, client absent…" />
         {toSettle && <p className="small muted">Étape suivante : le règlement avec le livreur (onglet « À régler »), pour une ou plusieurs commandes à la fois.</p>}
+      </div>
+    </Modal>
+  );
+}
+
+/** Le vendeur indique le choix du client (articles partis en choix), sans confirmer le retour du livreur. */
+export function ChoiceModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const lines = o.lines.filter((l) => l.isChoice);
+  const [kept, setKept] = useState<Record<string, string>>(() => Object.fromEntries(lines.map((l) => [l.id, o.choiceNote?.kept[l.id] != null ? String(choiceKept(o, l)) : ''])));
+  const [note, setNote] = useState(o.choiceNote?.note ?? '');
+  const [busy, setBusy] = useState(false);
+  const missing = lines.filter((l) => (kept[l.id] ?? '').trim() === '');
+  const num = (l: OrderLine) => Math.max(0, Math.min(l.qty, parseNum(kept[l.id]) ?? 0));
+  return (
+    <Modal title={`Choix du client — ${o.number}`} onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={missing.length > 0} onClick={async () => {
+        setBusy(true);
+        try { await saveChoice(o, Object.fromEntries(lines.map((l) => [l.id, num(l)])), note.trim() || undefined); toast('Choix du client enregistré : le gérant le verra au retour du livreur'); onClose(); }
+        catch (e: any) { toast(e.message, 'error'); }
+        setBusy(false);
+      }}>{missing.length ? `Indiquez le choix (${missing.length} ligne(s))` : 'Enregistrer le choix'}</Button></>}>
+      <div className="stack">
+        <p className="small">Pour chaque article parti <strong>en choix</strong>, indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il a tout rendu). Le retour du livreur et l’argent seront confirmés par le gérant.</p>
+        <div className="row"><Button variant="ghost" className="btn-sm" onClick={() => setKept(Object.fromEntries(lines.map((l) => [l.id, '0'])))}>Choix tous rendus</Button></div>
+        <div className="table-wrap"><table className="table lines-table">
+          <thead><tr><th>Article en choix</th><th className="t-num">Parti</th><th style={{ width: 120 }}>Gardé par le client</th></tr></thead>
+          <tbody>{lines.map((l) => { const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId); return (
+            <tr key={l.id} className="is-choice"><td><strong>{p?.name ?? p?.code}</strong> {variantLabel(v)}<div className="small muted">{p?.code} · {fmtAr(l.unitPrice)}</div></td>
+              <td className="t-num num">{l.qty}</td>
+              <td><input className="cell-input" inputMode="numeric" aria-label={`Gardé ${p?.code ?? ''}`} placeholder="à préciser" aria-invalid={(kept[l.id] ?? '').trim() === ''} value={kept[l.id]} onChange={(e) => setKept({ ...kept, [l.id]: e.target.value })} /></td></tr>); })}</tbody>
+        </table></div>
+        <TextField label="Remarque (facultatif)" value={note} onChange={setNote} placeholder="Ex. a gardé la taille M, rendu la L" />
       </div>
     </Modal>
   );
