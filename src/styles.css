@@ -1254,3 +1254,40 @@ a.bell { text-decoration: none; }
 .sort-select { align-items: flex-end; gap: 10px; flex: 1 1 auto; }
 .sort-select .field select { width: 100%; }
 .sort-now { padding-bottom: 10px; }
+
+/* Filtres compacts (Stock, Articles) : tout sur une ou deux lignes pour laisser la place à la liste */
+.filter-compact { padding: 12px 14px; gap: 8px; }
+.filter-compact .filter-row { gap: 8px; align-items: center; }
+.filter-compact .field { margin: 0; }
+.filter-compact input, .filter-compact select { min-height: 38px; padding-top: 6px; padding-bottom: 6px; }
+.fc-search { flex: 1 1 220px; min-width: 0; }
+.fc-select { flex: 0 1 210px; min-width: 150px; }
+.sort-compact { flex: 0 1 230px; min-width: 200px; }
+.sort-compact select { flex: 1; min-width: 0; }
+.segmented-sm { padding: 3px; }
+.segmented-sm button { min-height: 30px; padding: 0 11px; font-size: .82rem; }
+.fc-legend summary { cursor: pointer; color: var(--muted); list-style: none; }
+.fc-legend summary::-webkit-details-marker { display: none; }
+.fc-legend summary::before { content: 'ⓘ '; }
+.fc-legend[open] { flex-basis: 100%; }
+/* Tableaux denses : moins de marge, colonnes d'action étroites */
+.table-compact th, .table-compact td { padding: 8px 10px; }
+.table-compact td.t-act { width: 1%; padding-left: 4px; padding-right: 8px; white-space: nowrap; }
+.nowrap { white-space: nowrap; }
+.stock-table td:first-child strong { display: block; max-width: 220px; }
+
+/* Aperçus sans rien de coupé : tableaux plus denses sur ordinateur ; tableau plus large que l'écran → première
+   colonne fixe et rappel « faites défiler » ; montants des cartes qui passent à la ligne au lieu d'être coupés. */
+@media (min-width: 900px) {
+  .table th, .table td { padding: 9px 11px; }
+  .table th { font-size: .82rem; }
+  /* Titres de colonnes sur deux lignes si besoin, pour que le tableau tienne dans l'écran. */
+  .table th, .table-grid th, .sit-table th { white-space: normal; vertical-align: bottom; line-height: 1.2; min-width: 56px; }
+}
+.table-wrap[data-more] > .table th:first-child, .table-wrap[data-more] > .table td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); box-shadow: 6px 0 8px -8px rgba(0,0,0,.35); }
+.table-wrap[data-more] > .table thead th:first-child { z-index: 2; }
+.table-wrap[data-more] > .table tr.t-total td:first-child, .table-wrap[data-more] > .table tfoot td:first-child { background: var(--surface-2); }
+.scroll-hint { position: sticky; left: 0; box-sizing: border-box; display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding: 4px 14px 8px; font-size: .78rem; color: var(--muted); }
+.scroll-hint button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; width: 28px; height: 26px; cursor: pointer; font-weight: 700; }
+.sit-kpis { grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); }
+.stat-grid .stat-value { font-size: clamp(1.2rem, 1.9vw, 1.6rem); overflow-wrap: anywhere; }

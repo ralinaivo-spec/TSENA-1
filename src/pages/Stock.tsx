@@ -14,7 +14,7 @@ import { downloadBlob, writeXlsx } from '../lib/xlsx';
 import { cancelMove } from '../lib/corrections';
 import { InventoryTab, VariantDetail } from './Inventory';
 import { reservedIndex, type Order } from '../lib/orders';
-import { Badge, Help } from '../ui/kit';
+import { Badge, IconButton } from '../ui/kit';
 import { ADVICE, BOOST_DAYS, HEALTH, SALES_DAYS, coverDays, healthOf, soldByVariant, stockByPage, type Health } from '../lib/stockRank';
 import { SortSelect, compareBy, useSortPref } from '../ui/stockSort';
 const coverText = (d: number) => d === Infinity ? 'aucune vente' : d <= 0 ? '—' : d > 365 ? '> 1 an' : `${d} j`;
@@ -85,6 +85,8 @@ function StockState() {
       .map((x) => x.r);
   }, [variants, q, cat, f, scope.on, allMatches, reserved, sold, sort, health]);
 
+  const anyHeld = rows.some((r) => r.held);
+  const anyIncoming = rows.some((r) => r.incoming);
   const allRows = variants.filter((v) => { const p = get<Product>('products', v.productId); return p && p.active !== false && scope.product(p.id) && inCategory(p, cat); });
   const totals = allRows.reduce((t, v) => {
     const s = stockOf(v.id);
@@ -113,50 +115,53 @@ function StockState() {
         {totals.neg > 0 && <button className="card stat stat-warn" onClick={() => setF('neg')}><span className="muted small">Stocks négatifs à corriger</span><span className="stat-value">{totals.neg}</span></button>}
       </div>
       <PageStockCard showCost={showCost} keep={(p) => scope.product(p.id)} />
-      <div className="card stack">
-        <div className="row">
-          <div className="field" style={{ flex: '1 1 220px' }}><input aria-label="Rechercher" placeholder="Rechercher un code ou un article" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
-          <div className="field" style={{ flex: '0 1 220px' }}>
+      <div className="card stack-s filter-compact">
+        <div className="row filter-row">
+          <div className="field fc-search"><input aria-label="Rechercher" placeholder="Rechercher un code ou un article" value={q} onChange={(e) => { setQ(e.target.value); setAllMatches(false); }} /></div>
+          <div className="field fc-select">
             <FilterSelect label="Catégorie" value={cat} onChange={setCat} options={categoryOptions(categories, 'Toutes les catégories')} />
           </div>
-        </div>
-        <div className="row stock-sortbar">
-          <SortSelect value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
-          <label className="field" style={{ flex: '0 1 230px' }}><span className="small muted">Marque</span>
-            <select aria-label="Marque" value={health} onChange={(e) => setHealth(e.target.value as '' | Health)}>
-              <option value="">Toutes</option>
-              {(Object.keys(HEALTH) as Health[]).map((h) => <option key={h} value={h}>{HEALTH[h].label}</option>)}
-            </select></label>
-          <Help>« Dormant » : en stock, aucune vente depuis {SALES_DAYS} jours (promotion, ou ne plus en racheter). « À booster » : il faudrait plus de {BOOST_DAYS} jours pour écouler le stock au rythme actuel (faire de la publicité). « Rotation OK » : se vend bien.</Help>
-        </div>
-        {(q || cat || health) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setHealth(''); }}>Effacer les filtres</Button></div>}
-        <div className="row-between">
-          <div className="segmented" role="group">
-            {([['in', 'En stock'], ['out', 'En rupture'], ['neg', 'Négatifs'], ['', 'Tout']] as const).map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)}>{l}</button>)}
+          <SortSelect compact value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
+          <div className="field fc-select">
+            <select aria-label="Marque" value={health} onChange={(e) => setHealth(e.target.value as '' | Health)} title={`Dormant : aucune vente depuis ${SALES_DAYS} jours (promotion, ou ne plus en racheter). À booster : plus de ${BOOST_DAYS} jours pour écouler le stock (faire de la publicité). Rotation OK : se vend bien.`}>
+              <option value="">Marque : toutes</option>
+              {(Object.keys(HEALTH) as Health[]).map((h) => <option key={h} value={h}>Marque : {HEALTH[h].label}</option>)}
+            </select>
           </div>
-          <Button variant="ghost" icon="download" onClick={exportXlsx}>Exporter en Excel</Button>
+        </div>
+        <div className="row-between filter-row">
+          <div className="row" style={{ gap: 8 }}>
+            <div className="segmented segmented-sm" role="group">
+              {([['in', 'En stock'], ['out', 'En rupture'], ['neg', 'Négatifs'], ['', 'Tout']] as const).map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)}>{l}</button>)}
+            </div>
+            {(q || cat || health) && <Button variant="quiet" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setHealth(''); }}>Effacer les filtres</Button>}
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <details className="fc-legend"><summary className="small">Que veulent dire les marques ?</summary>
+              <p className="small muted">« Dormant » : en stock, aucune vente depuis {SALES_DAYS} jours (promotion, ou ne plus en racheter). « À booster » : il faudrait plus de {BOOST_DAYS} jours pour écouler le stock au rythme actuel (faire de la publicité). « Rotation OK » : se vend bien.</p></details>
+            <Button variant="ghost" className="btn-sm" icon="download" onClick={exportXlsx}>Excel</Button>
+          </div>
         </div>
         <MoreMatches n={others} onShow={() => setAllMatches(true)} />
       </div>
       <div className="card card-flush">
         {rows.length === 0 ? <Empty icon="store" title="Aucune variante ne correspond" /> : (
           <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th><th className="t-num" title="Pièces promises à des commandes pas encore remises au livreur">Réservé</th><th className="t-num">Disponible</th><th className="t-num">En arrivage</th>{showCost && <th className="t-num">Coût moyen</th>}{showCost && <th className="t-num">Valeur</th>}<th className="t-num">Vendus {SALES_DAYS} j</th><th className="t-num" title="Au rythme des ventes des 30 derniers jours">Pour écouler</th><th></th></tr></thead>
+            <table className="table table-compact stock-table">
+              <thead><tr><th>Article</th><th>Variante</th><th className="t-num">Stock</th>{anyHeld && <th className="t-num" title="Pièces promises à des commandes pas encore remises au livreur">Réservé</th>}{anyHeld && <th className="t-num">Dispo.</th>}{anyIncoming && <th className="t-num">Arrivage</th>}{showCost && <th className="t-num" title="Stock × coût moyen">Valeur</th>}<th className="t-num">Vendus {SALES_DAYS} j</th><th className="t-num" title="Au rythme des ventes des 30 derniers jours">Pour écouler</th><th></th></tr></thead>
               <tbody>
                 {rows.slice(0, limit).map((r) => (
                   <tr key={r.v.id} className="row-link" onClick={() => navigate('/articles/' + r.p!.id)}>
-                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={52} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div>{r.health ? <span title={HEALTH[r.health].hint}><Badge tone={HEALTH[r.health].tone}>{HEALTH[r.health].label}</Badge></span> : null}</div></div></td>
+                    <td><div className="row" style={{ gap: 10, flexWrap: 'nowrap' }}><Thumb src={photoOf(r.v)} size={44} zoom alt={r.p!.name} /><div><strong>{r.p!.name}</strong><div className="small muted">{r.v.sku}</div>{r.health ? <span title={HEALTH[r.health].hint}><Badge tone={HEALTH[r.health].tone}>{HEALTH[r.health].label}</Badge></span> : null}</div></div></td>
                     <td>{variantLabel(r.v)}</td>
                     <td className="t-num"><span className={`stock-pill ${r.stock <= 0 ? 'is-out' : ''}`}>{fmtNum(r.stock)}</span></td>
-                    <td className="t-num">{r.held ? <button type="button" className="link-btn" style={{ padding: 0 }} title="Voir les commandes qui réservent" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>{fmtNum(r.held)}</button> : '—'}</td>
-                    <td className={`t-num ${r.stock - r.held < 0 ? 'neg' : ''}`}>{r.held ? fmtNum(r.stock - r.held) : fmtNum(r.stock)}</td>
-                    <td className="t-num">{r.incoming || '—'}</td>
-                    {showCost && <td className="t-num">{fmtAr(r.v.costAvg)}</td>}
-                    {showCost && <td className="t-num"><strong>{fmtAr(r.value)}</strong></td>}
+                    {anyHeld && <td className="t-num">{r.held ? <button type="button" className="link-btn" style={{ padding: 0 }} title="Voir les commandes qui réservent" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>{fmtNum(r.held)}</button> : '—'}</td>}
+                    {anyHeld && <td className={`t-num ${r.stock - r.held < 0 ? 'neg' : ''}`}>{r.held ? fmtNum(r.stock - r.held) : fmtNum(r.stock)}</td>}
+                    {anyIncoming && <td className="t-num">{r.incoming || '—'}</td>}
+                    {showCost && <td className="t-num nowrap"><strong>{fmtAr(r.value)}</strong><div className="small muted">{fmtAr(r.v.costAvg)} / pce</div></td>}
                     <td className="t-num">{fmtNum(r.sold)}</td>
-                    <td className="t-num small">{coverText(r.cover)}</td>
-                    <td><Button variant="quiet" className="btn-sm" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }}>Détail</Button></td>
+                    <td className="t-num small nowrap">{coverText(r.cover)}</td>
+                    <td className="t-act"><IconButton icon="eye" label="Détail du stock (mouvements, réservations)" onClick={(e) => { e.stopPropagation(); setDetail(r.v.id); }} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -173,14 +178,14 @@ function StockState() {
 /** Résumé par page : où dort l'argent, et quelles pages mériteraient un boost. */
 function PageStockCard({ showCost, keep }: { showCost: boolean; keep: (p: Product) => boolean }) {
   const orders = useTable<Order>('orders'); const boosts = useTable('boosts'); const moves = useTable('stockMoves');
-  const [open, setOpen] = useKeep('stock.pages.open', true);
+  const [open, setOpen] = useKeep('stock.pages.open', false);
   const list = useMemo(() => stockByPage(keep), [orders, boosts, moves]);
   if (!list.length) return null;
   return (
     <div className="card card-flush page-stock">
       <div className="card-pad row-between">
         <div><h2>Stock par page — pour décider et choisir les publicités</h2>
-          <p className="small muted">Valeur au prix de revient · ventes des {SALES_DAYS} derniers jours · boosts actifs aujourd’hui.</p></div>
+          <p className="small muted">{open ? `Valeur au prix de revient · ventes des ${SALES_DAYS} derniers jours · boosts actifs aujourd’hui.` : `${list.length} page(s) · ${list.filter((r) => r.advice === 'boost').length} à booster · ${list.filter((r) => r.advice === 'promo').length} promotion à envisager`}</p></div>
         <Button variant="ghost" className="btn-sm" onClick={() => setOpen(!open)}>{open ? 'Masquer' : 'Afficher'}</Button>
       </div>
       {open && <div className="table-wrap"><table className="table">

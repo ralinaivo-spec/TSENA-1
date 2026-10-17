@@ -38,8 +38,17 @@ export function compareBy(sort: SortKey) {
 }
 
 /** Liste « Trier par » + rappel du tri en cours + retour au tri par défaut. */
-export function SortSelect({ value, onChange, def, showCost }: { value: SortKey; onChange: (k: SortKey) => void; def: SortKey; showCost: boolean }) {
+export function SortSelect({ value, onChange, def, showCost, compact }: { value: SortKey; onChange: (k: SortKey) => void; def: SortKey; showCost: boolean; compact?: boolean }) {
   const keys = (Object.keys(SORT_LABEL) as SortKey[]).filter((k) => showCost || k !== 'value');
+  // Version compacte (une ligne de filtres) : la liste affiche elle-même « Tri : … » ; bouton ↺ pour revenir au tri par défaut.
+  if (compact) return (
+    <div className="field fc-select sort-compact row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+      <select aria-label="Trier par" value={value} onChange={(e) => onChange(e.target.value as SortKey)} title={`Trié par : ${SHORT[value]}`}>
+        {keys.map((k) => <option key={k} value={k}>Tri : {SHORT[k]}</option>)}
+      </select>
+      {value !== def && <Button variant="quiet" className="btn-sm" icon="refresh" aria-label="Revenir au tri par défaut" title="Revenir au tri par défaut" onClick={() => onChange(def)}>Défaut</Button>}
+    </div>
+  );
   return (
     <div className="sort-select row">
       <label className="field" style={{ flex: '0 1 340px' }}><span className="small muted">Trier par</span>

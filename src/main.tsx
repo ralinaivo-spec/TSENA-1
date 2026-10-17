@@ -17,6 +17,7 @@ declare global {
 }
 
 const root = createRoot(document.getElementById('root')!);
+import('./ui/scrollHint').then((m) => m.watchWideTables()).catch(() => {});
 
 function guessDeviceName() {
   const ua = navigator.userAgent;

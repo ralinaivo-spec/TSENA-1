@@ -145,6 +145,7 @@ Menu **Stock → Pages et variantes**.
   - Carte **Stock par page** : valeur, pièces, vendus 30 j, jours pour écouler, valeur dormante, boosts actifs aujourd'hui (Boosts pub) et conseil : « Mettre un boost » (lent et sans boost), « Promotion à envisager » (lent malgré un boost), « OK ».
   - Export Excel avec ces colonnes. Accueil (gérant/admin avec les coûts) : **Top 5 — argent qui dort dans le stock**.
   - **Tri gardé** : même « Trier par » dans **Articles** (valeur en stock affichée à droite). Le tri ne change jamais avec les filtres (catégorie, recherche, état du stock) ; il est gardé sur l'appareil, même après fermeture, jusqu'à un changement manuel. « Trié par : … » affiché ; bouton « Revenir au tri par défaut » (valeur en stock ↓, ou quantité ↓ pour qui ne voit pas les coûts).
+  - **Affichage compact** *(17/10/2026)* : filtres du stock sur deux lignes, « Stock par page » replié par défaut, tableau sans colonne coupée (icône œil pour le détail, coût moyen sous la valeur, colonnes Réservé / Arrivage seulement si utiles). Partout : tableaux plus serrés, titres de colonnes sur deux lignes ; tableau trop large → première colonne fixe et rappel « faites défiler ← → ».
 
 ---
 
