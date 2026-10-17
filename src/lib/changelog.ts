@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-17', items: [
+    'Versements des vendeurs (et autres tableaux) : la liste des pages sous le nom du vendeur passe à la ligne au lieu d’élargir le tableau : toutes les colonnes (Total à payer, Reçu) sont visibles.',
     'Retour du livreur confirmé par erreur : sur la commande, le gérant touche « Remettre en livraison (retour à refaire) ». Elle revient « En livraison » dans la liste du livreur (Retour livreur) et sort de « À régler » ; articles de nouveau chez le livreur, encaissement du retour retiré, choix du client gardé pré-rempli. On refait ensuite le retour avec les bons montants.',
     'Corriger un paiement : nouveau choix « Argent reçu par » (la boutique / le livreur), tant que le règlement du livreur n’est pas fait. Pour réparer un montant encaissé par le livreur saisi par erreur comme « payé à la boutique » : la caisse, le reste à payer et ce que le livreur doit verser se recalculent.',
     'Commande refusée : tout est à 0 (articles et frais), aucun frais pour le livreur et plus d’étape « À régler (livreur) » — elle va directement dans « Annulées / refusées ». Les anciennes refusées en attente de règlement disparaissent aussi de « À régler » et du retour livreur.',

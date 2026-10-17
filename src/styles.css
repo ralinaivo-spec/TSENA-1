@@ -1317,3 +1317,6 @@ a.bell { text-decoration: none; }
   .content .card.row > .list-dates { flex: 0 1 auto; }
 }
 .filter-compact .row, .filter-compact .segmented { min-width: 0; max-width: 100%; }
+/* Tableaux en grille : le sous-texte de la 1re colonne (pages, adresse…) passe à la ligne au lieu d'élargir le tableau. */
+.table-grid td:first-child .small, .table-grid td:first-child .muted { white-space: normal; min-width: 140px; max-width: 230px; }
+.handover-table td:first-child { white-space: normal; }
