@@ -39,6 +39,8 @@ ok((await stock()).join() === '4,4', 'stock : les 2 coffrets de nouveau chez le 
 ok(o.choiceNote?.kept?.l1 === 1 && o.choiceNote?.kept?.l2 === 0, 'choix gardé pré-rempli (1 / 0)');
 await p.goto('http://localhost:5173/#/commandes/regler'); await p.waitForTimeout(400);
 ok(!(await p.locator('main').innerText()).includes('C-50'), 'plus dans « À régler (livreur) »');
+await p.goto('http://localhost:5173/#/commandes/o1'); await p.waitForTimeout(500);
+{ const sb = (await p.locator('.summary-box').innerText()).replace(/\s/g, ''); console.log(sb); ok(sb.includes('Articles(aveclechoixindiqué)35000Ar') && sb.includes('Total39000Ar'), 'en livraison : total attendu 39 000 avec le choix indiqué'); }
 await p.goto('http://localhost:5173/#/livraisons/retour'); await p.waitForTimeout(500);
 ok((await p.locator('main').innerText()).includes('C-50'), 'de retour dans la liste du livreur (Retour livreur)');
 // correction du paiement puis retour refait

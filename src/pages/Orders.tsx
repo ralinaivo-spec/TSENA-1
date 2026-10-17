@@ -715,7 +715,10 @@ function OrderDetail({ id }: { id: string }) {
         </div>
         {(o.adjusts || []).length > 0 && <div style={{ margin: '12px 16px 0' }}><AdjustList adjusts={o.adjusts} lines={o.lines} closed={closed} /></div>}
         <div className="summary-box" style={{ margin: 16 }}>
-          <div><span>Articles</span><strong className="num">{fmtAr(closed ? keptTotal(o) : itemsTotal(o))}</strong></div>
+          {(() => { const ch = o.lines.filter((l) => l.isChoice); const chosen = !closed && o.choiceNote ? ch.reduce((t, l) => t + choiceKept(o, l) * l.unitPrice, 0) : 0; return <>
+            <div><span>Articles{!closed && ch.length ? (o.choiceNote ? ' (avec le choix indiqué)' : '') : ''}</span><strong className="num">{fmtAr(closed ? keptTotal(o) : itemsTotal(o) + chosen)}</strong></div>
+            {!closed && ch.length > 0 && !o.choiceNote && <div className="small muted"><span>Articles en choix : pas encore comptés (en attente du choix du client)</span></div>}
+          </>; })()}
           {o.discount > 0 && <div><span>Remise</span><strong className="num">− {fmtAr(o.discount)}</strong></div>}
           {o.credit ? <div><span>Articles repris</span><strong className="num">− {fmtAr(o.credit)}</strong></div> : null}
           <div><span>Frais de livraison{closed && o.feeCharged !== o.deliveryFee ? ` (prévu ${fmtAr(o.deliveryFee)})` : ''}</span><strong className="num">{fmtAr(closed ? o.feeCharged ?? 0 : o.deliveryFee)}</strong></div>

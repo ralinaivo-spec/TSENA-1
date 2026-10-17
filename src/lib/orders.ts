@@ -202,7 +202,9 @@ export const refusedZero = (o: Pick<Order, 'status' | 'courierSettledAt'>) => o.
 export function orderedTotal(o: Order) { return Math.max(0, itemsTotal(o) - (o.discount || 0)) + (o.deliveryFee || 0); }
 export function orderTotal(o: Order) {
   if (o.status === 'cancelled' || refusedZero(o)) return o.status === 'cancelled' ? orderedTotal(o) : 0;
-  const items = isClosed(o) ? keptTotal(o) : itemsTotal(o);
+  // En livraison avec un choix du client déjà indiqué : on compte aussi les pièces « en choix » gardées (total attendu).
+  const chosen = !isClosed(o) && o.choiceNote ? o.lines.filter((l) => l.isChoice).reduce((t, l) => t + choiceKept(o, l) * l.unitPrice, 0) : 0;
+  const items = isClosed(o) ? keptTotal(o) : itemsTotal(o) + chosen;
   const fee = isClosed(o) ? (o.feeCharged ?? o.deliveryFee) : o.deliveryFee;
   return Math.max(0, items - (o.discount || 0)) + (fee || 0);
 }
