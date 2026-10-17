@@ -122,28 +122,30 @@ function ProductList() {
           {can('catalog.edit') && <Button icon="plus" onClick={() => setChoosing(true)}>Nouvel article</Button>}
         </>} />
       <ScopeBar scope={scope} />
-      <div className="card stack">
-        <div className="row">
-          <div className="field" style={{ flex: '1 1 240px' }}>
+      <div className="card stack-s filter-compact">
+        <div className="row filter-row">
+          <div className="field fc-search">
             <input aria-label="Rechercher" placeholder="Rechercher un code, un nom…" value={q} onChange={(e) => { setQ(e.target.value); setLimit(60); setAllMatches(false); }} />
           </div>
-          <div className="field" style={{ flex: '0 1 240px' }}>
+          <div className="field fc-select">
             <select aria-label="Catégorie" value={cat} onChange={(e) => setCat(e.target.value)}>
               {categoryOptions(categories, 'Toutes les catégories').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+          <SortSelect compact value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
         </div>
-        <SortSelect value={sort} onChange={setSort} def={sortDef} showCost={showCost} />
-        {(q || cat || sf) && <div><Button variant="ghost" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setSf(''); setLimit(60); }}>Effacer les filtres</Button></div>}
-        <MoreMatches n={others} onShow={() => setAllMatches(true)} />
-        <div className="row-between">
-          <div className="segmented" role="group" aria-label="Filtrer par stock">
-            {([['', 'Tous'], ['in', 'En stock'], ['low', 'Stock bas'], ['out', 'En rupture'], ['incoming', 'En arrivage']] as const).map(([k, l]) => (
-              <button key={k} aria-pressed={sf === k} onClick={() => setSf(k)}>{l}</button>
-            ))}
+        <div className="row-between filter-row">
+          <div className="row" style={{ gap: 8 }}>
+            <div className="segmented segmented-sm" role="group" aria-label="Filtrer par stock">
+              {([['', 'Tous'], ['in', 'En stock'], ['low', 'Stock bas'], ['out', 'En rupture'], ['incoming', 'En arrivage']] as const).map(([k, l]) => (
+                <button key={k} aria-pressed={sf === k} onClick={() => setSf(k)}>{l}</button>
+              ))}
+            </div>
+            {(q || cat || sf) && <Button variant="quiet" className="btn-sm" icon="x" onClick={() => { setQ(''); setCat(''); setSf(''); setLimit(60); }}>Effacer les filtres</Button>}
           </div>
           <label className="row small" style={{ gap: 6 }}><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Afficher les archivés</label>
         </div>
+        <MoreMatches n={others} onShow={() => setAllMatches(true)} />
       </div>
 
       <div className="card card-flush">

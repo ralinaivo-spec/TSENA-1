@@ -1291,3 +1291,29 @@ a.bell { text-decoration: none; }
 .scroll-hint button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; width: 28px; height: 26px; cursor: pointer; font-weight: 700; }
 .sit-kpis { grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); }
 .stat-grid .stat-value { font-size: clamp(1.2rem, 1.9vw, 1.6rem); overflow-wrap: anywhere; }
+
+/* Zones de recherche / filtres / tri plus compactes partout (cartes qui contiennent une recherche, une période ou des filtres) */
+@media (min-width: 700px) {
+  .field input, .field select { min-height: 40px; padding-top: 7px; padding-bottom: 7px; }
+  .content .card:has(input[placeholder^="Rechercher"]), .content .card:has(> .row > .field select[aria-label]), .content .card:has(.period-picker), .content .filter-compact { padding: 12px 16px; gap: 10px; }
+  .content .card:has(input[placeholder^="Rechercher"]) .row, .content .card:has(.period-picker) .row { gap: 8px; }
+  .content .card:has(input[placeholder^="Rechercher"]) .field, .content .card:has(.period-picker) .field { gap: 3px; }
+  .content .card:has(input[placeholder^="Rechercher"]) .field label, .content .card:has(.period-picker) .field label { font-size: .78rem; color: var(--muted); font-weight: 600; }
+  .content .card:has(input[placeholder^="Rechercher"]) .segmented button, .content .card:has(.period-picker) .segmented button { min-height: 32px; padding: 0 12px; font-size: .84rem; }
+  .content .card:has(input[placeholder^="Rechercher"]) .segmented, .content .card:has(.period-picker) .segmented { padding: 3px; }
+}
+@media (min-width: 700px) {
+  /* Période et ordre : la valeur choisie se lit d'elle-même (« Aujourd'hui », « Plus récent d'abord ») → titres masqués, champs moins larges. */
+  .content .list-dates { gap: 8px; align-items: center; }
+  .content .list-dates > .field > label, .content .list-dates .period-picker > .field:first-child > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .content .list-dates .period-picker { flex: 0 1 380px; align-items: center; }
+  .content .list-dates .period-picker .period-arrows { align-self: center; }
+  .content .list-dates > .field { flex: 0 1 230px; min-width: 215px; }
+  .fc-select { min-width: 190px; }
+}
+@media (min-width: 900px) {
+  .content .list-dates { flex-wrap: nowrap; }
+  .content .card.row:has(> .list-dates) { align-items: center !important; }
+  .content .card.row > .list-dates { flex: 0 1 auto; }
+}
+.filter-compact .row, .filter-compact .segmented { min-width: 0; max-width: 100%; }

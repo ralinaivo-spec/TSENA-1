@@ -146,6 +146,7 @@ Menu **Stock → Pages et variantes**.
   - Export Excel avec ces colonnes. Accueil (gérant/admin avec les coûts) : **Top 5 — argent qui dort dans le stock**.
   - **Tri gardé** : même « Trier par » dans **Articles** (valeur en stock affichée à droite). Le tri ne change jamais avec les filtres (catégorie, recherche, état du stock) ; il est gardé sur l'appareil, même après fermeture, jusqu'à un changement manuel. « Trié par : … » affiché ; bouton « Revenir au tri par défaut » (valeur en stock ↓, ou quantité ↓ pour qui ne voit pas les coûts).
   - **Affichage compact** *(17/10/2026)* : filtres du stock sur deux lignes, « Stock par page » replié par défaut, tableau sans colonne coupée (icône œil pour le détail, coût moyen sous la valeur, colonnes Réservé / Arrivage seulement si utiles). Partout : tableaux plus serrés, titres de colonnes sur deux lignes ; tableau trop large → première colonne fixe et rappel « faites défiler ← → ».
+  - **Filtres compacts partout** *(17/10/2026)* : Articles comme le Stock (recherche + catégorie + tri sur une ligne, état du stock et archivés sur la seconde). Sur ordinateur, toutes les zones de recherche/filtres ont des champs moins hauts et des marges réduites ; « Période » et « Ordre » sans titre au-dessus.
 
 ---
 

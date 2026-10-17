@@ -3,6 +3,8 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-17', items: [
+    'Articles : recherche, catégorie et tri sur une seule ligne, filtres de stock sur la seconde (comme dans le Stock) : la liste des articles apparaît tout de suite.',
+    'Toutes les zones de recherche et de filtres (commandes, clients, dépenses, livraisons, rapports…) : champs moins hauts, marges réduites ; « Période » et « Ordre » sans titre au-dessus (la valeur choisie suffit) et moins larges.',
     'Stock : filtres sur deux lignes seulement (recherche, catégorie, tri, marque, puis état et Excel), « Stock par page » replié par défaut (résumé sur une ligne) : la liste du stock apparaît tout de suite. Tableau du stock sans rien de coupé : bouton « Détail » remplacé par l’icône œil, coût moyen sous la valeur, colonnes « Réservé » et « Arrivage » seulement quand il y en a.',
     'Tous les écrans : tableaux plus serrés et titres de colonnes sur deux lignes si besoin. Si un tableau reste plus large que l’écran, sa première colonne reste fixe et « faites défiler ← → » s’affiche dessous. Montants des cartes jamais coupés.',
     'Articles : nouveau « Trier par », comme dans le Stock ; par défaut, les articles qui immobilisent le plus d’argent en premier (valeur affichée à droite). Dans Stock et Articles, le tri reste le même quand vous changez de catégorie, de recherche ou de filtre, et il est gardé sur l’appareil (même après fermeture) jusqu’à ce que vous le changiez ; « Trié par : … » rappelle le tri en cours et « Revenir au tri par défaut » le remet.',
