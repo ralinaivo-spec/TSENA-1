@@ -86,9 +86,9 @@ function Board() {
       {can('orders.create') && <OrdersState />}
       {can('cashday.use') && (
         <div className="card row-between daycash-shortcut">
-          <div><h3>Caisse du jour</h3><p className="small muted">Saisir une dépense de la caisse commune ou envoyer le récapitulatif global du jour.</p></div>
+          <div><h3>Caisse du jour</h3><p className="small muted">{can('expenses.manage') ? 'Saisir une dépense de la caisse commune ou envoyer le récapitulatif global du jour.' : 'Voir les ventes du jour et envoyer le récapitulatif par WhatsApp.'}</p></div>
           <div className="row" style={{ gap: 8 }}>
-            <a className="btn btn-ghost" href="#/caisse-du-jour"><Icon name="wallet" />Dépense</a>
+            {can('expenses.manage') && <a className="btn btn-ghost" href="#/caisse-du-jour"><Icon name="wallet" />Dépense</a>}
             <a className="btn btn-primary" href={RECAP_HREF}><Icon name="share" />Récap WhatsApp</a>
           </div>
         </div>

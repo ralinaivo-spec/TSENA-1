@@ -21,7 +21,7 @@ export const PERMISSIONS: PermissionDef[] = [
   { group: 'Livraison', key: 'courier.self', label: 'Livreur : voir seulement ses colis et son compte' },
   { group: 'Livraison', key: 'couriers.manage', label: 'Créer et modifier les fiches livreurs' },
   { group: 'Argent', key: 'treasury.view', label: 'Voir la trésorerie et les soldes' },
-  { group: 'Argent', key: 'cashday.use', label: 'Caisse du jour : saisir les dépenses de la caisse commune et envoyer le récapitulatif global par WhatsApp' },
+  { group: 'Argent', key: 'cashday.use', label: 'Caisse du jour : voir les ventes du jour et envoyer le récapitulatif par WhatsApp (les dépenses : droit « Saisir les dépenses »)' },
   { group: 'Argent', key: 'expenses.manage', label: 'Saisir les dépenses et autres revenus' },
   { group: 'Argent', key: 'handover.self', label: 'Vendeur : voir sa feuille de versement du jour (ventes, espèces, mobile money, total à remettre)' },
   { group: 'Argent', key: 'handover.receive', label: 'Responsable : recevoir et valider les versements des vendeurs' },

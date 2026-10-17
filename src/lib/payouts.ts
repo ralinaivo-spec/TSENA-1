@@ -159,15 +159,17 @@ export function dayRecap(ymd: string, only?: { pages: string[]; userName?: strin
   return { g, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, sales: g.salesTotal, expenses: g.expensesTotal, net: g.rest, mine: false };
 }
 const ar = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} Ar`;
-export function dayRecapText(ymd: string, companyName: string, sender?: string, only?: { pages: string[]; userName?: string }) {
+export function dayRecapText(ymd: string, companyName: string, sender?: string, only?: { pages: string[]; userName?: string }, withExpenses = true) {
   const r = dayRecap(ymd, only);
   const date = new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
   const L: string[] = [];
-  L.push(`*${companyName}*`, `*Récapitulatif du ${date}*`, r.mine ? `_Mes pages${sender ? ` (${sender})` : ''}_` : '_Global : tous les vendeurs, caisse commune_', '');
+  L.push(`*${companyName}*`, `*Récapitulatif du ${date}*`, r.mine ? `_Mes pages${sender ? ` (${sender})` : ''}_` : withExpenses ? '_Global : tous les vendeurs, caisse commune_' : '_Ventes du jour : tous les vendeurs_', '');
   L.push('*Ventes par page*');
   if (!r.pages.length) L.push('• Aucune vente');
   for (const p of r.pages) L.push(`• ${p.name} : ${ar(r.g.pageTotals[p.id])}`);
   L.push(`*TOTAL DES VENTES : ${ar(r.sales)}*`, `  (sur place : ${ar(r.shop)} · ${r.shopCount} vente(s) ; livraisons : ${ar(r.online)} · ${r.onlineCount} commande(s))`, '');
+  // Vendeur sans accès aux dépenses : récapitulatif des ventes seulement (le gérant gère les dépenses).
+  if (!withExpenses) { if (sender) L.push(`Envoyé par ${sender} le ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`); return L.join('\n'); }
   L.push(r.mine ? '*Mes dépenses (caisse commune)*' : '*Dépenses de la caisse commune*');
   if (!r.g.expenseMoves.length) L.push('• Aucune dépense');
   for (const m of r.g.expenseMoves) L.push(`• ${m.label || catName(m.categoryId) || 'Dépense'}${m.label && catName(m.categoryId) ? ` (${catName(m.categoryId)})` : ''} : ${ar(-m.amount)}${m.userName ? ` — ${m.userName}` : ''}`);

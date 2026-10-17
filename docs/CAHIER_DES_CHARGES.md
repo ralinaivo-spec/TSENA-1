@@ -719,3 +719,8 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - **Remettre en livraison (retour à refaire)** (gérant, droit « Faire les règlements des livreurs ») : sur une commande dont le retour a été confirmé mais pas encore réglée avec le livreur (et sans échange lié). La commande redevient « En livraison » chez le même livreur, revient dans « Retour livreur » et sort de « À régler (livreur) » ; le stock repasse chez le livreur ; les encaissements saisis au retour sont retirés (les paiements reçus par la boutique restent) ; le choix du client est gardé pré-rempli. Journal : action importante « Retour livreur annulé ».
 - **Corriger un paiement** : en plus du montant et du moyen, « Argent reçu par » (boutique ↔ livreur), tant que le livreur n'est pas réglé pour la commande.
 
+### Dépenses réservées au gérant *(modification du 17/10/2026)*
+- Les dépenses journalières sont saisies et vues **uniquement par le gérant / l'admin** (droit « Saisir les dépenses et autres revenus »).
+- Vendeur (droit « Caisse du jour » sans droit dépenses) : Caisse du jour = ventes du jour (tous les vendeurs) + vérification + envoi WhatsApp ; pas de cartes « Dépenses » / « Net », pas de saisie, pas de case « dépenses » à cocher ; message WhatsApp : ventes par page et total des ventes seulement. Accueil : plus de bouton « Dépense ». Sa feuille de versement n'affiche plus la ligne « Dépenses » (sauf s'il en existe une à son nom).
+- Le gérant garde la Caisse du jour complète (dépenses, net, récapitulatif avec dépenses).
+

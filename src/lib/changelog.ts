@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-17', items: [
+    'Dépenses : seulement le gérant / l’admin (droit « Saisir les dépenses »). Le vendeur ne voit plus et ne saisit plus de dépenses dans la Caisse du jour (ni bouton « Dépense » sur l’accueil) : il voit les ventes du jour et envoie un récapitulatif WhatsApp des ventes seulement.',
     'Commande en livraison avec des articles « en choix » : dès que le choix du client est indiqué, il est compté dans le total attendu (« Articles (avec le choix indiqué) ») ; avant, les pièces en choix ne comptaient pas et un faux « trop perçu » pouvait s’afficher.',
     'Versements des vendeurs (et autres tableaux) : la liste des pages sous le nom du vendeur passe à la ligne au lieu d’élargir le tableau : toutes les colonnes (Total à payer, Reçu) sont visibles.',
     'Retour du livreur confirmé par erreur : sur la commande, le gérant touche « Remettre en livraison (retour à refaire) ». Elle revient « En livraison » dans la liste du livreur (Retour livreur) et sort de « À régler » ; articles de nouveau chez le livreur, encaissement du retour retiré, choix du client gardé pré-rempli. On refait ensuite le retour avec les bons montants.',

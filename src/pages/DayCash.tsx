@@ -38,12 +38,14 @@ export function DayCashPage() {
   const only = undefined;
   void scope;
   const r = dayRecap(date, only);
-  const text = dayRecapText(date, company.name, user?.fullName, only);
+  // Dépenses : seulement le gérant / l'admin (droit « Saisir les dépenses ») ; le vendeur ne voit que les ventes.
+  const canExp = can('expenses.manage');
+  const text = dayRecapText(date, company.name, user?.fullName, only, canExp);
   const longDate = new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <>
-      <PageHead title="Caisse du jour" subtitle={r.mine ? `Vos pages seulement (${scope.names}) : vos ventes, vos dépenses et votre récapitulatif à envoyer` : 'Une seule caisse commune pour tous les vendeurs : dépenses du jour et récapitulatif global à envoyer'} />
+      <PageHead title="Caisse du jour" subtitle={!canExp ? 'Les ventes du jour (tous les vendeurs) et le récapitulatif à envoyer par WhatsApp' : r.mine ? `Vos pages seulement (${scope.names}) : vos ventes, vos dépenses et votre récapitulatif à envoyer` : 'Une seule caisse commune pour tous les vendeurs : dépenses du jour et récapitulatif global à envoyer'} />
       <div className="card row" style={{ alignItems: 'center', gap: 6 }}>
         <IconButton icon="chevronLeft" label="Jour précédent" onClick={() => setDate(addDays(date, -1))} />
         <strong style={{ textTransform: 'capitalize' }}>{longDate}</strong>
@@ -53,13 +55,13 @@ export function DayCashPage() {
 
       <div className="stat-grid">
         <div className="card stat"><span className="small muted">{r.mine ? 'Ventes de mes pages' : 'Total des ventes (tous les vendeurs)'}</span><strong className="stat-value num">{fmtAr(r.sales)}</strong></div>
-        <div className="card stat"><span className="small muted">{r.mine ? 'Mes dépenses (caisse commune)' : 'Dépenses de la caisse commune'}</span><strong className={`stat-value num ${r.expenses ? 'neg' : ''}`}>{fmtAr(r.expenses)}</strong></div>
-        <div className="card stat stat-strong"><span className="small muted">Montant net du jour</span><strong className="stat-value num">{fmtAr(r.net)}</strong></div>
+        {canExp && <div className="card stat"><span className="small muted">{r.mine ? 'Mes dépenses (caisse commune)' : 'Dépenses de la caisse commune'}</span><strong className={`stat-value num ${r.expenses ? 'neg' : ''}`}>{fmtAr(r.expenses)}</strong></div>}
+        {canExp && <div className="card stat stat-strong"><span className="small muted">Montant net du jour</span><strong className="stat-value num">{fmtAr(r.net)}</strong></div>}
       </div>
 
-      <Expenses date={date} moves={r.g.expenseMoves} total={r.expenses} mine={r.mine} />
+      {canExp && <Expenses date={date} moves={r.g.expenseMoves} total={r.expenses} mine={r.mine} />}
 
-      <Review date={date} r={r} text={text} />
+      <Review date={date} r={r} text={text} canExp={canExp} />
     </>
   );
 }
@@ -131,7 +133,7 @@ const KIND = { shop: { label: 'Sur place', tone: 'brand' }, online: { label: 'Li
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 /** Aperçu du jour à vérifier, puis envoi WhatsApp (seulement après confirmation de la vérification). */
-function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap>; text: string }) {
+function Review({ date, r, text, canExp }: { date: string; r: ReturnType<typeof dayRecap>; text: string; canExp: boolean }) {
   const company = useCompany();
   const scope = useMyScope();
   const { rows, warnings } = dayReview(date);
@@ -141,7 +143,7 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
   const [checks, setChecks] = useState({ sales: false, expenses: false, totals: false });
   const [verified, setVerified] = useState<string | null>(null);
   const ok = verified === sig;
-  const allChecked = checks.sales && checks.expenses && checks.totals;
+  const allChecked = checks.sales && (checks.expenses || !canExp) && checks.totals;
   const stale = verified !== null && verified !== sig;
   const confirm = async () => {
     setVerified(sig);
@@ -183,8 +185,10 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
           <tbody>
             {r.pages.map((p) => <tr key={p.id}><td>Ventes — {p.name}</td><td className="t-num">{fmtAr(r.g.pageTotals[p.id])}</td></tr>)}
             <tr className="t-total"><td>Total des ventes <span className="small muted">(sur place {fmtAr(r.shop)} · livraisons {fmtAr(r.online)})</span></td><td className="t-num">{fmtAr(r.sales)}</td></tr>
+{canExp && <>
             <tr><td>Dépenses de la caisse commune ({r.g.expenseMoves.length})</td><td className="t-num neg">− {fmtAr(r.expenses)}</td></tr>
             <tr className="t-total"><td><strong>Montant net du jour</strong> <span className="small muted">= ventes − dépenses</span></td><td className="t-num"><strong>{fmtAr(r.net)}</strong></td></tr>
+            </>}
           </tbody>
         </table></div>
       </div>
@@ -196,8 +200,8 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
         {stale && <div className="notice notice-danger"><Icon name="alert" /><span>Les chiffres ont changé depuis votre vérification (vente ou dépense ajoutée, modifiée ou supprimée). Vérifiez à nouveau.</span></div>}
         <div className="stack-s">
           {box('sales', `J’ai vérifié les ${rows.length} vente(s) / retour(s) du tableau 1 : rien ne manque et les montants sont justes.`)}
-          {box('expenses', `J’ai vérifié les ${r.g.expenseMoves.length} dépense(s) de la caisse commune : rien ne manque.`)}
-          {box('totals', `Je confirme les totaux : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}.`)}
+          {canExp && box('expenses', `J’ai vérifié les ${r.g.expenseMoves.length} dépense(s) de la caisse commune : rien ne manque.`)}
+          {box('totals', canExp ? `Je confirme les totaux : ventes ${fmtAr(r.sales)}, dépenses ${fmtAr(r.expenses)}, net ${fmtAr(r.net)}.` : `Je confirme le total des ventes : ${fmtAr(r.sales)}.`)}
         </div>
         {!ok && <div><Button icon="check" disabled={!allChecked} onClick={confirm}>Confirmer la vérification</Button></div>}
         {ok && <p className="small pos"><strong>✓ Vérification confirmée.</strong> Vous pouvez envoyer le récapitulatif.</p>}
@@ -212,7 +216,7 @@ function Review({ date, r, text }: { date: string; r: ReturnType<typeof dayRecap
             <Button icon="share" disabled>WhatsApp au patron</Button>
           </>}
         </div>
-        {!ok && <p className="small muted">L’envoi s’active une fois les trois cases cochées et la vérification confirmée.</p>}
+        {!ok && <p className="small muted">L’envoi s’active une fois les cases cochées et la vérification confirmée.</p>}
         <p className="small muted">{company.managerPhone ? `Gérant : ${fmtPhone(company.managerPhone)}` : 'Gérant : numéro non renseigné'} · {company.bossPhone ? `Patron : ${fmtPhone(company.bossPhone)}` : 'Patron : numéro non renseigné'}</p>
         <details><summary className="small">Voir le message qui sera envoyé</summary><pre className="recap-text">{text}</pre></details>
       </div>

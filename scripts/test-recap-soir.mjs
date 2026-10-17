@@ -33,9 +33,14 @@ await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200
 ok(p.url().includes('caisse-du-jour/envoyer'), 'ouvre Caisse du jour');
 const top = await p.locator('.daycash-send').evaluate((e) => { const r = e.getBoundingClientRect().top; const max = document.documentElement.scrollHeight - innerHeight; return (r < 200 || Math.abs(scrollY - max) < 4) && max > 0 ? Math.round(scrollY) : -1; });
 ok(top > 0, 'arrive directement sur « Vérifier puis envoyer » (top=' + Math.round(top) + ')');
+{ const m = await p.locator('main').innerText(); ok(!/Dépense|dépense/.test(m) && await p.getByLabel('Montant de la dépense (Ar)').count() === 0, 'vendeur : aucune dépense visible ni saisissable'); }
+await p.goto('http://localhost:5173/#/'); await p.waitForTimeout(400);
+ok(await p.locator('.daycash-shortcut a', { hasText: 'Dépense' }).count() === 0, 'accueil vendeur : pas de bouton « Dépense »');
+await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200);
 for (const c of await p.locator('.review-check input').all()) await c.check();
 await p.getByRole('button', { name: 'Confirmer la vérification' }).click(); await p.waitForTimeout(300);
 await ctx.route('https://wa.me/**', (r) => r.fulfill({ body: 'ok' }));
+{ const href = await p.getByRole('link', { name: /WhatsApp au gérant/ }).getAttribute('href'); const msg = decodeURIComponent(href.split('text=')[1]); console.log(msg); ok(msg.includes('TOTAL DES VENTES') && !msg.includes('DÉPENSES') && !msg.includes('NET'), 'message vendeur : ventes seulement'); }
 const [pop] = await Promise.all([ctx.waitForEvent('page'), p.getByRole('link', { name: /WhatsApp au gérant/ }).click()]);
 await pop.close(); await p.waitForTimeout(500);
 ok((await p.locator('.daycash-send').innerText()).includes('déjà envoyé'), 'mention « déjà envoyé » après l’envoi');

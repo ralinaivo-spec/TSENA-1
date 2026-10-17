@@ -148,8 +148,8 @@ function Sheet({ d, self, onDone }: { d: SellerDay; self?: boolean; onDone?: () 
             <tr><td>Orange Money <span className="small muted">(numéro de la boutique)</span></td><td className="t-num">{fmtAr(d.pay.orange)}</td></tr>
             <tr><td>Airtel Money <span className="small muted">(numéro de la boutique)</span></td><td className="t-num">{fmtAr(d.pay.airtel)}</td></tr>
             {d.fees > 0 && <tr><td>Frais de livraison gardés par les livreurs</td><td className="t-num neg">− {fmtAr(d.fees)}</td></tr>}
-            <tr><td>Dépenses payées ({d.expenseMoves.length}){d.expenseMoves.length ? <div className="small muted">{d.expenseMoves.map((m) => `${m.label || 'Dépense'} ${fmtAr(-m.amount)}`).join(' · ')}</div> : null}</td><td className="t-num neg">{d.expenses ? `− ${fmtAr(d.expenses)}` : fmtAr(0)}</td></tr>
-            <tr className="t-total rc-grand"><td><strong>TOTAL À PAYER</strong> <span className="small muted">= espèces − frais livreurs − dépenses</span></td><td className="t-num"><strong>{fmtAr(d.toPay)}</strong></td></tr>
+            {(!self || can('expenses.manage') || d.expenses !== 0) && <tr><td>Dépenses payées ({d.expenseMoves.length}){d.expenseMoves.length ? <div className="small muted">{d.expenseMoves.map((m) => `${m.label || 'Dépense'} ${fmtAr(-m.amount)}`).join(' · ')}</div> : null}</td><td className="t-num neg">{d.expenses ? `− ${fmtAr(d.expenses)}` : fmtAr(0)}</td></tr>}
+            <tr className="t-total rc-grand"><td><strong>TOTAL À PAYER</strong> <span className="small muted">= espèces − frais livreurs{!self || can('expenses.manage') || d.expenses !== 0 ? ' − dépenses' : ''}</span></td><td className="t-num"><strong>{fmtAr(d.toPay)}</strong></td></tr>
           </tbody>
         </table></div>
         {d.outParcels > 0 && <div className={`notice ${self ? 'card-pad' : ''}`}><Icon name="truck" /><span>{d.outParcels} colis encore chez les livreurs : leur argent comptera le jour où le livreur le rapporte.</span></div>}
