@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -675,6 +675,7 @@ function OrderDetail({ id }: { id: string }) {
           {hasPendingChoice(o) && can('returns.manage') && <Button variant={can('couriers.settle') ? 'ghost' : 'primary'} icon="edit" onClick={() => setModal('choice')}>{choiceGiven(o) ? 'Modifier le choix du client' : can('couriers.settle') ? 'Indiquer le choix seulement' : 'Préciser le choix du client'}</Button>}
           {o.status === 'out' && !o.exchangeRequest && o.kind !== 'exchange' && can('returns.manage') && <Button variant="ghost" icon="refresh" onClick={() => setModal('dlvexchange')}>Le client veut échanger</Button>}
           {needsSettlement(o) && courier && can('couriers.settle') && <Button icon="wallet" onClick={() => setModal('settle')}>Régler avec {courier.name}</Button>}
+          {canUndoReturn(o) && can('couriers.settle') && <Button variant="ghost" icon="truck" onClick={() => setModal('undoreturn')}>Remettre en livraison (retour à refaire)</Button>}
           {o.kind === 'exchange' && ['new', 'confirmed', 'ready'].includes(o.status) && can('returns.manage') && <Button variant="ghost" onClick={() => setModal('shop')}>Échange fait en boutique</Button>}
           {((!closed && o.status !== 'cancelled') || rest !== 0) && o.status !== 'cancelled' && can('orders.create') && <Button variant="ghost" icon="plus" onClick={() => setModal('pay')}>{rest < 0 ? 'Rendre l’argent au client' : 'Paiement reçu'}</Button>}
           {closed && can('returns.manage') && !children.some((c) => c.status !== 'cancelled' && c.id === o.exchangeRequest?.childId) && <Button variant="ghost" icon="refresh" onClick={() => setModal('exchange')}>{o.status === 'refused' ? 'Échange (autre modèle / taille)' : 'Retour / échange'}</Button>}
@@ -767,6 +768,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'dispatch' && <DispatchModal orders={[o]} onClose={() => setModal('')} />}
       {modal === 'return' && <ReturnModal order={o} onClose={() => setModal('')} />}
       {modal === 'choice' && <ChoiceModal order={o} onClose={() => setModal('')} />}
+      {modal === 'undoreturn' && <UndoReturnModal order={o} onClose={() => setModal('')} />}
       {modal === 'dlvexchange' && <DeliveryExchange order={o} onClose={() => setModal('')} />}
       {modal === 'settle' && courier && <SettleModal courier={courier} orders={[o]} onClose={() => setModal('')} />}
       {modal === 'redate' && <RedateModal order={o} onClose={() => setModal('')} />}
@@ -906,6 +908,25 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         {toSettle && <p className="small muted">Étape suivante : le règlement avec le livreur (onglet « À régler »), pour une ou plusieurs commandes à la fois.</p>}
       </div>
     </Modal>
+  );
+}
+
+/** Retour du livreur confirmé par erreur : la commande revient « En livraison » pour refaire le retour avec le livreur. */
+function UndoReturnModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const [reason, setReason] = useState('Erreur au retour (choix / montant)');
+  const courier = get<Courier>('couriers', o.courierId || '')?.name ?? 'le livreur';
+  return (
+    <Confirm title={`Remettre ${o.number} en livraison`} confirmLabel="Remettre en livraison" onClose={onClose}
+      onConfirm={async () => { await undoReturn(o, reason.trim() || undefined); toast(`${o.number} : de nouveau « En livraison » chez ${courier}`); }}
+      message={<div className="stack-s">
+        <p>Le retour du livreur a été confirmé par erreur ? La commande revient <strong>« En livraison »</strong> dans la liste de {courier} (Retour livreur), comme avant le retour, et sort de « À régler (livreur) ».</p>
+        <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+          <li>Les articles repassent chez le livreur (stock), le résultat « gardé / rendu » est effacé{o.lines.some((l) => l.isChoice) ? ' (le choix du client est gardé pré-rempli)' : ''}.</li>
+          <li>L’argent saisi comme encaissé par le livreur au retour est retiré ; les paiements reçus par la boutique restent (à corriger avec ✏️ si besoin).</li>
+          <li>Vous referez ensuite le retour normalement, avec les bons montants.</li>
+        </ul>
+        <TextField label="Motif" value={reason} onChange={setReason} />
+      </div>} />
   );
 }
 

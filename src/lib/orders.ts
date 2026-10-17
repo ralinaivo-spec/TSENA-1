@@ -430,6 +430,35 @@ export async function handOverAtShop(o: Order, pay?: { amount: number; method: P
  * annulée (pas de frais pour le client, pas de dédommagement pour le livreur). Les articles reviennent en boutique,
  * réservés pour le client ; la commande attend le client et deviendra une vente sur place quand il paiera.
  */
+/** Retour du livreur confirmé par erreur (mauvais choix, mauvais montant…) et pas encore réglé : la commande revient « En livraison »,
+ *  dans la liste du livreur, comme avant le retour. Stock remis chez le livreur, encaissements du retour retirés ; le choix déjà indiqué est gardé. */
+export const canUndoReturn = (o: Order) => ['delivered', 'partial', 'refused'].includes(o.status) && !!o.courierId && !!o.dispatchedAt && !!o.returnedAt
+  && !isPickupZone(o.zoneId) && !isWalkIn(o) && !o.exchangeRequest && (!o.courierSettledAt || (o.status === 'refused' && o.courierSettledAt === o.returnedAt));
+export async function undoReturn(o: Order, reason?: string) {
+  if (!canUndoReturn(o)) throw new Error('Cette commande ne peut plus revenir en livraison (déjà réglée avec le livreur, ou échange lié).');
+  assertOpenNow('Annulation du retour');
+  const at = bizNow();
+  // Stock : la commande redevient entièrement chez le livreur (net de ses mouvements = − pièces parties).
+  const net = new Map<string, number>();
+  for (const m of all<StockMove>('stockMoves')) if (m.refType === 'order' && m.refId === o.id) net.set(m.variantId, (net.get(m.variantId) ?? 0) + m.qty);
+  const target = new Map<string, number>();
+  for (const l of o.lines) target.set(l.variantId, (target.get(l.variantId) ?? 0) - l.qty);
+  const fix = [...new Set([...net.keys(), ...target.keys()])].map((v) => ({ v, d: (target.get(v) ?? 0) - (net.get(v) ?? 0) })).filter((x) => x.d);
+  if (fix.length) await addMoves(fix.map((x) => ({ variantId: x.v, qty: x.d, type: (x.d < 0 ? 'dispatch' : 'delivery_return') as StockMove['type'], refType: 'order', refId: o.id, reason: `${o.number} — retour annulé, de nouveau chez le livreur`, at })));
+  // Encaissements saisis au retour (par le livreur, à l'heure du retour) : retirés, ils seront ressaisis au vrai retour.
+  const payments = (o.payments || []).filter((p) => !(p.receivedBy === 'courier' && p.at === o.returnedAt));
+  const kept = Object.fromEntries(o.lines.filter((l) => l.isChoice).map((l) => [l.id, l.qtyKept ?? 0]));
+  const u = currentUser();
+  const nul = null as unknown as undefined;
+  await save('orders', {
+    id: o.id, status: 'out', payments, lines: o.lines.map((l) => ({ ...l, qtyKept: nul, qtyReturned: nul })),
+    feeCharged: nul, returnedAt: nul, returnSavedAt: nul, courierSettledAt: nul, feeStatus: nul,
+    ...(Object.keys(kept).length ? { choiceNote: { at, by: u?.fullName, kept, note: 'repris du retour annulé' } } : {}),
+    events: [...(o.events || []), { at, text: `Retour du livreur annulé : de nouveau « En livraison »${reason ? ` — ${reason}` : ''}`, user: u?.fullName }],
+  });
+  await audit('Retour livreur annulé', `${o.number} : remis en livraison${reason ? ` — ${reason}` : ''}`, 'orders', o.id, 'high');
+}
+
 export async function cancelDeliveryToShop(o: Order) {
   assertOpenNow('Retour du livreur');
   if (o.status !== 'out') throw new Error('La commande n’est pas en livraison.');

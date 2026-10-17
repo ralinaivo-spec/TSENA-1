@@ -715,3 +715,7 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - **Refusée = 0 partout** : articles 0, frais de livraison 0 (aucune saisie possible), rien d'encaissé par le livreur ; la commande est réglée d'office avec le livreur et ne passe pas par « À régler (livreur) » ni par le Retour livreur. Les anciennes refusées pas encore réglées (sans argent encaissé) sortent aussi de ces listes ; les refus déjà réglés gardent leur historique.
 - Liste « Annulées / refusées » : montant de la commande barré, **0 Ar** affiché ; total des groupes 0 Ar. Un acompte payé à la boutique reste à rendre au client (« Rendre l'argent au client »).
 
+### Corriger une erreur de retour livreur *(ajout du 17/10/2026)*
+- **Remettre en livraison (retour à refaire)** (gérant, droit « Faire les règlements des livreurs ») : sur une commande dont le retour a été confirmé mais pas encore réglée avec le livreur (et sans échange lié). La commande redevient « En livraison » chez le même livreur, revient dans « Retour livreur » et sort de « À régler (livreur) » ; le stock repasse chez le livreur ; les encaissements saisis au retour sont retirés (les paiements reçus par la boutique restent) ; le choix du client est gardé pré-rempli. Journal : action importante « Retour livreur annulé ».
+- **Corriger un paiement** : en plus du montant et du moyen, « Argent reçu par » (boutique ↔ livreur), tant que le livreur n'est pas réglé pour la commande.
+
