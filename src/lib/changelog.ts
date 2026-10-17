@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-17', items: [
+    'Récapitulatifs → Semaine, « Tableau de la semaine » : une ligne par page et une colonne par jour (lundi → samedi), puis Total semaine, Boost et Bénéfice ; en bas Total des ventes, Dépenses et Reste. Tout tient dans l’écran, même avec beaucoup de pages. L’Excel ne change pas.',
     'Liste des dépenses plus lisible et jamais coupée : date et heure sur deux lignes, catégorie et type sous la description, « par … » sous le compte ; l’export Excel garde toutes les colonnes. Dans tous les rapports, les textes longs passent à la ligne au lieu d’être coupés par « … ».',
     'Dépenses : seulement le gérant / l’admin (droit « Saisir les dépenses »). Le vendeur ne voit plus et ne saisit plus de dépenses dans la Caisse du jour (ni bouton « Dépense » sur l’accueil) : il voit les ventes du jour et envoie un récapitulatif WhatsApp des ventes seulement.',
     'Commande en livraison avec des articles « en choix » : dès que le choix du client est indiqué, il est compté dans le total attendu (« Articles (avec le choix indiqué) ») ; avant, les pièces en choix ne comptaient pas et un faux « trop perçu » pouvait s’afficher.',

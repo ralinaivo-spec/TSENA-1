@@ -14,7 +14,7 @@ const dayName = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString(
 const cell = (v: number) => (v ? fmtAr(v) : '—');
 const useWatch = () => { useTable('orders'); useTable('cashMoves'); useTable('payouts'); useTable('boostReadings'); useTable('boosts'); useTable('categories'); useTable('settings'); useTable('financeCategories'); };
 
-/** Tableau de la semaine : une ligne par jour (lundi → samedi), une colonne par page. */
+/** Tableau de la semaine : une ligne par page, une colonne par jour (lundi → samedi), puis total, boost et bénéfice. */
 export function WeekGrid({ monday, withProfit }: { monday: string; withProfit: boolean }) {
   useWatch();
   const w = weekOf(monday);
@@ -52,23 +52,24 @@ export function WeekGrid({ monday, withProfit }: { monday: string; withProfit: b
   return (
     <div className="card card-flush">
       <div className="card-pad row-between">
-        <div><h2>Tableau de la semaine</h2><p className="small muted">Ventes par page et par jour (retours déduits), dépenses et reste — comme le cahier « Recette et Dépense ». Reste = ventes − dépenses.</p></div>
+        <div><h2>Tableau de la semaine</h2><p className="small muted">Ventes de chaque page par jour (retours déduits), puis total, dépenses et reste. Reste = ventes − dépenses.{withProfit ? ' Bénéfice = ventes − coût des articles − boost ; en bas à droite, après les dépenses.' : ''}</p></div>
         <Button variant="ghost" icon="download" onClick={exportXlsx}>Excel</Button>
       </div>
       {pages.length === 0 && !g.expensesTotal ? <p className="card-pad small muted">Aucune vente ni dépense cette semaine.</p> : (
-        <div className="table-wrap"><table className="table table-grid">
-          <thead><tr><th>Jour</th>{pages.map((p) => <th key={p.id} className="t-num">{p.name}</th>)}<th className="t-num">Total ventes</th><th className="t-num">Dépenses</th><th className="t-num">Reste</th></tr></thead>
+        // Une ligne par page, une colonne par jour : tient dans l'écran quel que soit le nombre de pages (comme lire le cahier).
+        <div className="table-wrap"><table className="table table-grid week-grid">
+          <thead><tr><th>Page</th>{w.days.map((d) => <th key={d} className="t-num" style={{ textTransform: 'capitalize' }}>{dayName(d)}</th>)}<th className="t-num">Total semaine</th>{totalBoost > 0 && <th className="t-num" title={`Boost converti à ${rate.toLocaleString('fr-FR')} Ar/$`}>Boost</th>}{withProfit && <th className="t-num" title="Ventes − coût des articles − boost">Bénéfice</th>}</tr></thead>
           <tbody>
-            {w.days.map((d) => (
-              <tr key={d}><td><strong>{dayName(d)}</strong></td>
-                {pages.map((p) => <td key={p.id} className="t-num">{cell(g.sales[d][p.id] ?? 0)}</td>)}
-                <td className="t-num"><strong>{cell(g.dayTotals[d])}</strong></td>
-                <td className="t-num neg">{cell(g.expensesByDay[d])}</td>
-                <td className="t-num">{cell(g.dayTotals[d] - g.expensesByDay[d])}</td></tr>
-            ))}
-            <tr className="t-total"><td>Total</td>{pages.map((p) => <td key={p.id} className="t-num">{fmtAr(g.pageTotals[p.id] ?? 0)}</td>)}<td className="t-num">{fmtAr(g.salesTotal)}</td><td className="t-num neg">{fmtAr(g.expensesTotal)}</td><td className="t-num"><strong>{fmtAr(g.rest)}</strong></td></tr>
-            {totalBoost > 0 && <tr><td className="muted">Boost <span className="small">({rate.toLocaleString('fr-FR')} Ar/$)</span></td>{pages.map((p) => <td key={p.id} className="t-num muted">{cell(Math.round(boostAr(p.id)))}</td>)}<td className="t-num muted">{fmtAr(Math.round(totalBoost))}</td><td /><td /></tr>}
-            {withProfit && <tr><td>Bénéfice <span className="small muted">(ventes − coût − boost)</span></td>{pages.map((p) => { const v = (g.pageTotals[p.id] ?? 0) - (g.cost[p.id] ?? 0) - boostAr(p.id); return <td key={p.id} className={`t-num ${v < 0 ? 'neg' : 'pos'}`}>{fmtAr(Math.round(v))}</td>; })}<td className="t-num"><strong>{fmtAr(Math.round(g.salesTotal - totalCost - totalBoost))}</strong></td><td /><td className="t-num"><strong>{fmtAr(Math.round(g.salesTotal - totalCost - totalBoost - g.expensesTotal))}</strong></td></tr>}
+            {pages.map((p) => { const ben = (g.pageTotals[p.id] ?? 0) - (g.cost[p.id] ?? 0) - boostAr(p.id); return (
+              <tr key={p.id}><td><strong>{p.name}</strong></td>
+                {w.days.map((d) => <td key={d} className="t-num">{cell(g.sales[d][p.id] ?? 0)}</td>)}
+                <td className="t-num"><strong>{fmtAr(g.pageTotals[p.id] ?? 0)}</strong></td>
+                {totalBoost > 0 && <td className="t-num muted">{cell(Math.round(boostAr(p.id)))}</td>}
+                {withProfit && <td className={`t-num ${ben < 0 ? 'neg' : 'pos'}`}>{fmtAr(Math.round(ben))}</td>}
+              </tr>); })}
+            <tr className="t-total"><td>Total des ventes</td>{w.days.map((d) => <td key={d} className="t-num">{fmtAr(g.dayTotals[d])}</td>)}<td className="t-num">{fmtAr(g.salesTotal)}</td>{totalBoost > 0 && <td className="t-num">{fmtAr(Math.round(totalBoost))}</td>}{withProfit && <td className="t-num">{fmtAr(Math.round(g.salesTotal - totalCost - totalBoost))}</td>}</tr>
+            <tr><td>Dépenses</td>{w.days.map((d) => <td key={d} className="t-num neg">{g.expensesByDay[d] ? `− ${fmtAr(g.expensesByDay[d])}` : '—'}</td>)}<td className="t-num neg">{g.expensesTotal ? `− ${fmtAr(g.expensesTotal)}` : '—'}</td>{totalBoost > 0 && <td />}{withProfit && <td className="t-num neg">{g.expensesTotal ? `− ${fmtAr(g.expensesTotal)}` : '—'}</td>}</tr>
+            <tr className="t-total"><td>Reste <span className="small muted">(ventes − dépenses)</span></td>{w.days.map((d) => <td key={d} className="t-num">{fmtAr(g.dayTotals[d] - g.expensesByDay[d])}</td>)}<td className="t-num"><strong>{fmtAr(g.rest)}</strong></td>{totalBoost > 0 && <td />}{withProfit && <td className="t-num" title="Bénéfice net : ventes − coût − boost − dépenses"><strong>{fmtAr(Math.round(g.salesTotal - totalCost - totalBoost - g.expensesTotal))}</strong></td>}</tr>
           </tbody>
         </table></div>
       )}

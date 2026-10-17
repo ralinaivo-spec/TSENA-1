@@ -1,0 +1,21 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await (await b.newContext({ viewport: { width: 1430, height: 860 } })).newPage();
+p.on('pageerror', (e) => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/'); await p.waitForTimeout(600);
+await p.getByLabel("Nom d'utilisateur").fill('super-adm'); await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(400);
+await p.evaluate(async () => { const t = window.__tsena;
+  const names = ['ANTIVOL', 'BOXER ET SLIP ENFANT', 'BOXER HOMME', 'CASQUE BLUETOOTH', 'COFFRET CADEAU', 'LAMPE RECHARGEABLE', 'POIGNET PRECIEUX', 'PYJAMAS ENFANT', 'PYJAMAS FEMME', 'PYJAMAS HOMME', 'SANDALE'];
+  await t.save('categories', names.map((n, i) => ({ id: 'c' + i, name: n })));
+  await t.save('products', names.map((n, i) => ({ id: 'p' + i, code: 'P' + i, name: 'A' + i, categoryId: 'c' + i, priceRetail: 35000, active: true })));
+  await t.save('variants', names.map((n, i) => ({ id: 'v' + i, productId: 'p' + i, sku: 'S' + i, costAvg: 15000 })));
+  const mon = new Date(); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7)); const orders = [];
+  for (let d = 0; d < 6; d++) for (let i = 0; i < names.length; i++) { if ((d + i) % 3 === 0) continue; const at = new Date(mon); at.setDate(mon.getDate() + d); at.setHours(12); if (at > new Date()) continue;
+    orders.push({ id: `o${d}_${i}`, number: `W${d}${i}`, kind: 'order', channel: 'shop', status: 'delivered', createdAt: at.toISOString(), createdByName: 'X', lines: [{ id: 'l', variantId: 'v' + i, qty: 1 + ((d * i) % 6), qtyKept: 1 + ((d * i) % 6), unitPrice: 35000 }], payments: [], discount: 0, deliveryFee: 0 }); }
+  await t.save('orders', orders); });
+await p.goto('http://localhost:5173/#/recapitulatif'); await p.waitForTimeout(700); await p.getByRole('button', { name: /^Semaine/ }).click(); await p.waitForTimeout(700);
+const g = p.locator('.week-grid'); 
+console.log('found', await g.count(), JSON.stringify(await p.evaluate(() => [...document.querySelectorAll('.table-wrap')].map((w) => w.scrollWidth - w.clientWidth))));
+await g.scrollIntoViewIfNeeded(); await p.screenshot({ path: '/tmp/claude-0/t/wk.png' });
+await b.close();
