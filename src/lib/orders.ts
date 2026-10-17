@@ -46,7 +46,7 @@ export interface Payment {
   note?: string;
   userName?: string;
   /** Corrections faites par l'admin : ancien et nouveau montant, date, utilisateur. */
-  edits?: { at: string; user?: string; fromAmount: number; toAmount: number; fromMethod: PayMethod; toMethod: PayMethod; reason?: string }[];
+  edits?: { at: string; user?: string; fromAmount: number; toAmount: number; fromMethod: PayMethod; toMethod: PayMethod; reason?: string; fromBy?: 'shop' | 'courier'; toBy?: 'shop' | 'courier' }[];
 }
 export interface Order extends BaseRecord {
   number: string;
@@ -543,13 +543,19 @@ export async function cancelOrder(o: Order, reason: string, atGiven?: string) {
 }
 
 /** Correction d'un paiement (erreur de saisie) par l'admin : tout est gardé dans l'historique. */
-export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string) {
+export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string, by?: 'shop' | 'courier') {
   const u = currentUser();
   const at = new Date().toISOString(); // heure réelle de la correction
   const old = (o.payments || []).find((p) => p.id === paymentId);
   if (!old) return;
-  const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason }] } : p));
-  const text = `Paiement corrigé : ${old.amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[old.method]}) → ${amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[method]})${reason ? ` — ${reason}` : ''}`;
+  const toBy = by ?? old.receivedBy;
+  // Changer « reçu par » (boutique ↔ livreur) n'est possible que tant que le livreur n'est pas réglé pour cette commande.
+  if (toBy !== old.receivedBy && o.courierSettledAt) throw new Error('Le règlement avec le livreur est déjà fait pour cette commande : impossible de changer qui a reçu ce paiement.');
+  if (toBy === 'courier' && !o.courierId) throw new Error('Pas de livreur sur cette commande.');
+  const who = (b: 'shop' | 'courier') => (b === 'shop' ? 'boutique' : 'livreur');
+  const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, receivedBy: toBy, courierId: toBy === 'courier' ? o.courierId : undefined,
+    edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason, ...(toBy !== p.receivedBy ? { fromBy: p.receivedBy, toBy } : {}) }] } : p));
+  const text = `Paiement corrigé : ${old.amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[old.method]}, ${who(old.receivedBy)}) → ${amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[method]}, ${who(toBy)})${reason ? ` — ${reason}` : ''}`;
   await save('orders', { id: o.id, payments, events: [...(o.events || []), { at, text, user: u?.fullName }] });
   await audit('Paiement corrigé', `${o.number} : ${text}`, 'orders', o.id);
 }

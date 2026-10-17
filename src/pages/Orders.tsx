@@ -744,7 +744,7 @@ function OrderDetail({ id }: { id: string }) {
               <li key={p.id} className="list-item" style={{ padding: '10px 0' }}>
                 <div className="list-item-main"><strong className="num">{fmtAr(p.amount)}</strong> · {PAY_METHODS[p.method]}{p.ref ? ` · réf. ${p.ref}` : ''}
                   <p className="small muted">{fmtDateTime(p.at)} · {p.receivedBy === 'shop' ? 'reçu par la boutique' : `encaissé par ${get<Courier>('couriers', p.courierId || '')?.name || 'le livreur'}`}{p.userName ? ` · saisi par ${p.userName}` : ''}</p>
-                  {(p.edits || []).map((e, i) => <p key={i} className="small" style={{ color: 'var(--warn, #9a6700)' }}>Corrigé le {fmtDateTime(e.at)} par {e.user || '—'} : {fmtAr(e.fromAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.fromMethod]})` : ''} → {fmtAr(e.toAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.toMethod]})` : ''}{e.reason ? ` — ${e.reason}` : ''}</p>)}
+                  {(p.edits || []).map((e, i) => <p key={i} className="small" style={{ color: 'var(--warn, #9a6700)' }}>Corrigé le {fmtDateTime(e.at)} par {e.user || '—'} : {fmtAr(e.fromAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.fromMethod]})` : ''} → {fmtAr(e.toAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.toMethod]})` : ''}{e.toBy ? ` · ${e.fromBy === 'shop' ? 'boutique' : 'livreur'} → ${e.toBy === 'shop' ? 'boutique' : 'livreur'}` : ''}{e.reason ? ` — ${e.reason}` : ''}</p>)}
                 </div>
                 {can('users.manage') && <IconButton icon="edit" label="Corriger ce paiement" onClick={() => setEditPay(p)} />}
               </li>
@@ -956,16 +956,19 @@ function EditPaymentModal({ order: o, payment: p, onClose }: { order: Order; pay
   const [amount, setAmount] = useState(String(p.amount));
   const [method, setMethod] = useState<PayMethod>(p.method);
   const [reason, setReason] = useState('Erreur de saisie');
+  const [by, setBy] = useState<'shop' | 'courier'>(p.receivedBy);
   const n = parseAr(amount) ?? NaN;
+  const canMove = !!o.courierId && !o.courierSettledAt;
   return (
     <Modal title={`Corriger un paiement — ${o.number}`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={isNaN(n) || (n === p.amount && method === p.method)} onClick={async () => { await editPayment(o, p.id, n, method, reason.trim() || undefined); toast('Paiement corrigé'); onClose(); }}>Enregistrer la correction</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={isNaN(n) || (n === p.amount && method === p.method && by === p.receivedBy)} onClick={async () => { try { await editPayment(o, p.id, n, method, reason.trim() || undefined, by); toast('Paiement corrigé'); onClose(); } catch (e: any) { toast(e.message, 'error'); } }}>Enregistrer la correction</Button></>}>
       <div className="stack">
         <p className="small">Montant actuel : <strong>{fmtAr(p.amount)}</strong> ({PAY_METHODS[p.method]}, {p.receivedBy === 'shop' ? 'reçu par la boutique' : 'encaissé par le livreur'}) le {fmtDateTime(p.at)}.</p>
         <div className="grid-2">
           <TextField label="Nouveau montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" hint="0 pour annuler ce paiement" />
           <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         </div>
+        {canMove && <SelectField label="Argent reçu par" value={by} onChange={(v) => setBy(v as 'shop' | 'courier')} options={[{ value: 'shop', label: 'La boutique (déjà dans la caisse / le compte)' }, { value: 'courier', label: 'Le livreur (il doit le verser à la boutique)' }]} hint="Erreur fréquente : un montant encaissé par le livreur saisi comme « payé à la boutique »." />}
         <TextField label="Motif" value={reason} onChange={setReason} />
         <Help>L’ancien montant, le nouveau, la date et votre nom restent visibles sous le paiement et dans le journal d’activité. Le reste à payer et le compte du livreur se recalculent tout seuls.</Help>
       </div>
