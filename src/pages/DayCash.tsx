@@ -1,7 +1,7 @@
 // Caisse du jour (vendeurs) : une seule caisse commune pour tous les vendeurs.
 // - saisie des dépenses du jour payées avec la caisse commune (compte « Caisse espèces ») ;
 // - récapitulatif global du jour (tous les vendeurs) à envoyer par WhatsApp au gérant et au patron.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { recapSent, recapTime, scrollToRecap } from '../ui/eveningRecap';
 import { audit, useCan, useCurrentUser } from '../lib/auth';
 import { useTable } from '../lib/db';
@@ -10,10 +10,10 @@ import { compressPhoto } from '../lib/images';
 import { addDays, addMove, atFor, deleteMove, today, type FinanceCategory } from '../lib/money';
 import { catName, dayRecap, dayRecapText, dayReview } from '../lib/payouts';
 import { closedBy } from '../lib/closed';
-import { fmtPhone, normPhone } from '../lib/orders';
+import { PAY_METHODS, fmtPhone, normPhone, type PayMethod } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
-import { Help, Badge, Button, Confirm, Empty, IconButton, PageHead, SelectField, TextField, fmtDate, toast, useRoute } from '../ui/kit';
+import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, PageHead, SelectField, TextField, fmtDate, toast, useRoute } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import type { CashMove } from '../lib/money';
 
@@ -28,6 +28,7 @@ export function DayCashPage() {
   const company = useCompany();
   useTable('orders'); useTable('cashMoves'); useTable('categories'); useTable('products'); useTable('variants'); useTable('payouts'); useTable('audit');
   const [date, setDate] = useState(today());
+  const [detail, setDetail] = useState<Detail | null>(null);
   const route = useRoute();
   // Raccourci « Récap du soir » (#/caisse-du-jour/envoyer) : on arrive directement sur « 3. Vérifier puis envoyer ».
   useEffect(() => { if (route.endsWith('/envoyer')) { setDate(today()); scrollToRecap(); } }, [route]);
@@ -53,15 +54,16 @@ export function DayCashPage() {
         {!isToday && <Button variant="quiet" onClick={() => setDate(today())}>Aujourd’hui</Button>}
       </div>
 
-      <div className="stat-grid">
-        <div className="card stat stat-strong"><span className="small muted">{r.mine ? 'Ventes de mes pages' : 'Total des ventes (tous les vendeurs)'}</span><strong className="stat-value num">{fmtAr(r.sales)}</strong></div>
-        <div className="card stat"><span className="small muted">Ventes sur place ({r.shopCount})</span><strong className="stat-value num">{fmtAr(r.shop)}</strong></div>
-        <div className="card stat"><span className="small muted">Ventes en livraison ({r.onlineCount})</span><strong className="stat-value num">{fmtAr(r.online)}</strong></div>
-        <div className="card stat"><span className="small muted">Mobile Money reçu ({r.mobile.count})</span><strong className="stat-value num">{fmtAr(r.mobile.total)}</strong>
-          <span className="small muted">MVola {fmtAr(r.mobile.mvola)} · Orange {fmtAr(r.mobile.orange)} · Airtel {fmtAr(r.mobile.airtel)}</span></div>
-        {canExp && <div className="card stat"><span className="small muted">{r.mine ? 'Mes dépenses (caisse commune)' : 'Dépenses de la caisse commune'}</span><strong className={`stat-value num ${r.expenses ? 'neg' : ''}`}>{fmtAr(r.expenses)}</strong></div>}
-        {canExp && <div className="card stat"><span className="small muted">Montant net du jour</span><strong className="stat-value num">{fmtAr(r.net)}</strong></div>}
+      <div className="stat-grid daycash-stats">
+        <button type="button" className="card stat stat-strong stat-click" onClick={() => setDetail('all')} title="Voir le détail"><span className="small muted">{r.mine ? 'Ventes de mes pages' : 'Total des ventes (tous les vendeurs)'}</span><strong className="stat-value num">{fmtAr(r.sales)}</strong><span className="stat-more small">Voir le détail ›</span></button>
+        <button type="button" className="card stat stat-click" onClick={() => setDetail('shop')} title="Voir le détail"><span className="small muted">Ventes sur place ({r.shopCount})</span><strong className="stat-value num">{fmtAr(r.shop)}</strong><span className="stat-more small">Voir le détail ›</span></button>
+        <button type="button" className="card stat stat-click" onClick={() => setDetail('online')} title="Voir le détail"><span className="small muted">Ventes en livraison ({r.onlineCount})</span><strong className="stat-value num">{fmtAr(r.online)}</strong><span className="stat-more small">Voir le détail ›</span></button>
+        <button type="button" className="card stat stat-click" onClick={() => setDetail('mobile')} title="Voir le détail"><span className="small muted">Mobile Money reçu ({r.mobile.count})</span><strong className="stat-value num">{fmtAr(r.mobile.total)}</strong>
+          <span className="small muted">MVola {fmtAr(r.mobile.mvola)} · Orange {fmtAr(r.mobile.orange)} · Airtel {fmtAr(r.mobile.airtel)}</span><span className="stat-more small">Voir le détail ›</span></button>
+        {canExp && <button type="button" className="card stat stat-click" onClick={() => setDetail('expenses')} title="Voir le détail"><span className="small muted">{r.mine ? 'Mes dépenses (caisse commune)' : 'Dépenses de la caisse commune'}</span><strong className={`stat-value num ${r.expenses ? 'neg' : ''}`}>{fmtAr(r.expenses)}</strong><span className="stat-more small">Voir le détail ›</span></button>}
+        {canExp && <button type="button" className="card stat stat-click" onClick={() => setDetail('net')} title="Voir le détail"><span className="small muted">Montant net du jour</span><strong className="stat-value num">{fmtAr(r.net)}</strong><span className="stat-more small">Voir le détail ›</span></button>}
       </div>
+      {detail && <DetailModal kind={detail} date={date} r={r} longDate={longDate} onClose={() => setDetail(null)} />}
 
       {canExp && <Expenses date={date} moves={r.g.expenseMoves} total={r.expenses} mine={r.mine} />}
 
@@ -130,6 +132,82 @@ function Expenses({ date, moves, total, mine: onlyMine }: { date: string; moves:
       )}
       {del && <Confirm title="Supprimer cette dépense ?" danger confirmLabel="Supprimer" message={<p>{del.label} — {fmtAr(-del.amount)}</p>} onConfirm={async () => { await deleteMove(del); toast('Dépense supprimée'); }} onClose={() => setDel(null)} />}
     </div>
+  );
+}
+
+type Detail = 'all' | 'shop' | 'online' | 'mobile' | 'expenses' | 'net';
+const DETAIL_TITLE: Record<Detail, string> = { all: 'Total des ventes', shop: 'Ventes sur place', online: 'Ventes en livraison', mobile: 'Mobile Money reçu', expenses: 'Dépenses de la caisse commune', net: 'Montant net du jour' };
+
+/** Fenêtre de détail d'un montant de la Caisse du jour : la liste qui compose le chiffre, pour vérifier sans changer d'écran. */
+function DetailModal({ kind, date, r, longDate, onClose }: { kind: Detail; date: string; r: ReturnType<typeof dayRecap>; longDate: string; onClose: () => void }) {
+  const go = (id: string) => { onClose(); location.hash = `#/commandes/${id}`; };
+  let body: ReactNode;
+  if (kind === 'all' || kind === 'shop' || kind === 'online') {
+    const rows = dayReview(date).rows.filter((x) => kind === 'all' || x.channel === kind);
+    const total = kind === 'all' ? r.sales : kind === 'shop' ? r.shop : r.online;
+    body = rows.length === 0 ? <p className="small muted">Aucune vente enregistrée.</p> : (
+      <div className="table-wrap"><table className="table review-table">
+        <thead><tr><th>Heure</th><th>N°</th>{kind === 'all' && <th>Type</th>}<th>Client</th><th>Articles</th><th>Vendeur</th><th className="t-num">Montant</th></tr></thead>
+        <tbody>
+          {rows.map((x) => (
+            <tr key={x.key}>
+              <td>{hm(x.at)}</td><td><a href={`#/commandes/${x.orderId}`} onClick={(e) => { e.preventDefault(); go(x.orderId); }}>{x.number}</a></td>
+              {kind === 'all' && <td><Badge tone={KIND[x.kind].tone}>{KIND[x.kind].label}</Badge></td>}
+              {kind !== 'all' && x.kind === 'return' ? <td className="small"><Badge tone="danger">Retour</Badge> {x.who}</td> : <td className="small">{x.who}</td>}
+              <td className="small">{x.items.join(' ; ')}</td><td className="small">{x.seller ?? '—'}</td>
+              <td className={`t-num ${x.amount < 0 ? 'neg' : ''}`}><strong>{fmtAr(x.amount)}</strong></td>
+            </tr>
+          ))}
+          <tr className="t-total"><td colSpan={kind === 'all' ? 6 : 5}>Total ({rows.length} ligne{rows.length > 1 ? 's' : ''})</td><td className="t-num">{fmtAr(total)}</td></tr>
+        </tbody>
+      </table></div>
+    );
+  } else if (kind === 'mobile') {
+    const items = r.mobile.items;
+    body = items.length === 0 ? <p className="small muted">Aucun paiement Mobile Money ce jour.</p> : (
+      <div className="table-wrap"><table className="table review-table">
+        <thead><tr><th>Heure</th><th>N°</th><th>Client</th><th>Moyen</th><th>Référence</th><th>Saisi par</th><th className="t-num">Montant</th></tr></thead>
+        <tbody>
+          {items.map((x) => (
+            <tr key={x.key}>
+              <td>{hm(x.at)}</td><td><a href={`#/commandes/${x.orderId}`} onClick={(e) => { e.preventDefault(); go(x.orderId); }}>{x.number}</a></td>
+              <td className="small">{x.who}</td><td className="small">{PAY_METHODS[x.method as PayMethod] ?? x.method}</td>
+              <td className="small">{x.ref || '—'}</td><td className="small">{x.receivedBy === 'courier' ? `Livreur${x.userName ? ` (${x.userName})` : ''}` : x.userName ?? '—'}</td>
+              <td className={`t-num ${x.amount < 0 ? 'neg' : ''}`}><strong>{fmtAr(x.amount)}</strong></td>
+            </tr>
+          ))}
+          {(['mvola', 'orange', 'airtel'] as const).map((m) => <tr key={m}><td colSpan={6} className="small">dont {PAY_METHODS[m]}</td><td className="t-num small">{fmtAr(r.mobile[m])}</td></tr>)}
+          <tr className="t-total"><td colSpan={6}>Total Mobile Money ({items.length} paiement{items.length > 1 ? 's' : ''})</td><td className="t-num">{fmtAr(r.mobile.total)}</td></tr>
+        </tbody>
+      </table></div>
+    );
+  } else if (kind === 'expenses') {
+    const moves = r.g.expenseMoves;
+    body = moves.length === 0 ? <p className="small muted">Aucune dépense ce jour.</p> : (
+      <div className="table-wrap"><table className="table review-table">
+        <thead><tr><th>Heure</th><th>Dépense</th><th>Catégorie</th><th>Saisie par</th><th className="t-num">Montant</th></tr></thead>
+        <tbody>
+          {moves.map((m) => <tr key={m.id}><td>{hm(m.at)}</td><td className="small">{m.label || '—'}{m.photo ? ' · reçu joint' : ''}</td><td className="small">{catName(m.categoryId) || '—'}</td><td className="small">{m.userName ?? '—'}</td><td className="t-num neg"><strong>{fmtAr(-m.amount)}</strong></td></tr>)}
+          <tr className="t-total"><td colSpan={4}>Total des dépenses ({moves.length})</td><td className="t-num">{fmtAr(r.expenses)}</td></tr>
+        </tbody>
+      </table></div>
+    );
+  } else {
+    body = (
+      <div className="table-wrap"><table className="table"><tbody>
+        <tr><td>Ventes sur place ({r.shopCount})</td><td className="t-num">{fmtAr(r.shop)}</td></tr>
+        <tr><td>Ventes en livraison ({r.onlineCount})</td><td className="t-num">{fmtAr(r.online)}</td></tr>
+        <tr className="t-total"><td>Total des ventes</td><td className="t-num">{fmtAr(r.sales)}</td></tr>
+        <tr><td>Dépenses de la caisse commune ({r.g.expenseMoves.length})</td><td className="t-num neg">− {fmtAr(r.expenses)}</td></tr>
+        <tr className="t-total"><td><strong>Montant net du jour</strong></td><td className="t-num"><strong>{fmtAr(r.net)}</strong></td></tr>
+      </tbody></table></div>
+    );
+  }
+  return (
+    <Modal wide title={`${DETAIL_TITLE[kind]} — ${longDate}`} onClose={onClose} footer={<Button variant="ghost" onClick={onClose}>Fermer</Button>}>
+      {(kind === 'all' || kind === 'shop' || kind === 'online' || kind === 'mobile') && <p className="small muted" style={{ marginTop: 0 }}>Comparez avec votre cahier ou vos messages Mobile Money : ce qui manque ici n’a pas été enregistré dans le logiciel. Touchez un numéro pour ouvrir la commande.</p>}
+      {body}
+    </Modal>
   );
 }
 

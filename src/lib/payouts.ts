@@ -141,6 +141,7 @@ export function monthly(n: number, todayYmd: string): { rows: MonthRow[]; pages:
 }
 
 /** Récapitulatif global du jour (tous les vendeurs, caisse commune) à envoyer par WhatsApp. */
+export interface MobileItem { key: string; at: string; orderId: string; number: string; who: string; method: string; amount: number; ref?: string; userName?: string; receivedBy?: string }
 export function dayRecap(ymd: string, only?: { pages: string[]; userName?: string }) {
   const g = grid(ymd, ymd);
   let shop = 0, online = 0; const shopN = new Set<string>(), onlineN = new Set<string>();
@@ -151,7 +152,7 @@ export function dayRecap(ymd: string, only?: { pages: string[]; userName?: strin
   }
   // Mobile Money reçu ce jour-là (MVola, Orange Money, Airtel Money), d'après la date du paiement.
   // Vendeur limité à ses pages : part de ses pages dans chaque commande.
-  const mobile = { mvola: 0, orange: 0, airtel: 0, total: 0, count: 0 };
+  const mobile = { mvola: 0, orange: 0, airtel: 0, total: 0, count: 0, items: [] as MobileItem[] };
   for (const o of all<Order>('orders')) {
     if (o.deleted) continue;
     const pays = (o.payments || []).filter((p) => p.method !== 'cash' && p.at && dayOf(p.at) === ymd);
@@ -159,9 +160,10 @@ export function dayRecap(ymd: string, only?: { pages: string[]; userName?: strin
     let f = 1;
     if (set) { f = 0; for (const [pg, x] of orderShares(o)) if (set.has(pg)) f += x; }
     if (f <= 0) continue;
-    for (const p of pays) { const v = p.amount * f; mobile[p.method as 'mvola' | 'orange' | 'airtel'] += v; mobile.total += v; }
+    for (const p of pays) { const v = p.amount * f; mobile[p.method as 'mvola' | 'orange' | 'airtel'] += v; mobile.total += v; mobile.items.push({ key: `${o.id}|${p.id}`, at: p.at, orderId: o.id, number: o.number, who: orderLabel(o), method: p.method, amount: v, ref: p.ref, userName: p.userName, receivedBy: p.receivedBy }); }
     mobile.count++;
   }
+  mobile.items.sort((a, b) => a.at.localeCompare(b.at));
   const pages = g.pages.filter((p) => g.pageTotals[p.id] && (!set || set.has(p.id))).sort((a, b) => (g.pageTotals[b.id] ?? 0) - (g.pageTotals[a.id] ?? 0));
   if (set) {
     // Vendeur limité à ses pages : seulement ses pages et les dépenses qu'il a saisies lui-même.
@@ -197,7 +199,7 @@ export function dayRecapText(ymd: string, companyName: string, sender?: string, 
   return L.join('\n');
 }
 
-export interface ReviewRow { key: string; at: string; number: string; orderId: string; kind: 'shop' | 'online' | 'return'; who: string; pages: string[]; items: string[]; qty: number; amount: number; seller?: string }
+export interface ReviewRow { key: string; at: string; number: string; orderId: string; kind: 'shop' | 'online' | 'return'; channel: 'shop' | 'online'; who: string; pages: string[]; items: string[]; qty: number; amount: number; seller?: string }
 /** Aperçu détaillé du jour pour la vérification avant envoi : une ligne par vente / livraison / retour. */
 export function dayReview(ymd: string, pages?: string[]) {
   const rows = new Map<string, ReviewRow>();
@@ -207,7 +209,7 @@ export function dayReview(ymd: string, pages?: string[]) {
     const kind: ReviewRow['kind'] = l.kind === 'return' ? 'return' : l.channel === 'shop' ? 'shop' : 'online';
     const key = `${l.order.id}|${kind}|${l.at}`;
     let r = rows.get(key);
-    if (!r) { r = { key, at: l.at, number: l.order.number, orderId: l.order.id, kind, who: orderLabel(l.order), pages: [], items: [], qty: 0, amount: 0, seller: l.order.createdByName }; rows.set(key, r); }
+    if (!r) { r = { key, at: l.at, number: l.order.number, orderId: l.order.id, kind, channel: l.channel === 'shop' ? 'shop' : 'online', who: orderLabel(l.order), pages: [], items: [], qty: 0, amount: 0, seller: l.order.createdByName }; rows.set(key, r); }
     const v = get<Variant>('variants', l.variantId); const prod = v && get<Product>('products', v.productId);
     const page = get<Category>('categories', rootOf(l.categoryId) || '')?.name ?? 'Sans page';
     if (!r.pages.includes(page)) r.pages.push(page);
