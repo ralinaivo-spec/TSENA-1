@@ -46,7 +46,7 @@ export interface Payment {
   note?: string;
   userName?: string;
   /** Corrections faites par l'admin : ancien et nouveau montant, date, utilisateur. */
-  edits?: { at: string; user?: string; fromAmount: number; toAmount: number; fromMethod: PayMethod; toMethod: PayMethod; reason?: string; fromBy?: 'shop' | 'courier'; toBy?: 'shop' | 'courier' }[];
+  edits?: { at: string; user?: string; fromAmount: number; toAmount: number; fromMethod: PayMethod; toMethod: PayMethod; reason?: string; fromBy?: 'shop' | 'courier'; toBy?: 'shop' | 'courier'; fromAt?: string; toAt?: string }[];
 }
 export interface Order extends BaseRecord {
   number: string;
@@ -584,25 +584,47 @@ export async function cancelOrder(o: Order, reason: string, atGiven?: string) {
 }
 
 /** Correction d'un paiement (erreur de saisie) par l'admin : tout est gardé dans l'historique. */
-export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string, by?: 'shop' | 'courier') {
+/** Contrôle de la date réelle d'un paiement : pas dans le futur, pas avant la commande, pas dans une semaine déjà versée ;
+ *  pour une livraison, modifiable tant que le compte avec le livreur n'est pas fait (le livreur peut livrer et encaisser plus tard) ;
+ *  sans livreur (boutique, retrait), pas après la remise de la commande. Renvoie le message d'erreur, ou ''. */
+export function paymentDateError(o: Order, iso: string, oldIso?: string): string {
+  const t = new Date(iso);
+  if (isNaN(t.getTime())) return 'Date invalide.';
+  if (t.getTime() > Date.now() + 60_000) return 'La date du paiement ne peut pas être dans le futur.';
+  if (o.createdAt && iso.slice(0, 10) < ymdOf(new Date(o.createdAt))) return `Le paiement ne peut pas être avant la commande (${new Date(o.createdAt).toLocaleDateString('fr-FR')}).`;
+  const courierFlow = !!o.courierId && !!o.dispatchedAt && !isPickupZone(o.zoneId) && !isWalkIn(o);
+  if (courierFlow && o.courierSettledAt) return 'Le compte avec le livreur est déjà fait pour cette commande : la date ne peut plus changer.';
+  const closedAt = o.returnedAt ?? o.statusDates?.delivered;
+  if (!courierFlow && closedAt && ['delivered', 'partial'].includes(o.status) && t.getTime() > new Date(closedAt).getTime() + 60_000) return `Le paiement ne peut pas être après la remise de la commande (${new Date(closedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}).`;
+  for (const [d, what] of [[iso, 'Nouvelle date'], ...(oldIso ? [[oldIso, 'Date actuelle']] : [])] as [string, string][]) {
+    try { assertOpenAt(d, what === 'Nouvelle date' ? 'Paiement à cette date' : 'Changement de date'); } catch (e: any) { return e.message; }
+  }
+  return '';
+}
+
+export async function editPayment(o: Order, paymentId: string, amount: number, method: PayMethod, reason?: string, by?: 'shop' | 'courier', newAt?: string) {
   const u = currentUser();
   const at = new Date().toISOString(); // heure réelle de la correction
   const old = (o.payments || []).find((p) => p.id === paymentId);
   if (!old) return;
   const toBy = by ?? old.receivedBy;
+  const atChange = newAt && newAt !== old.at ? newAt : undefined;
+  if (atChange) { const err = paymentDateError(o, atChange, old.at); if (err) throw new Error(err); }
   // Changer « reçu par » (boutique ↔ livreur) n'est possible que tant que le livreur n'est pas réglé pour cette commande.
   if (toBy !== old.receivedBy && o.courierSettledAt) throw new Error('Le règlement avec le livreur est déjà fait pour cette commande : impossible de changer qui a reçu ce paiement.');
   if (toBy === 'courier' && !o.courierId) throw new Error('Pas de livreur sur cette commande.');
   const who = (b: 'shop' | 'courier') => (b === 'shop' ? 'boutique' : 'livreur');
-  const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, receivedBy: toBy, courierId: toBy === 'courier' ? o.courierId : undefined,
-    edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason, ...(toBy !== p.receivedBy ? { fromBy: p.receivedBy, toBy } : {}) }] } : p));
-  const text = `Paiement corrigé : ${old.amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[old.method]}, ${who(old.receivedBy)}) → ${amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[method]}, ${who(toBy)})${reason ? ` — ${reason}` : ''}`;
+  const payments = o.payments.map((p) => (p.id === paymentId ? { ...p, amount, method, receivedBy: toBy, courierId: toBy === 'courier' ? o.courierId : undefined, ...(atChange ? { at: atChange } : {}),
+    edits: [...(p.edits || []), { at, user: u?.fullName, fromAmount: p.amount, toAmount: amount, fromMethod: p.method, toMethod: method, reason, ...(toBy !== p.receivedBy ? { fromBy: p.receivedBy, toBy } : {}), ...(atChange ? { fromAt: p.at, toAt: atChange } : {}) }] } : p));
+  const dt = (x: string) => new Date(x).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const text = `Paiement corrigé : ${old.amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[old.method]}, ${who(old.receivedBy)}) → ${amount.toLocaleString('fr-FR')} Ar (${PAY_METHODS[method]}, ${who(toBy)})${atChange ? ` · date ${dt(old.at)} → ${dt(atChange)}` : ''}${reason ? ` — ${reason}` : ''}`;
   await save('orders', { id: o.id, payments, events: [...(o.events || []), { at, text, user: u?.fullName }] });
   await audit('Paiement corrigé', `${o.number} : ${text}`, 'orders', o.id);
 }
 
-export async function addPayment(o: Order, p: Omit<Payment, 'id' | 'at' | 'userName'>) {
-  const pay: Payment = { ...p, id: newId(), at: bizNow(), userName: currentUser()?.fullName };
+export async function addPayment(o: Order, p: Omit<Payment, 'id' | 'at' | 'userName'> & { at?: string }) {
+  if (p.at) { const err = paymentDateError(o, p.at); if (err) throw new Error(err); }
+  const pay: Payment = { ...p, id: newId(), at: p.at ?? bizNow(), userName: currentUser()?.fullName };
   await save('orders', { id: o.id, payments: [...(o.payments || []), pay] });
   await audit('Paiement client', `${o.number} : ${pay.amount} Ar (${PAY_METHODS[pay.method]}, ${pay.receivedBy === 'shop' ? 'boutique' : 'livreur'})`, 'orders', o.id);
 }

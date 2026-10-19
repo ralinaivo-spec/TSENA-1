@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  shopPaid, courierProvisional, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  paymentDateError, shopPaid, courierProvisional, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -748,7 +748,7 @@ function OrderDetail({ id }: { id: string }) {
               <li key={p.id} className="list-item" style={{ padding: '10px 0' }}>
                 <div className="list-item-main"><strong className="num">{fmtAr(p.amount)}</strong> · {PAY_METHODS[p.method]}{p.ref ? ` · réf. ${p.ref}` : ''}
                   <p className="small muted">{fmtDateTime(p.at)} · {p.receivedBy === 'shop' ? 'reçu par la boutique' : `encaissé par ${get<Courier>('couriers', p.courierId || '')?.name || 'le livreur'}`}{p.userName ? ` · saisi par ${p.userName}` : ''}</p>
-                  {(p.edits || []).map((e, i) => <p key={i} className="small" style={{ color: 'var(--warn, #9a6700)' }}>Corrigé le {fmtDateTime(e.at)} par {e.user || '—'} : {fmtAr(e.fromAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.fromMethod]})` : ''} → {fmtAr(e.toAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.toMethod]})` : ''}{e.toBy ? ` · ${e.fromBy === 'shop' ? 'boutique' : 'livreur'} → ${e.toBy === 'shop' ? 'boutique' : 'livreur'}` : ''}{e.reason ? ` — ${e.reason}` : ''}</p>)}
+                  {(p.edits || []).map((e, i) => <p key={i} className="small" style={{ color: 'var(--warn, #9a6700)' }}>Corrigé le {fmtDateTime(e.at)} par {e.user || '—'} : {fmtAr(e.fromAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.fromMethod]})` : ''} → {fmtAr(e.toAmount)}{e.fromMethod !== e.toMethod ? ` (${PAY_METHODS[e.toMethod]})` : ''}{e.toBy ? ` · ${e.fromBy === 'shop' ? 'boutique' : 'livreur'} → ${e.toBy === 'shop' ? 'boutique' : 'livreur'}` : ''}{e.toAt ? ` · date ${fmtDateTime(e.fromAt!)} → ${fmtDateTime(e.toAt)}` : ''}{e.reason ? ` — ${e.reason}` : ''}</p>)}
                 </div>
                 {can('users.manage') && <IconButton icon="edit" label="Corriger ce paiement" onClick={() => setEditPay(p)} />}
               </li>
@@ -980,22 +980,33 @@ export function PayFeeModal({ order, courier, amount, onClose }: { order: Order;
   );
 }
 
+/** Date ISO ↔ valeur d'un champ « date et heure » (heure locale). */
+const toLocalInput = (iso: string) => { const d = new Date(iso); const p2 = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : '');
+
 function EditPaymentModal({ order: o, payment: p, onClose }: { order: Order; payment: Payment; onClose: () => void }) {
   const [amount, setAmount] = useState(String(p.amount));
   const [method, setMethod] = useState<PayMethod>(p.method);
   const [reason, setReason] = useState('Erreur de saisie');
   const [by, setBy] = useState<'shop' | 'courier'>(p.receivedBy);
+  const [when, setWhen] = useState(toLocalInput(p.at));
+  const newAt = fromLocalInput(when);
+  const dateChanged = !!newAt && toLocalInput(newAt) !== toLocalInput(p.at);
+  const dateErr = dateChanged ? paymentDateError(o, newAt, p.at) : '';
+  const lockDate = !!o.courierSettledAt && !!o.courierId && !isPickupZone(o.zoneId) && !isWalkIn(o);
   const n = parseAr(amount) ?? NaN;
   const canMove = !!o.courierId && !o.courierSettledAt;
   return (
     <Modal title={`Corriger un paiement — ${o.number}`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={isNaN(n) || (n === p.amount && method === p.method && by === p.receivedBy)} onClick={async () => { try { await editPayment(o, p.id, n, method, reason.trim() || undefined, by); toast('Paiement corrigé'); onClose(); } catch (e: any) { toast(e.message, 'error'); } }}>Enregistrer la correction</Button></>}>
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={isNaN(n) || !!dateErr || (n === p.amount && method === p.method && by === p.receivedBy && !dateChanged)} onClick={async () => { try { await editPayment(o, p.id, n, method, reason.trim() || undefined, by, dateChanged ? newAt : undefined); toast('Paiement corrigé'); onClose(); } catch (e: any) { toast(e.message, 'error'); } }}>Enregistrer la correction</Button></>}>
       <div className="stack">
         <p className="small">Montant actuel : <strong>{fmtAr(p.amount)}</strong> ({PAY_METHODS[p.method]}, {p.receivedBy === 'shop' ? 'reçu par la boutique' : 'encaissé par le livreur'}) le {fmtDateTime(p.at)}.</p>
         <div className="grid-2">
           <TextField label="Nouveau montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" hint="0 pour annuler ce paiement" />
           <SelectField label="Moyen" value={method} onChange={(v) => setMethod(v as PayMethod)} options={Object.entries(PAY_METHODS).map(([value, label]) => ({ value, label }))} />
         </div>
+        {lockDate ? <p className="small muted">Date du paiement : {fmtDateTime(p.at)} — le compte avec le livreur est fait, elle ne peut plus changer.</p>
+          : <TextField label="Date réelle du paiement" type="datetime-local" value={when} onChange={setWhen} error={dateErr || null} hint="Le jour où le client a vraiment payé : c’est cette date qui compte dans la caisse du jour, le récapitulatif et le versement de la semaine." />}
         {canMove && <SelectField label="Argent reçu par" value={by} onChange={(v) => setBy(v as 'shop' | 'courier')} options={[{ value: 'shop', label: 'La boutique (déjà dans la caisse / le compte)' }, { value: 'courier', label: 'Le livreur (il doit le verser à la boutique)' }]} hint="Erreur fréquente : un montant encaissé par le livreur saisi comme « payé à la boutique »." />}
         <TextField label="Motif" value={reason} onChange={setReason} />
         <Help>L’ancien montant, le nouveau, la date et votre nom restent visibles sous le paiement et dans le journal d’activité. Le reste à payer et le compte du livreur se recalculent tout seuls.</Help>
@@ -1009,11 +1020,15 @@ function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) 
   const due = Math.abs(remaining(o));
   const [lines, setLines] = useState<PayLine[]>([{ method: refund ? 'cash' : 'mvola', amount: String(due), ref: '' }]);
   const [by, setBy] = useState<'shop' | 'courier'>('shop');
+  const [when, setWhen] = useState(() => toLocalInput(new Date().toISOString()));
+  const at = fromLocalInput(when);
+  const dateErr = at ? paymentDateError(o, at) : 'Date à saisir.';
   const sum = payLinesSum(lines);
   return (
     <Modal title={refund ? `Argent rendu au client — ${o.number}` : `Paiement reçu — ${o.number}`} onClose={onClose}
-      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!sum} onClick={async () => {
-        for (const l of lines) { const n = parseAr(l.amount) || 0; if (n > 0) await addPayment(o = get<Order>('orders', o.id) ?? o, { amount: refund ? -n : n, method: l.method, ref: l.ref.trim() || undefined, receivedBy: by, courierId: by === 'courier' ? o.courierId : undefined }); }
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!sum || !!dateErr} onClick={async () => {
+        try { for (const l of lines) { const n = parseAr(l.amount) || 0; if (n > 0) await addPayment(o = get<Order>('orders', o.id) ?? o, { amount: refund ? -n : n, method: l.method, ref: l.ref.trim() || undefined, receivedBy: by, courierId: by === 'courier' ? o.courierId : undefined, at }); } }
+        catch (e: any) { toast(e.message, 'error'); return; }
         toast(refund ? 'Remboursement enregistré' : lines.filter((l) => parseAr(l.amount)).length > 1 ? 'Paiement en plusieurs tranches enregistré' : 'Paiement enregistré'); onClose();
       }}>Enregistrer</Button></>}>
       <div className="stack">
@@ -1021,6 +1036,7 @@ function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) 
         {!refund && <p className="small muted">Reste à payer : <strong>{fmtAr(due)}</strong>. Le client peut payer en plusieurs tranches (ex. une partie en espèces, le reste en mobile money).</p>}
         <PayLines lines={lines} onChange={setLines} total={due} mode="select" />
         {o.courierId && <SelectField label="Reçu par" value={by} onChange={(v) => setBy(v as any)} options={[{ value: 'shop', label: 'La boutique' }, { value: 'courier', label: 'Le livreur' }]} />}
+        <TextField label="Date réelle du paiement" type="datetime-local" value={when} onChange={setWhen} error={(at && dateErr) || null} hint="Par défaut maintenant. Changez-la si le client a payé un autre jour (ex. acompte MVola reçu avant)." />
       </div>
     </Modal>
   );

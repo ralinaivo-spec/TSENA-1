@@ -729,3 +729,10 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Tout montant noté **avant le retour** comme « encaissé par le livreur » (reste prévu saisi d'avance) est **provisoire** : un avertissement l'indique et il est remplacé par le montant réel saisi au retour (historique de la commande : « Encaissement livreur noté d'avance … remplacé »). Même règle dans « Retour livreur » (plusieurs colis).
 - Exemple : 2 pyjamas 80 000 + frais 5 000, acompte MVola 40 000, le client garde 1 pyjama → total 45 000, le livreur a encaissé 5 000 (ses frais), rien de plus.
 
+### Date réelle d'un paiement *(ajout du 19/10/2026)*
+- Champ **« Date réelle du paiement »** (date et heure) dans « Paiement reçu » (par défaut maintenant) et dans « Corriger un paiement ». Caisse du jour, Récapitulatifs, Trésorerie et Versement de la semaine utilisent cette date.
+- Contrôles : pas dans le futur ; pas avant la date de la commande ; ni la nouvelle date ni l'ancienne dans une **semaine déjà versée** au patron.
+- Commande livrée par un livreur : date modifiable (même après la date d'enregistrement de la livraison, le livreur pouvant livrer et encaisser plus tard) **tant que le compte avec le livreur n'est pas fait** ; ensuite verrouillée.
+- Commande sans livreur (vente en boutique, retrait) : pas après la remise de la commande.
+- Historique sous le paiement et journal : « date JJ/MM HH:MM → JJ/MM HH:MM », nom et motif.
+

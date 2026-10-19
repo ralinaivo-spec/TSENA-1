@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Paiements : « Date réelle du paiement » dans « Paiement reçu » et « Corriger un paiement ». La caisse du jour, le récapitulatif et le versement de la semaine suivent cette date. Refusée si elle est dans le futur, avant la commande ou dans une semaine déjà versée ; pour une livraison, modifiable tant que le compte avec le livreur n’est pas fait (il peut livrer et encaisser plus tard), verrouillée ensuite ; sans livreur, pas après la remise de la commande. Le changement reste visible sous le paiement.',
     'Retour du livreur avec acompte : un montant noté d’avance comme « encaissé par le livreur » (ex. le reste prévu) n’est plus additionné. Au retour il est remplacé par ce que le livreur a réellement encaissé, proposé automatiquement = total après le choix du client − acompte payé à la boutique (ex. 45 000 − 40 000 = 5 000). Plus de faux « trop perçu » ni de faux reste chez le livreur.',
   ] },
   { date: '2026-10-17', items: [
