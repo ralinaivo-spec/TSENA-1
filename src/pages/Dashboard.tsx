@@ -315,10 +315,6 @@ function SellerBoard({ name }: { name: string }) {
       <div className="stat-grid">
         <div className="card stat"><span className="small muted">{scope.strict ? 'Ventes de mes pages' : 'Mes ventes'}</span><strong className="stat-value num">{k.orders}</strong><span className="small muted">{k.shopOrders} sur place · {k.onlineOrders} en ligne</span></div>
         <div className="card stat"><span className="small muted">Montant vendu</span><strong className="stat-value num">{fmtAr(k.revenue)}</strong></div>
-        {(() => { const shop = lines.filter((l) => l.channel === 'shop').reduce((t, l) => t + l.amount, 0); return <>
-          <div className="card stat"><span className="small muted">Ventes sur place ({k.shopOrders})</span><strong className="stat-value num">{fmtAr(shop)}</strong></div>
-          <div className="card stat"><span className="small muted">Ventes en livraison ({k.onlineOrders})</span><strong className="stat-value num">{fmtAr(k.revenue - shop)}</strong></div>
-        </>; })()}
         <div className="card stat"><span className="small muted">Pièces</span><strong className="stat-value num">{k.pieces}</strong></div>
       </div>
       <SituationCard from={from} to={to} />

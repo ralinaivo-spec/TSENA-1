@@ -27,7 +27,7 @@ await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('E
 const later = p.getByRole('button', { name: 'Plus tard' }); if (await later.count()) await later.click();
 await p.goto('http://localhost:5173/#/'); await p.waitForTimeout(500);
 ok(await p.locator('.evening-recap').count() === 1, 'vendeur, 18 h : bandeau « récap du soir » sur l’accueil');
-{ const sg = (await p.locator('.stat-grid').first().innerText()).replace(/\s/g, ''); ok(sg.includes('Ventessurplace(1)50000Ar') && sg.includes('Ventesenlivraison(0)0Ar'), 'accueil vendeur : ventes sur place et en livraison avec montant'); }
+{ const sg = (await p.locator('.stat-grid').first().innerText()).replace(/\s/g, ''); ok(!sg.includes('Ventessurplace(') && sg.includes('Montantvendu'), 'accueil vendeur : comme avant (sans cartes sur place / livraison)'); }
 ok(await p.locator('.sidebar .recap-shortcut.is-due').count() === 1, 'raccourci dans le menu, mis en évidence');
 await p.screenshot({ path: '/tmp/claude-0/t/ev1.png' });
 await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200);
