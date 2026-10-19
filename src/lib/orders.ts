@@ -213,6 +213,11 @@ export function exchangeBalance(o: Order) {
   const items = isClosed(o) ? keptTotal(o) : itemsTotal(o);
   return items - (o.discount || 0) - (o.credit || 0) + (isClosed(o) ? (o.feeCharged ?? o.deliveryFee) : o.deliveryFee);
 }
+/** Paiements reçus par la boutique (acomptes MVola, espèces…). */
+export const shopPaid = (o: Pick<Order, 'payments'>) => (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
+/** Montants notés « encaissé par le livreur » avant son retour (souvent le reste prévu, saisi d'avance) : provisoires,
+ *  ils sont remplacés au retour par ce que le livreur a réellement encaissé. */
+export const courierProvisional = (o: Pick<Order, 'payments' | 'courierId'>) => (o.payments || []).filter((p) => p.receivedBy === 'courier' && p.courierId === o.courierId);
 export function remaining(o: Order) {
   const due = o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o);
   return due - paidTotal(o);
@@ -361,6 +366,10 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
   })));
   const u = currentUser();
   const pays: Payment[] = r.collected.filter((c) => c.amount).map((c) => ({ id: newId(), at, amount: c.amount, method: c.method, ref: c.ref, receivedBy: 'courier', courierId: o.courierId, userName: u?.fullName }));
+  // Ce qui avait été noté d'avance comme « encaissé par le livreur » est remplacé par le montant réellement encaissé au retour.
+  const prov = courierProvisional(o);
+  const basePays = (o.payments || []).filter((p) => !prov.includes(p));
+  const provNote = prov.length ? `Encaissement livreur noté d'avance (${prov.reduce((t, p) => t + p.amount, 0).toLocaleString('fr-FR')} Ar) remplacé par le montant réel du retour` : '';
   const keptAny = lines.some((l) => (l.qtyKept ?? 0) > 0);
   const allKept = lines.filter((l) => !l.isChoice).every((l) => (l.qtyKept ?? 0) >= l.qty);
   const status: OrderStatus = !keptAny && !(o.kind === 'exchange' && !o.lines.length) ? 'refused' : allKept ? 'delivered' : 'partial';
@@ -370,7 +379,8 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
     await addMoves(o.returnLines.map((rl) => ({ variantId: rl.variantId, qty: rl.qty, type: 'exchange_in' as const, refType: 'order', refId: o.id, reason: `${o.number} — article repris (échange)`, at })));
   }
   const late = atGiven && ymdOf(new Date(atGiven)) !== ymdOf(new Date(bizNow())) ? { returnSavedAt: new Date().toISOString() } : {};
-  await setStatus(o, status, { lines, feeCharged: refusedNow ? 0 : r.feeCharged, payments: [...(o.payments || []), ...(refusedNow ? [] : pays)], returnedAt: at, ...late, ...(refusedNow ? { courierSettledAt: at, feeStatus: undefined } : {}), notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
+  if (provNote) await save('orders', { id: o.id, events: [...(o.events || []), { at, text: provNote, user: u?.fullName }] });
+  await setStatus(get<Order>('orders', o.id) ?? o, status, { lines, feeCharged: refusedNow ? 0 : r.feeCharged, payments: [...basePays, ...(refusedNow ? [] : pays)], returnedAt: at, ...late, ...(refusedNow ? { courierSettledAt: at, feeStatus: undefined } : {}), notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
   await moveExchangeCredit(o.id, at);
 }
 

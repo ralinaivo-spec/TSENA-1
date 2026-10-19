@@ -724,3 +724,8 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Vendeur (droit « Caisse du jour » sans droit dépenses) : Caisse du jour = ventes du jour (tous les vendeurs) + vérification + envoi WhatsApp ; pas de cartes « Dépenses » / « Net », pas de saisie, pas de case « dépenses » à cocher ; message WhatsApp : ventes par page et total des ventes seulement. Accueil : plus de bouton « Dépense ». Sa feuille de versement n'affiche plus la ligne « Dépenses » (sauf s'il en existe une à son nom).
 - Le gérant garde la Caisse du jour complète (dépenses, net, récapitulatif avec dépenses).
 
+### Acompte et encaissement du livreur au retour *(ajout du 19/10/2026)*
+- Au **retour du livreur**, l'argent qu'il a encaissé est proposé = total de la commande après le choix du client (articles gardés + frais) − **paiements reçus par la boutique** (acompte MVola, etc.).
+- Tout montant noté **avant le retour** comme « encaissé par le livreur » (reste prévu saisi d'avance) est **provisoire** : un avertissement l'indique et il est remplacé par le montant réel saisi au retour (historique de la commande : « Encaissement livreur noté d'avance … remplacé »). Même règle dans « Retour livreur » (plusieurs colis).
+- Exemple : 2 pyjamas 80 000 + frais 5 000, acompte MVola 40 000, le client garde 1 pyjama → total 45 000, le livreur a encaissé 5 000 (ses frais), rien de plus.
+

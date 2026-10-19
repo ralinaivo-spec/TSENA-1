@@ -27,9 +27,11 @@ function simulate(o: Order, d: Decision, fee: number): Order {
   // Ligne en choix : ce que le vendeur a indiqué (choix du client) ; sinon livrée = tout gardé, refusée = tout rendu.
   const keep = (l: Order['lines'][number]) => d !== 'delivered' ? 0 : l.isChoice ? choiceKept(o, l) : l.qty;
   const lines = o.lines.map((l) => ({ ...l, qtyKept: keep(l), qtyReturned: l.qty - keep(l) }));
-  const sim = { ...o, status: d, lines, feeCharged: fee } as Order;
+  // Montants notés d'avance « encaissé par le livreur » : provisoires, remplacés par ce qui reste réellement à payer.
+  const base = (o.payments || []).filter((p) => !(p.receivedBy === 'courier' && p.courierId === o.courierId));
+  const sim = { ...o, status: d, lines, feeCharged: fee, payments: base } as Order;
   const rest = remaining(sim);
-  if (rest > 0) sim.payments = [...(o.payments || []), { id: 'sim', at: '', amount: rest, method: 'cash', receivedBy: 'courier', courierId: o.courierId }];
+  if (rest > 0) sim.payments = [...base, { id: 'sim', at: '', amount: rest, method: 'cash', receivedBy: 'courier', courierId: o.courierId }];
   return sim;
 }
 
@@ -136,7 +138,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
       for (const r of on) {
         if (!r.open) continue;
         const kept = Object.fromEntries(r.o.lines.map((l) => [l.id, r.d !== 'delivered' ? 0 : l.isChoice ? choiceKept(r.o, l) : l.qty]));
-        const rest = remaining({ ...r.o, status: r.d, lines: r.o.lines.map((l) => ({ ...l, qtyKept: kept[l.id] })), feeCharged: r.fee } as Order);
+        const rest = remaining({ ...r.o, status: r.d, lines: r.o.lines.map((l) => ({ ...l, qtyKept: kept[l.id] })), feeCharged: r.fee, payments: (r.o.payments || []).filter((p) => !(p.receivedBy === 'courier' && p.courierId === r.o.courierId)) } as Order);
         await recordReturn(r.o, { kept, feeCharged: r.fee, collected: rest > 0 ? [{ amount: rest, method: 'cash' }] : [], note: r.d === 'refused' ? 'Refusée (retour livreur)' : undefined }, at);
       }
       const label = mode === 'retenue' ? 'frais retenus par le livreur' : mode === 'apart' ? 'frais payés à part' : 'frais à payer plus tard (compte du livreur)';

@@ -2,6 +2,9 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-19', items: [
+    'Retour du livreur avec acompte : un montant noté d’avance comme « encaissé par le livreur » (ex. le reste prévu) n’est plus additionné. Au retour il est remplacé par ce que le livreur a réellement encaissé, proposé automatiquement = total après le choix du client − acompte payé à la boutique (ex. 45 000 − 40 000 = 5 000). Plus de faux « trop perçu » ni de faux reste chez le livreur.',
+  ] },
   { date: '2026-10-17', items: [
     'Récapitulatifs → Semaine, « Tableau de la semaine » : une ligne par page et une colonne par jour (lundi → samedi), puis Total semaine, Boost et Bénéfice ; en bas Total des ventes, Dépenses et Reste. Tout tient dans l’écran, même avec beaucoup de pages. L’Excel ne change pas.',
     'Liste des dépenses plus lisible et jamais coupée : date et heure sur deux lignes, catégorie et type sous la description, « par … » sous le compte ; l’export Excel garde toutes les colonnes. Dans tous les rapports, les textes longs passent à la ligne au lieu d’être coupés par « … ».',

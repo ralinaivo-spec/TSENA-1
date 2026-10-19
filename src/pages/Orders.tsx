@@ -6,7 +6,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  shopPaid, courierProvisional, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -826,7 +826,10 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const refusedAll = !anyKept && !(o.kind === 'exchange' && !o.lines.length);
   const feeVal = refusedAll ? 0 : fee == null ? o.deliveryFee : parseNum(fee) ?? 0;
   const sim = { ...o, status: 'delivered', lines: o.lines.map((l) => ({ ...l, qtyKept: keptNum[l.id] })), feeCharged: feeVal } as Order;
-  const toCollect = Math.max(0, (o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim)) - paidTotal(o));
+  // Ce qui a été payé à la boutique (acompte) est déduit ; un montant noté d'avance « encaissé par le livreur » est provisoire.
+  const prov = courierProvisional(o);
+  const provSum = prov.reduce((t, p) => t + p.amount, 0);
+  const toCollect = Math.max(0, (o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim)) - shopPaid(o));
   const [amount, setAmount] = useState<string | null>(null);
   const [method, setMethod] = useState<PayMethod>('cash');
   const [ref, setRef] = useState('');
@@ -842,7 +845,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   const c = o.kind === 'exchange' ? exchangeBalance(sim) : orderTotal(sim);
   const prepaid = (o.payments || []).filter((p) => p.receivedBy === 'shop').reduce((t, p) => t + p.amount, 0);
   const paidHow = [...new Set((o.payments || []).filter((p) => p.receivedBy === 'shop').map((p) => `${PAY_METHODS[p.method]}${p.ref ? ' réf. ' + p.ref : ''}`))].join(', ');
-  const simPaid = { ...sim, payments: [...(o.payments || []), ...(amountVal ? [{ id: 'sim', at: '', amount: amountVal, method, receivedBy: 'courier' as const, courierId: o.courierId }] : [])] } as Order;
+  const simPaid = { ...sim, payments: [...(o.payments || []).filter((p) => !prov.includes(p)), ...(amountVal ? [{ id: 'sim', at: '', amount: amountVal, method, receivedBy: 'courier' as const, courierId: o.courierId }] : [])] } as Order;
   const x = courierSplit(simPaid);
   const eDue = x.toCollect + x.feeKept;
   const toSettle = !!o.courierId && !isPickupZone(o.zoneId);
@@ -855,6 +858,7 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         toast(refusedAll ? 'Commande refusée : 0 Ar, rien à régler avec le livreur' : toSettle ? 'Retour confirmé : la commande passe dans « À régler (livreur) »' : 'Retour enregistré'); setBusy(false); onClose();
       }}>{choiceMissing.length ? `Indiquez le choix (${choiceMissing.length} ligne(s))` : 'Confirmer le retour'}</Button></>}>
       <div className="stack">
+        {provSum > 0 && <div className="notice"><Icon name="alert" /><span><strong>{fmtAr(provSum)}</strong> étaient notés d’avance comme « encaissés par le livreur ». Ils sont <strong>remplacés</strong> par le montant réellement encaissé indiqué plus bas (calculé : total après le choix du client − acompte payé à la boutique).</span></div>}
         {hasChoice && !o.choiceNote && <div className="notice"><Icon name="alert" /><span>Cette livraison contient des articles <strong>en choix</strong>. Pour chaque ligne « choix », indiquez combien de pièces le client a <strong>gardées</strong> (0 s’il les a toutes rendues).</span></div>}
         {hasChoice && o.choiceNote && <div className="notice notice-ok"><Icon name="check" /><span>Choix du client déjà indiqué{o.choiceNote.by ? ` par ${o.choiceNote.by}` : ''} le {fmtDateTime(o.choiceNote.at)}{o.choiceNote.note ? ` — ${o.choiceNote.note}` : ''} : les quantités « gardé » sont reprises ci-dessous. Vérifiez avec le livreur puis confirmez.</span></div>}
         <div className="row">
