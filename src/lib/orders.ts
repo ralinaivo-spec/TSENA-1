@@ -55,7 +55,7 @@ export interface Order extends BaseRecord {
   /** Échange demandé par le client pendant la livraison : ce qu'il rend (par ligne) et la commande échange créée. */
   exchangeRequest?: { at: string; by?: string; returns: Record<string, number>; childId: string; childNumber: string };
   /** Choix du client (articles partis « en choix ») indiqué par le vendeur avant le retour du livreur ; repris par le gérant au règlement. */
-  choiceNote?: { at: string; by?: string; kept: Record<string, number>; note?: string };
+  choiceNote?: { at: string; by?: string; kept: Record<string, number>; note?: string; /** Première saisie du choix : jour où les articles gardés comptent en vente. */ since?: string };
   /** Date de commande (rattachement) quand elle diffère de la saisie : commande saisie le week-end → lundi. */
   orderDate?: string;
   /** Échanges faits pendant la livraison (commande modifiée sur place). */
@@ -215,12 +215,24 @@ export const choiceGiven = (o: Pick<Order, 'lines' | 'choiceNote'>) => !!o.choic
 export const choiceBlocking = (o: Pick<Order, 'status' | 'lines' | 'choiceNote'>) => hasPendingChoice(o) && !choiceGiven(o);
 /** Pièces gardées par le client pour une ligne en choix, d'après la saisie du vendeur (0 sinon). */
 export const choiceKept = (o: Pick<Order, 'choiceNote'>, l: { id: string; qty: number }) => Math.max(0, Math.min(l.qty, o.choiceNote?.kept[l.id] ?? 0));
+/** À partir de cette date, les articles « au choix » gardés selon le choix indiqué par le vendeur comptent dans les ventes
+ *  dès la saisie du choix (sans attendre le retour du livreur). Les retours plus anciens gardent l'ancienne règle. */
+export const CHOICE_SALE_FROM = '2026-10-19';
+/** Vente « au choix » déjà comptée grâce au choix indiqué : date de comptage, ou null. */
+export function choiceSaleAt(o: Pick<Order, 'lines' | 'choiceNote' | 'dispatchedAt' | 'returnedAt'>): string | null {
+  if (!o.choiceNote || !o.dispatchedAt || !o.lines.some((l) => l.isChoice)) return null;
+  if (o.returnedAt && o.returnedAt.slice(0, 10) < CHOICE_SALE_FROM) return null;
+  const at = o.choiceNote.since ?? o.choiceNote.at;
+  return at > o.dispatchedAt ? at : o.dispatchedAt;
+}
+/** Pièces d'une ligne au choix déjà comptées en vente avant le retour (0 si aucune). */
+export const choicePreCounted = (o: Pick<Order, 'lines' | 'choiceNote' | 'dispatchedAt' | 'returnedAt'>, l: OrderLine) => (l.isChoice && choiceSaleAt(o) ? choiceKept(o, l) : 0);
 /** Le vendeur indique le choix du client : enregistré sur la commande, sans confirmer le retour (fait par le gérant). */
 export async function saveChoice(o: Order, kept: Record<string, number>, note?: string) {
   const u = currentUser();
   const at = new Date().toISOString();
   const text = `Choix du client indiqué : ${o.lines.filter((l) => l.isChoice).map((l) => `${kept[l.id] ?? 0}/${l.qty} gardé(s)`).join(', ')}${note ? ` — ${note}` : ''}`;
-  await save('orders', { id: o.id, choiceNote: { at, by: u?.fullName, kept, note: note || undefined }, events: [...(o.events || []), { at, text, user: u?.fullName }] });
+  await save('orders', { id: o.id, choiceNote: { at, by: u?.fullName, kept, note: note || undefined, since: o.choiceNote?.since ?? o.choiceNote?.at ?? at }, events: [...(o.events || []), { at, text, user: u?.fullName }] });
   await audit('Choix du client indiqué', `${o.number} : ${text}`, 'orders', o.id);
 }
 export const choiceQty = (o: Pick<Order, 'lines'>) => o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0);

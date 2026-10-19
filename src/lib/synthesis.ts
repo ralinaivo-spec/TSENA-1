@@ -4,7 +4,7 @@
 import { adjustKept } from './lots';
 import { all, get } from './db';
 import type { Category, Product, Variant } from './catalog';
-import { courierSplit, isPickupZone, isWalkIn, type Courier, type Order } from './orders';
+import { choicePreCounted, courierSplit, isPickupZone, isWalkIn, type Courier, type Order } from './orders';
 import { dayOf } from './money';
 
 export interface SynthCourier { id: string; name: string; count: number; fees: number; returns: number; pending: number; sans: number; avec: number }
@@ -39,7 +39,8 @@ function orderLines(o: Order) {
   const closed = CLOSED.includes(o.status) || isWalkIn(o);
   const adj = o.adjusts || [];
   // Prix du lot / par quantité : rattaché à un article du lot (pour la page).
-  const sansLines = [...o.lines.filter((l) => !l.isChoice).map((l) => ({ variantId: l.variantId, value: l.qty * l.unitPrice })),
+  // Choix indiqué par le vendeur : les articles gardés comptent déjà.
+  const sansLines = [...o.lines.filter((l) => !l.isChoice || choicePreCounted(o, l) > 0).map((l) => ({ variantId: l.variantId, value: (l.isChoice ? choicePreCounted(o, l) : l.qty) * l.unitPrice })),
     ...adj.map((a) => ({ variantId: a.refVariantId || '', value: a.qty * a.unit }))];
   const avecLines = o.status === 'cancelled' ? [] : closed
     ? [...o.lines.map((l) => ({ variantId: l.variantId, value: (l.qtyKept ?? (l.isChoice ? 0 : l.qty)) * l.unitPrice })),

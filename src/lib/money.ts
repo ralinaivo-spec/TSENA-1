@@ -5,7 +5,7 @@ import { audit, currentUser, type User } from './auth';
 import { assertOpenAt } from './closed';
 import { variantCost, type Variant } from './catalog';
 import { adjustsKeptTotal, adjustsTotal } from './lots';
-import { courierSplit, isPickupZone, isWalkIn, itemsTotal, keptTotal, recordReturn, remaining, returnAt as returnAtImport, sellingLines, type Courier, type Order, type PayMethod } from './orders';
+import { choicePreCounted, choiceSaleAt, courierSplit, isPickupZone, isWalkIn, itemsTotal, keptTotal, recordReturn, remaining, returnAt as returnAtImport, sellingLines, type Courier, type Order, type PayMethod } from './orders';
 
 // ---------- Comptes ----------
 export type AccountId = PayMethod | 'bank';
@@ -424,7 +424,8 @@ const costOf = (variantId: string) => { const v = get<Variant>('variants', varia
 
 /**
  * Règle de comptage : les articles partis avec un livreur (hors « choix ») sont vendus le jour du départ.
- * Ce qui revient ensuite est un « retour » le jour du retour ; les choix gardés sont vendus le jour du retour.
+ * Ce qui revient ensuite est un « retour » le jour du retour ; les choix gardés sont vendus dès que le vendeur indique
+ * le choix du client (sinon le jour du retour).
  */
 export function report(from: string, to: string): Report {
   const z = () => Object.fromEntries(ACCOUNT_IDS.map((a) => [a, 0])) as Record<AccountId, number>;
@@ -453,13 +454,18 @@ export function report(from: string, to: string): Report {
       if (o.pickedUp && o.status !== 'cancelled') s.walkIns.push(o);
       else if (o.status !== 'cancelled') { const d = deliveryNet(o); s.deliveries.push({ o, courierId: isPickupZone(o.zoneId) ? '' : o.courierId || '', value, ...d, settled: !!o.courierSettledAt }); }
     }
+    // Choix indiqué par le vendeur : articles gardés vendus dès la saisie du choix (complété ou corrigé au retour).
+    const chAt = choiceSaleAt(o);
+    const preVal = chAt ? o.lines.reduce((t, l) => t + choicePreCounted(o, l) * l.unitPrice, 0) : 0;
+    const preCost = chAt ? o.lines.reduce((t, l) => t + choicePreCounted(o, l) * costOf(l.variantId), 0) : 0;
+    if (preVal && inR(chAt!)) addSale(o, preVal, preCost, false);
     const back = o.status === 'cancelled' ? o.statusDates?.cancelled : o.returnedAt;
     if (inR(back)) {
       let ret = 0, retCost = 0;
-      if (o.status === 'cancelled') { ret = itemsTotal(o) - (o.discount || 0); retCost = nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0); }
+      if (o.status === 'cancelled') { ret = itemsTotal(o) - (o.discount || 0) + preVal; retCost = nonChoice.reduce((t, l) => t + l.qty * costOf(l.variantId), 0) + preCost; }
       else {
         for (const l of o.lines) {
-          if (l.isChoice) { const k = l.qtyKept ?? 0; if (k) addSale(o, k * l.unitPrice, k * costOf(l.variantId), false); }
+          if (l.isChoice) { const k = (l.qtyKept ?? 0) - choicePreCounted(o, l); if (k > 0) addSale(o, k * l.unitPrice, k * costOf(l.variantId), false); else if (k < 0) { ret -= k * l.unitPrice; retCost -= k * costOf(l.variantId); } }
           else { const r = l.qtyReturned ?? 0; ret += r * l.unitPrice; retCost += r * costOf(l.variantId); }
         }
         ret += adjustsTotal(o) - adjustsKeptTotal(o); // lot devenu incomplet : prix normal pour ce qui est gardé

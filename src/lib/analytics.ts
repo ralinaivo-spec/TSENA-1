@@ -2,7 +2,7 @@
 // pour le tableau de bord et les rapports (période, heure, jour, mois, article, client, vendeur, livreur…).
 import { all, get } from './db';
 import { stockOf, variantCost, incomingOf, type Category, type Product, type Purchase, type Variant } from './catalog';
-import { isPickupZone, isWalkIn, sellingLines, type Courier, type Order } from './orders';
+import { choicePreCounted, choiceSaleAt, isPickupZone, isWalkIn, sellingLines, type Courier, type Order } from './orders';
 import { dayOf, type CashMove, type FinanceCategory } from './money';
 import { purchaseTotalAr, purchasePaid, purchaseTotal } from './purchases';
 import { adjustKept, type Adjust } from './lots';
@@ -68,14 +68,21 @@ export function salesLedger(from?: string, to?: string): SaleLine[] {
       ...adj.map((a) => ({ variantId: '', qty: 0, value: a.qty * a.unit, over: adjOver(a) })),
     ], o.discount || 0);
     if (inR(o.dispatchedAt)) for (const l of nonChoice) push(o, o.dispatchedAt, 'sale', l.variantId, l.qty, l.value, l.over);
+    // Choix du client indiqué par le vendeur : les articles gardés sont vendus dès la saisie du choix.
+    const chAt = choiceSaleAt(o);
+    const pre = chAt ? o.lines.filter((l) => l.isChoice).map((l) => ({ l, k: choicePreCounted(o, l) })).filter((x) => x.k > 0) : [];
+    if (chAt && inR(chAt)) for (const { l, k } of pre) push(o, chAt, 'sale', l.variantId, k, k * l.unitPrice);
     if (o.status === 'cancelled') {
       const at = o.statusDates?.cancelled;
-      if (at && inR(at)) for (const l of nonChoice) push(o, at, 'return', l.variantId, -l.qty, -l.value, l.over);
+      if (at && inR(at)) {
+        for (const l of nonChoice) push(o, at, 'return', l.variantId, -l.qty, -l.value, l.over);
+        for (const { l, k } of pre) push(o, at, 'return', l.variantId, -k, -k * l.unitPrice);
+      }
       continue;
     }
     if (o.returnedAt && inR(o.returnedAt)) {
       for (const l of o.lines) {
-        if (l.isChoice) { if (l.qtyKept) push(o, o.returnedAt, 'sale', l.variantId, l.qtyKept, l.qtyKept * l.unitPrice); }
+        if (l.isChoice) { const d = (l.qtyKept ?? 0) - choicePreCounted(o, l); if (d) push(o, o.returnedAt, d > 0 ? 'sale' : 'return', l.variantId, d, d * l.unitPrice); }
         else if (l.qtyReturned) push(o, o.returnedAt, 'return', l.variantId, -l.qtyReturned, -l.qtyReturned * l.unitPrice, lotOver(o, l));
       }
       for (const a of adj) { const back = a.qty - adjustKept(a, o.lines, adj); if (back) push(o, o.returnedAt, 'return', '', 0, -back * a.unit, adjOver(a)); }

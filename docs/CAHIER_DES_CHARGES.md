@@ -223,7 +223,7 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 - **Création** par le vendeur : client, articles (+ variante), quantités, prix, remise éventuelle, zone, frais de livraison, date/créneau souhaité, mode de paiement prévu, notes.
 - **Hors heures d'ouverture** : la commande est enregistrée et apparaît dans la file « À préparer à l'ouverture ».
 - **Préparation** : liste de préparation, cochage article par article, la marchandise passe en « Réservé ».
-- **Articles en choix** : lignes marquées « choix » (ex. 3 tailles envoyées pour 1 achetée). Ils sortent physiquement avec le livreur mais **ne sont pas une vente**.
+- **Articles en choix** : lignes marquées « choix » (ex. 3 tailles envoyées pour 1 achetée). Ils sortent physiquement avec le livreur mais **ne sont pas une vente**. *(19/10/2026)* Dès que le vendeur **indique le choix du client** (« Préciser le choix du client »), les articles gardés **comptent dans les ventes** ce jour-là (Caisse du jour, récap WhatsApp, Récapitulatifs, Situation, versements), sans attendre le retour du livreur. Au retour confirmé par le gérant, seule une éventuelle différence est ajoutée ou retirée (jamais compté deux fois) ; si la commande est annulée, la vente est retirée. Sans choix indiqué, les articles gardés comptent le jour du retour.
 
 ### 7.2 Livraisons
 - **Zones / axes de livraison** paramétrables, chacun avec un **tarif par défaut** ; le montant peut être modifié à la main.
