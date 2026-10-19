@@ -743,3 +743,10 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Liste : « commande du lun. 19/10 (saisie sam. 17/10 18:10) ». Fiche : « Changer la date de commande » (gérant) ; refusé si l'ancienne ou la nouvelle date est dans une semaine déjà versée ; l'acompte payé à la boutique le jour de la saisie suit ; historique et journal.
 - Commandes existantes : avertissement « N commande(s) saisie(s) le week-end » (45 derniers jours, semaines non versées) → « Rattacher au lundi… » avec cases à cocher.
 
+### Échange pendant la livraison = une seule commande *(modification du 19/10/2026)*
+- « Le client veut échanger » (commande en livraison) : 1. ce que le client rend ; 2. ce qu'il prend à la place (formulaire, livreur et lieu repris, frais en plus 0 par défaut). À l'enregistrement, **la commande d'origine est modifiée** (même numéro) : lignes rendues retirées, nouvelles lignes ajoutées ; la commande échange temporaire est fusionnée puis supprimée.
+- Stock : l'article rendu **revient tout de suite en boutique** (le livreur le rapporte en venant chercher le nouveau) ; le nouvel article passe chez le livreur (mouvements rattachés à la commande d'origine).
+- Argent : acompte et paiements gardés/ajoutés sur la commande, frais = frais d'origine + frais de l'échange ; le compte du livreur et le reste à encaisser sont recalculés. Historique « Échange : 1 × … → 1 × … ».
+- Anciens échanges en deux commandes (origine en livraison + ECH pas terminée) : avertissement dans Commandes, bouton « Fusionner » (même traitement).
+- Échange après une livraison terminée ou refusée : reste une commande échange à part (livraison nouvelle).
+

@@ -1,5 +1,5 @@
 // Commandes clients, livraisons, livreurs, zones : règles de calcul et actions.
-import { all, applyRemote, bizNow, get, newId, save, type BaseRecord } from './db';
+import { all, applyRemote, bizNow, get, newId, remove, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { addMoves, nextNumber, stockOf, variantLabel, type Product, type StockMove, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
@@ -58,6 +58,8 @@ export interface Order extends BaseRecord {
   choiceNote?: { at: string; by?: string; kept: Record<string, number>; note?: string };
   /** Date de commande (rattachement) quand elle diffère de la saisie : commande saisie le week-end → lundi. */
   orderDate?: string;
+  /** Échanges faits pendant la livraison (commande modifiée sur place). */
+  exchanges?: { at: string; by?: string; text: string }[];
   channel: 'facebook' | 'phone' | 'shop' | 'other';
   customerId?: string;
   phone: string;
@@ -411,6 +413,46 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
   if (provNote) await save('orders', { id: o.id, events: [...(o.events || []), { at, text: provNote, user: u?.fullName }] });
   await setStatus(get<Order>('orders', o.id) ?? o, status, { lines, feeCharged: refusedNow ? 0 : r.feeCharged, payments: [...basePays, ...(refusedNow ? [] : pays)], returnedAt: at, ...late, ...(refusedNow ? { courierSettledAt: at, feeStatus: undefined } : {}), notes: r.note ? [o.notes, `Retour : ${r.note}`].filter(Boolean).join('\n') : o.notes }, at);
   await moveExchangeCredit(o.id, at);
+}
+
+/**
+ * Échange pendant la livraison → une seule commande : la commande d'origine est modifiée (articles rendus retirés,
+ * nouveaux articles ajoutés), la commande « échange » temporaire est fusionnée puis supprimée.
+ * Stock : les articles rendus reviennent tout de suite en boutique (le livreur les rapporte en prenant les nouveaux) ;
+ * les nouveaux articles passent chez le livreur. Paiements et frais de l'échange passent sur la commande d'origine.
+ */
+export async function mergeDeliveryExchange(parentId: string, childId: string, returns: Record<string, number>) {
+  const o = get<Order>('orders', parentId); const x = get<Order>('orders', childId);
+  if (!o || !x) throw new Error('Commande introuvable.');
+  if (o.status !== 'out') throw new Error('La commande d’origine n’est plus en livraison : l’échange reste une commande à part.');
+  const at = bizNow();
+  assertOpenAt(at, 'Échange');
+  const u = currentUser()?.fullName;
+  const name = (vid: string) => { const v = get<Variant>('variants', vid); const p = v && get<Product>('products', v.productId); return `${p?.name ?? '?'} ${variantLabel(v)}`.trim(); };
+  // 1. Articles rendus : retirés de la commande, de retour en stock maintenant.
+  const back = o.lines.filter((l) => (returns[l.id] ?? 0) > 0).map((l) => ({ l, q: Math.min(l.qty, returns[l.id]) }));
+  if (back.length) await addMoves(back.map(({ l, q }) => ({ variantId: l.variantId, qty: q, type: 'delivery_return' as const, refType: 'order', refId: o.id, reason: `${o.number} — échange : rendu par le client`, at })));
+  const lines = o.lines.map((l) => ({ ...l, qty: l.qty - Math.min(l.qty, returns[l.id] ?? 0) })).filter((l) => l.qty > 0);
+  // 2. Nouveaux articles : ajoutés, chez le livreur (mouvements déjà faits sur l'échange transférés sur la commande).
+  const childNet = new Map<string, number>();
+  for (const m of all<StockMove>('stockMoves')) if (m.refType === 'order' && m.refId === x.id) childNet.set(m.variantId, (childNet.get(m.variantId) ?? 0) + m.qty);
+  const transfer = [...childNet.entries()].filter(([, q]) => q);
+  if (transfer.length) await addMoves(transfer.flatMap(([v, q]) => [
+    { variantId: v, qty: -q, type: (-q > 0 ? 'delivery_return' : 'dispatch') as StockMove['type'], refType: 'order', refId: x.id, reason: `${x.number} fusionnée dans ${o.number}`, at },
+    { variantId: v, qty: q, type: (q > 0 ? 'delivery_return' : 'dispatch') as StockMove['type'], refType: 'order', refId: o.id, reason: `${o.number} — échange (repris de ${x.number})`, at },
+  ]));
+  const want = new Map<string, number>(); for (const l of x.lines) want.set(l.variantId, (want.get(l.variantId) ?? 0) + l.qty);
+  const out = [...want.entries()].map(([v, q]) => ({ v, q: q + (childNet.get(v) ?? 0) })).filter((y) => y.q > 0);
+  if (out.length) await addMoves(out.map((y) => ({ variantId: y.v, qty: -y.q, type: 'dispatch' as const, refType: 'order', refId: o.id, reason: `${o.number} — échange : nouvel article remis au livreur`, at })));
+  const added = x.lines.map((l) => ({ ...l, id: newId(), qtyKept: undefined, qtyReturned: undefined }));
+  // 3. Paiements et frais de l'échange → commande d'origine.
+  const pays = (x.payments || []).map((p) => (p.receivedBy === 'courier' ? { ...p, courierId: o.courierId } : p));
+  const text = `Échange : ${back.map(({ l, q }) => `${q} × ${name(l.variantId)}`).join(', ') || '—'} → ${x.lines.map((l) => `${l.qty} × ${name(l.variantId)}`).join(', ') || '—'}`;
+  const nul = null as unknown as undefined;
+  await save('orders', { id: o.id, lines: [...lines, ...added], payments: [...(o.payments || []), ...pays], deliveryFee: (o.deliveryFee || 0) + (x.deliveryFee || 0),
+    exchangeRequest: nul, exchanges: [...(o.exchanges || []), { at, by: u, text }], events: [...(o.events || []), { at, text, user: u }] });
+  await remove('orders', x.id);
+  await audit('Échange', `${o.number} : ${text} (une seule commande, ${x.number} fusionnée)`, 'orders', o.id);
 }
 
 /**

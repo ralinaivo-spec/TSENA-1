@@ -7,7 +7,7 @@ import { audit, currentUser, useCan } from '../lib/auth';
 import { all, bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  paymentDateError, shopPaid, courierProvisional, orderDay, defaultOrderDate, setOrderDate, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  paymentDateError, shopPaid, courierProvisional, mergeDeliveryExchange, orderDay, defaultOrderDate, setOrderDate, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -138,6 +138,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
         actions={can('orders.create') && <><Button variant="ghost" icon="users" onClick={() => setFollowing(true)}>Client à suivre</Button><Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button></>} />
       <ScopeBar scope={scope} mineLabel="Mes commandes" text={scope.locked ? 'Vous voyez seulement les commandes de vos pages' : 'Vous voyez les commandes que vous avez enregistrées.'} />
       <WeekendOrdersNotice />
+      <ExchangePairsNotice />
       <div className="tabs" role="tablist">
         {(() => { const n = prospects.filter((x) => x.status === 'open' && scope.mine({ createdBy: x.ownerId, createdByName: x.ownerName }) && bucketOf(x) !== 'later').length; return <button role="tab" aria-selected={tabKey === 'suivre'} onClick={() => switchTab('suivre')}>À suivre{n ? <span className="tab-count tab-count-hot">{n}</span> : null}</button>; })()}
         {TABS.map((t) => {
@@ -265,9 +266,9 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [zoneId, setZoneId] = useState(order?.zoneId ?? base?.zoneId ?? pre?.zoneId ?? '');
   const [place, setPlace] = useState(order?.place ?? base?.place ?? pre?.place ?? '');
   const couriers = useTable<Courier>('couriers').filter((c) => c.active !== false);
-  const [courierId, setCourierId] = useState(order?.courierId ?? (pre?.zoneId && !isPickupZone(pre.zoneId) ? couriers.find((x) => x.zoneIds?.includes(pre.zoneId!))?.id : undefined) ?? '');
+  const [courierId, setCourierId] = useState(order?.courierId ?? (base?.status === 'out' ? base.courierId : undefined) ?? (pre?.zoneId && !isPickupZone(pre.zoneId) ? couriers.find((x) => x.zoneIds?.includes(pre.zoneId!))?.id : undefined) ?? '');
   const [newCourier, setNewCourier] = useState('');
-  const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : pre?.zoneId ? (isPickupZone(pre.zoneId) ? 0 : get<Zone>('zones', pre.zoneId)?.fee ?? '') : '')));
+  const [fee, setFee] = useState(String(order?.deliveryFee ?? (base?.status === 'out' ? 0 : base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : pre?.zoneId ? (isPickupZone(pre.zoneId) ? 0 : get<Zone>('zones', pre.zoneId)?.fee ?? '') : '')));
   const [wantedDate, setWantedDate] = useState(order?.wantedDate ?? '');
   // Date de commande : aujourd'hui, ou lundi si la saisie est faite le samedi soir / le dimanche (modifiable).
   const ymdL = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -401,7 +402,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
           <div className="notice"><Icon name="refresh" /><span>Articles repris au client : {exchangeOf.returnLines.map((r) => `${r.qty} × ${variantLabel(get<Variant>('variants', r.variantId))}`).join(', ')} — valeur {fmtAr(draft.credit)} déduite.</span></div>
         )}
         {exchangeOf && exchangeOf.returnLines.length === 0 && (
-          <div className="notice"><Icon name="refresh" /><span>Échange de <strong>{exchangeOf.parent.number}</strong> : ajoutez ce que le client prend à la place (autre modèle, autre taille). Ce qu’il rend revient en stock avec le retour du livreur de {exchangeOf.parent.number} ; ce qu’il avait déjà payé à la boutique passe sur cet échange. Frais de livraison : mettez 0 si l’échange est offert.</span></div>
+          <div className="notice"><Icon name="refresh" /><span>{exchangeOf.parent.status === 'out' ? <>Échange sur <strong>{exchangeOf.parent.number}</strong> (en livraison) : ajoutez ce que le client prend à la place. Tout reste sur la même commande : l’article rendu revient en stock, le nouveau part avec le livreur. Frais en plus : 0 si le livreur ne refait pas de course.</> : <>Échange de <strong>{exchangeOf.parent.number}</strong> : ajoutez ce que le client prend à la place (autre modèle, autre taille). Ce qu’il avait déjà payé à la boutique passe sur cet échange. Frais de livraison : mettez 0 si l’échange est offert.</>}</span></div>
         )}
 
         <div className="row-between"><h3>{exchangeOf ? 'Nouveaux articles' : 'Articles'}</h3><Button variant="ghost" icon="plus" onClick={() => setPicking(true)}>Ajouter un article</Button></div>
@@ -930,6 +931,23 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
   );
 }
 
+/** Échanges faits pendant la livraison avant la règle « une seule commande » : commande d'origine + commande ECH en double. */
+function exchangePairs() {
+  return all<Order>('orders').filter((o) => o.status === 'out' && o.exchangeRequest)
+    .map((o) => ({ o, x: get<Order>('orders', o.exchangeRequest!.childId) }))
+    .filter((p): p is { o: Order; x: Order } => !!p.x && !p.x.deleted && ['new', 'confirmed', 'ready', 'out'].includes(p.x.status));
+}
+export function ExchangePairsNotice() {
+  const can = useCan(); const ords = useTable<Order>('orders');
+  const [busy, setBusy] = useState(false);
+  const list = useMemo(() => (can('returns.manage') ? exchangePairs() : []), [ords, can('returns.manage')]);
+  if (!list.length) return null;
+  return (
+    <div className="notice"><Icon name="refresh" /><span style={{ flex: 1 }}><strong>{list.length} échange(s) en livraison affiché(s) en deux commandes</strong> ({list.map((p) => `${p.o.number} + ${p.x.number}`).join(', ')}). Fusionnez-les : une seule commande, l’article rendu revient en stock, le compte du livreur est recalculé.</span>
+      <Button variant="ghost" busy={busy} onClick={async () => { setBusy(true); try { for (const p of list) await mergeDeliveryExchange(p.o.id, p.x.id, p.o.exchangeRequest!.returns); toast(`${list.length} échange(s) fusionné(s)`); } catch (e: any) { toast(e.message, 'error'); } setBusy(false); }}>Fusionner</Button></div>
+  );
+}
+
 /** Commandes saisies le samedi soir / dimanche encore rattachées à ce jour-là (avant la règle « lundi ») : à rattacher au lundi. */
 function weekendOrders(company: ReturnType<typeof useCompany>) {
   const since = Date.now() - 45 * 864e5;
@@ -1265,17 +1283,17 @@ function DeliveryExchange({ order: o, onClose }: { order: Order; onClose: () => 
   const [ret, setRet] = useState<Record<string, string>>(() => Object.fromEntries(o.lines.filter((l) => !l.isChoice).map((l) => [l.id, String(l.qty)])));
   const [step, setStep] = useState(1);
   const returns = Object.fromEntries(o.lines.filter((l) => !l.isChoice).map((l) => [l.id, Math.max(0, Math.min(l.qty, parseNum(ret[l.id]) ?? 0))]).filter(([, n]) => (n as number) > 0)) as Record<string, number>;
+  // Étape 2 : on choisit ce que le client prend à la place ; puis tout est fusionné dans la commande d'origine (une seule commande).
   if (step === 2) return <OrderForm exchangeOf={{ parent: o, returnLines: [] }} onClose={onClose} onSaved={async (x) => {
-    const at = bizNow(); const u = currentUser()?.fullName;
-    await save('orders', { id: o.id, exchangeRequest: { at, by: u, returns, childId: x.id, childNumber: x.number }, events: [...(o.events || []), { at, text: `Échange demandé par le client : nouvelle commande ${x.number}`, user: u }] });
-    await audit('Échange', `${o.number} : échange demandé pendant la livraison → ${x.number}`, 'orders', o.id);
-    navigate('/commandes/' + x.id);
+    try { await mergeDeliveryExchange(o.id, x.id, returns); toast(`Échange enregistré sur ${o.number} : article rendu remis en stock, nouvel article chez le livreur`); }
+    catch (e: any) { toast(e.message, 'error'); }
+    navigate('/commandes/' + o.id);
   }} />;
   return (
     <Modal title={`Le client veut échanger — ${o.number}`} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button disabled={!Object.keys(returns).length} onClick={() => setStep(2)}>Continuer : ce qu’il prend à la place</Button></>}>
       <div className="stack">
-        <Help>1. Indiquez ce que le client rend au livreur (autre taille, autre modèle, pas à son goût). 2. À l’étape suivante, choisissez ce qu’il prend à la place : une commande « échange » est créée, liée à celle-ci. Ce qui est rendu revient en stock quand le gérant confirme le retour du livreur ; ce que le client avait déjà payé passe sur l’échange.</Help>
+        <Help>1. Indiquez ce que le client rend (autre taille, autre modèle, pas à son goût). 2. Choisissez ce qu’il prend à la place. La commande reste la même (même numéro) : l’article rendu revient tout de suite en stock (le livreur le rapporte en prenant le nouveau), le nouvel article passe chez le livreur, le montant et le compte du livreur sont recalculés.</Help>
         {o.lines.filter((l) => !l.isChoice).map((l) => {
           const v = get<Variant>('variants', l.variantId); const p = v && get<Product>('products', v.productId);
           return (
