@@ -33,7 +33,7 @@ await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200
 ok(p.url().includes('caisse-du-jour/envoyer'), 'ouvre Caisse du jour');
 const top = await p.locator('.daycash-send').evaluate((e) => { const r = e.getBoundingClientRect().top; const max = document.documentElement.scrollHeight - innerHeight; return (r < 200 || Math.abs(scrollY - max) < 4) && max > 0 ? Math.round(scrollY) : -1; });
 ok(top > 0, 'arrive directement sur « Vérifier puis envoyer » (top=' + Math.round(top) + ')');
-{ const m = await p.locator('main').innerText(); ok(!/Dépense|dépense/.test(m) && await p.getByLabel('Montant de la dépense (Ar)').count() === 0, 'vendeur : aucune dépense visible ni saisissable'); }
+{ const m = await p.locator('main').innerText(); const st = (await p.locator('.stat-grid').innerText()).replace(/\s/g, ''); ok(st.includes('Totaldesventes') && st.includes('Ventessurplace(1)50000Ar') && st.includes('Ventesenlivraison(0)0Ar'), 'vendeur : total, sur place et livraison'); ok(!/Dépense|dépense/.test(m) && await p.getByLabel('Montant de la dépense (Ar)').count() === 0, 'vendeur : aucune dépense visible ni saisissable'); }
 await p.goto('http://localhost:5173/#/'); await p.waitForTimeout(400);
 ok(await p.locator('.daycash-shortcut a', { hasText: 'Dépense' }).count() === 0, 'accueil vendeur : pas de bouton « Dépense »');
 await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200);
