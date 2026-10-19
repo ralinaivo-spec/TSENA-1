@@ -119,6 +119,8 @@ export function get<T extends BaseRecord = BaseRecord>(table: TableName, id: str
   const r = cache.get(table)?.get(id);
   return r && !r.deleted ? (r as T) : undefined;
 }
+/** Tous les enregistrements, supprimés compris (réparations). */
+export function allWithDeleted<T extends BaseRecord = BaseRecord>(table: TableName): T[] { return [...(cache.get(table)?.values() ?? [])] as T[]; }
 export function getRaw(table: TableName, id: string) {
   return cache.get(table)?.get(id);
 }

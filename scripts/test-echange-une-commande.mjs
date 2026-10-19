@@ -57,8 +57,8 @@ ok((await p.evaluate(() => window.__tsena.get('orders', 'o1').status)) === 'deli
 // anciens échanges en double → fusion
 await p.evaluate(async () => { const t = window.__tsena; const at = new Date().toISOString();
   await t.save('stockMoves', [{ variantId: 'v38', qty: -1, type: 'dispatch', at, refType: 'order', refId: 'o2' }, { variantId: 'v39', qty: -1, type: 'dispatch', at, refType: 'order', refId: 'x2' }]);
-  await t.save('orders', [{ id: 'o2', number: 'C-G0034', kind: 'order', channel: 'facebook', phone: '0341239106', name: 'Holy', zoneId: 'zone-centre', place: 'Tsaramasay', courierId: 'k1', status: 'out', dispatchedAt: at, lines: [{ id: 'm1', variantId: 'v38', qty: 1, unitPrice: 34000 }], payments: [], discount: 0, deliveryFee: 0, createdAt: at, exchangeRequest: { at, returns: { m1: 1 }, childId: 'x2', childNumber: 'ECH-G0001' } },
-    { id: 'x2', number: 'ECH-G0001', kind: 'exchange', parentId: 'o2', channel: 'facebook', phone: '0341239106', name: 'Holy', zoneId: 'zone-centre', place: 'Tsaramasay', courierId: 'k1', status: 'out', dispatchedAt: at, lines: [{ id: 'n1', variantId: 'v39', qty: 1, unitPrice: 29000 }], payments: [], discount: 0, deliveryFee: 0, createdAt: at }]); });
+  await t.save('orders', [{ id: 'o2', number: 'C-G0034', kind: 'order', channel: 'facebook', phone: '0341239106', name: 'Holy', zoneId: 'zone-centre', place: 'Tsaramasay', courierId: 'k1', status: 'out', dispatchedAt: at, lines: [{ id: 'm1', variantId: 'v38', qty: 1, unitPrice: 34000 }], payments: [], discount: 0, deliveryFee: 4000, createdAt: at, exchangeRequest: { at, returns: { m1: 1 }, childId: 'x2', childNumber: 'ECH-G0001' } },
+    { id: 'x2', number: 'ECH-G0001', kind: 'exchange', parentId: 'o2', channel: 'facebook', phone: '0341239106', name: 'Holy', zoneId: 'zone-centre', place: 'Tsaramasay', courierId: 'k1', status: 'out', dispatchedAt: at, lines: [{ id: 'n1', variantId: 'v39', qty: 1, unitPrice: 29000 }], payments: [], discount: 0, deliveryFee: 4000, createdAt: at }]); });
 await p.goto('http://localhost:5173/#/commandes'); await p.waitForTimeout(500);
 const nt = p.locator('.notice', { hasText: 'en deux commandes' });
 ok(await nt.count() === 1, 'avertissement : échange affiché en deux commandes');
@@ -70,4 +70,11 @@ ok(r3.lines.join() === 'v39:1:29000' && !r3.req && r3.xDeleted, 'fusion : C-G003
 ok(await stock('v38') === before[0] + 1 && await stock('v39') === before[1], 'stock : rendu revenu en boutique, nouveau toujours chez le livreur');
 const net = await p.evaluate(() => { const m = window.__tsena.all('stockMoves').filter((x) => x.refId === 'o2'); return m.filter((x) => x.variantId === 'v39').reduce((s, x) => s + x.qty, 0); });
 ok(net === -1, 'le nouveau pyjama est rattaché à C-G0034 (mouvements)');
+ok((await p.evaluate(() => window.__tsena.get('orders', 'o2').deliveryFee)) === 4000, 'fusion : frais 4 000 une seule fois (pas 8 000)');
+// réparation d'une ancienne fusion à 8 000
+await p.evaluate(async () => { const t = window.__tsena; const at = new Date().toISOString();
+  await t.save('orders', [{ id: 'o3', number: 'C-OLD', kind: 'order', channel: 'facebook', phone: '0341239100', name: 'Old', zoneId: 'zone-centre', place: 'X', courierId: 'k1', status: 'out', dispatchedAt: at, lines: [{ id: 'q1', variantId: 'v39', qty: 1, unitPrice: 29000 }], payments: [], discount: 0, deliveryFee: 8000, createdAt: at, exchanges: [{ at, text: 'Échange : …' }] },
+    { id: 'x3', number: 'ECH-OLD', kind: 'exchange', parentId: 'o3', channel: 'facebook', phone: '0341239100', zoneId: 'zone-centre', courierId: 'k1', status: 'confirmed', lines: [], payments: [], discount: 0, deliveryFee: 4000, createdAt: at, deleted: true }]); });
+await p.goto('http://localhost:5173/#/'); await p.goto('http://localhost:5173/#/commandes'); await p.waitForTimeout(900);
+ok((await p.evaluate(() => window.__tsena.get('orders', 'o3').deliveryFee)) === 4000, 'ancienne fusion : frais 8 000 corrigés en 4 000');
 console.log(fail ? `${fail} ÉCHEC(S)` : 'TOUT EST BON'); await b.close();

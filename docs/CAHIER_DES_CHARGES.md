@@ -746,7 +746,7 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 ### Échange pendant la livraison = une seule commande *(modification du 19/10/2026)*
 - « Le client veut échanger » (commande en livraison) : 1. ce que le client rend ; 2. ce qu'il prend à la place (formulaire, livreur et lieu repris, frais en plus 0 par défaut). À l'enregistrement, **la commande d'origine est modifiée** (même numéro) : lignes rendues retirées, nouvelles lignes ajoutées ; la commande échange temporaire est fusionnée puis supprimée.
 - Stock : l'article rendu **revient tout de suite en boutique** (le livreur le rapporte en venant chercher le nouveau) ; le nouvel article passe chez le livreur (mouvements rattachés à la commande d'origine).
-- Argent : acompte et paiements gardés/ajoutés sur la commande, frais = frais d'origine + frais de l'échange ; le compte du livreur et le reste à encaisser sont recalculés. Historique « Échange : 1 × … → 1 × … ».
+- Argent : acompte et paiements gardés/ajoutés sur la commande, **frais = frais d'origine** (même livraison, pas de deuxièmes frais ; les fusions faites avant ce correctif avec frais en double sont corrigées automatiquement si le livreur n'est pas encore réglé) ; le compte du livreur et le reste à encaisser sont recalculés. Historique « Échange : 1 × … → 1 × … ».
 - Anciens échanges en deux commandes (origine en livraison + ECH pas terminée) : avertissement dans Commandes, bouton « Fusionner » (même traitement).
 - Échange après une livraison terminée ou refusée : reste une commande échange à part (livraison nouvelle).
 

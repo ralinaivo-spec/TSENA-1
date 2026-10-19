@@ -1,5 +1,5 @@
 // Commandes clients, livraisons, livreurs, zones : règles de calcul et actions.
-import { all, applyRemote, bizNow, get, newId, remove, save, type BaseRecord } from './db';
+import { all, allWithDeleted, applyRemote, bizNow, get, newId, remove, save, type BaseRecord } from './db';
 import { audit, currentUser } from './auth';
 import { addMoves, nextNumber, stockOf, variantLabel, type Product, type StockMove, type Variant } from './catalog';
 import { DEFAULT_COMPANY, type Company } from './settings';
@@ -60,6 +60,8 @@ export interface Order extends BaseRecord {
   orderDate?: string;
   /** Échanges faits pendant la livraison (commande modifiée sur place). */
   exchanges?: { at: string; by?: string; text: string }[];
+  /** Frais doublés par une ancienne fusion d'échange : déjà corrigés. */
+  exchangeFeeFixed?: boolean;
   channel: 'facebook' | 'phone' | 'shop' | 'other';
   customerId?: string;
   phone: string;
@@ -421,6 +423,22 @@ export async function recordReturn(o: Order, r: { kept: Record<string, number>; 
  * Stock : les articles rendus reviennent tout de suite en boutique (le livreur les rapporte en prenant les nouveaux) ;
  * les nouveaux articles passent chez le livreur. Paiements et frais de l'échange passent sur la commande d'origine.
  */
+/** Réparation : les premières fusions d'échange ont ajouté les frais de l'échange aux frais d'origine (frais comptés deux fois).
+ *  Tant que le compte avec le livreur n'est pas fait, on retire ces frais en double. */
+export async function repairExchangeFees() {
+  const kids = allWithDeleted<Order>('orders').filter((x) => x.deleted && x.kind === 'exchange' && x.parentId && (x.deliveryFee || 0) > 0);
+  for (const o of all<Order>('orders')) {
+    if (!o.exchanges?.length || o.exchangeFeeFixed || o.courierSettledAt) continue;
+    const extra = kids.filter((x) => x.parentId === o.id).reduce((t, x) => t + (x.deliveryFee || 0), 0);
+    if (!extra || (o.deliveryFee || 0) < extra) { await save('orders', { id: o.id, exchangeFeeFixed: true }); continue; }
+    const fee = (o.deliveryFee || 0) - extra;
+    const at = new Date().toISOString();
+    await save('orders', { id: o.id, deliveryFee: fee, ...(o.feeCharged === o.deliveryFee ? { feeCharged: fee } : {}), exchangeFeeFixed: true,
+      events: [...(o.events || []), { at, text: `Frais de livraison corrigés : ${(o.deliveryFee || 0).toLocaleString('fr-FR')} → ${fee.toLocaleString('fr-FR')} Ar (frais de l'échange comptés deux fois)` }] });
+    await audit('Frais corrigés', `${o.number} : frais de l'échange retirés (${extra.toLocaleString('fr-FR')} Ar en double)`, 'orders', o.id);
+  }
+}
+
 export async function mergeDeliveryExchange(parentId: string, childId: string, returns: Record<string, number>) {
   const o = get<Order>('orders', parentId); const x = get<Order>('orders', childId);
   if (!o || !x) throw new Error('Commande introuvable.');
@@ -449,7 +467,8 @@ export async function mergeDeliveryExchange(parentId: string, childId: string, r
   const pays = (x.payments || []).map((p) => (p.receivedBy === 'courier' ? { ...p, courierId: o.courierId } : p));
   const text = `Échange : ${back.map(({ l, q }) => `${q} × ${name(l.variantId)}`).join(', ') || '—'} → ${x.lines.map((l) => `${l.qty} × ${name(l.variantId)}`).join(', ') || '—'}`;
   const nul = null as unknown as undefined;
-  await save('orders', { id: o.id, lines: [...lines, ...added], payments: [...(o.payments || []), ...pays], deliveryFee: (o.deliveryFee || 0) + (x.deliveryFee || 0),
+  // Même livraison : les frais restent ceux de la commande d'origine (pas de deuxièmes frais pour l'échange).
+  await save('orders', { id: o.id, lines: [...lines, ...added], payments: [...(o.payments || []), ...pays], exchangeFeeFixed: true,
     exchangeRequest: nul, exchanges: [...(o.exchanges || []), { at, by: u, text }], events: [...(o.events || []), { at, text, user: u }] });
   await remove('orders', x.id);
   await audit('Échange', `${o.number} : ${text} (une seule commande, ${x.number} fusionnée)`, 'orders', o.id);

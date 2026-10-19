@@ -2,12 +2,12 @@
 import { useMyScope, variantPage } from '../lib/scope';
 import { assertOpenAt, closedBy } from '../lib/closed';
 import { ScopeBar } from '../ui/scope';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
 import { all, bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  paymentDateError, shopPaid, courierProvisional, mergeDeliveryExchange, orderDay, defaultOrderDate, setOrderDate, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  paymentDateError, shopPaid, courierProvisional, mergeDeliveryExchange, repairExchangeFees, orderDay, defaultOrderDate, setOrderDate, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -939,6 +939,7 @@ function exchangePairs() {
 }
 export function ExchangePairsNotice() {
   const can = useCan(); const ords = useTable<Order>('orders');
+  useEffect(() => { if (can('orders.create')) void repairExchangeFees(); }, [ords.length]);
   const [busy, setBusy] = useState(false);
   const list = useMemo(() => (can('returns.manage') ? exchangePairs() : []), [ords, can('returns.manage')]);
   if (!list.length) return null;
