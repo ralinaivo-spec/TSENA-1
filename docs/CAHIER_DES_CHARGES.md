@@ -753,4 +753,5 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 ### Envoi du récapitulatif *(modification du 19/10/2026)*
 - Caisse du jour, « 3. Vérifier puis envoyer » : **un seul bouton « Envoyer par WhatsApp »** (message prêt, choix du contact ou du groupe dans WhatsApp) + « Copier ». Plus de boutons séparés gérant / patron.
 - Message WhatsApp de la **semaine** (Récapitulatifs) : en tête, encadré et en gras : 💰 TOTAL DES VENTES, 🧾 DÉPENSES, ✅ RESTE À VERSER (mêmes chiffres que « Versement de la semaine ») ; puis le détail. « Soldes en fin de période » n'est plus dans le message (toujours visible à l'écran).
+- Récap WhatsApp **du soir** (Caisse du jour) : en tête, encadré et en gras : 💰 TOTAL DES VENTES, 🏪 VENTES SUR PLACE (n), 🚚 VENTES EN LIVRAISON (n) ; gérant : + 🧾 DÉPENSES et ✅ MONTANT NET ; puis ventes par page (et dépenses pour le gérant). Caisse du jour et accueil du vendeur : cartes Total / Sur place / En livraison avec montants.
 

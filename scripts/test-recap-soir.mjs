@@ -27,6 +27,7 @@ await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('E
 const later = p.getByRole('button', { name: 'Plus tard' }); if (await later.count()) await later.click();
 await p.goto('http://localhost:5173/#/'); await p.waitForTimeout(500);
 ok(await p.locator('.evening-recap').count() === 1, 'vendeur, 18 h : bandeau « récap du soir » sur l’accueil');
+{ const sg = (await p.locator('.stat-grid').first().innerText()).replace(/\s/g, ''); ok(sg.includes('Ventessurplace(1)50000Ar') && sg.includes('Ventesenlivraison(0)0Ar'), 'accueil vendeur : ventes sur place et en livraison avec montant'); }
 ok(await p.locator('.sidebar .recap-shortcut.is-due').count() === 1, 'raccourci dans le menu, mis en évidence');
 await p.screenshot({ path: '/tmp/claude-0/t/ev1.png' });
 await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200);
@@ -40,7 +41,7 @@ await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200
 for (const c of await p.locator('.review-check input').all()) await c.check();
 await p.getByRole('button', { name: 'Confirmer la vérification' }).click(); await p.waitForTimeout(300);
 await ctx.route('https://wa.me/**', (r) => r.fulfill({ body: 'ok' }));
-{ const href = await p.getByRole('link', { name: /Envoyer par WhatsApp/ }).getAttribute('href'); const msg = decodeURIComponent(href.split('text=')[1]); console.log(msg); ok(msg.includes('TOTAL DES VENTES') && !msg.includes('DÉPENSES') && !msg.includes('NET'), 'message vendeur : ventes seulement'); }
+{ const href = await p.getByRole('link', { name: /Envoyer par WhatsApp/ }).getAttribute('href'); const msg = decodeURIComponent(href.split('text=')[1]); console.log(msg); ok(msg.includes('*TOTAL DES VENTES : 50') && msg.includes('*VENTES SUR PLACE (1) : 50') && msg.includes('*VENTES EN LIVRAISON (0) : 0') && !msg.includes('DÉPENSES') && !msg.includes('NET'), 'message vendeur : total, sur place, livraison en tête, sans dépenses'); }
 const [pop] = await Promise.all([ctx.waitForEvent('page'), p.getByRole('link', { name: /Envoyer par WhatsApp/ }).click()]);
 await pop.close(); await p.waitForTimeout(500);
 ok((await p.locator('.daycash-send').innerText()).includes('déjà envoyé'), 'mention « déjà envoyé » après l’envoi');

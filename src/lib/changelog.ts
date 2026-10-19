@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Récap WhatsApp du soir : en tête, encadré et en gras, 💰 TOTAL DES VENTES, 🏪 VENTES SUR PLACE et 🚚 VENTES EN LIVRAISON (avec le nombre) ; pour le gérant aussi 🧾 DÉPENSES et ✅ MONTANT NET. Accueil du vendeur : cartes « Ventes sur place » et « Ventes en livraison » avec leur montant.',
     'Caisse du jour : en haut, le total des ventes, les ventes sur place et les ventes en livraison (avec le nombre), pour les vendeurs comme pour le gérant.',
     'Message WhatsApp de la semaine (Récapitulatifs → Semaine) : en tête, bien visibles et en gras, TOTAL DES VENTES, DÉPENSES et RESTE À VERSER (comme le versement de la semaine) ; la partie « Soldes en fin de période » (caisse, MVola, Orange Money, espèces attendues) n’est plus envoyée.',
     'Caisse du jour : un seul bouton « Envoyer par WhatsApp » (WhatsApp s’ouvre avec le récapitulatif, on choisit le contact ou le groupe) au lieu de « WhatsApp au gérant » / « WhatsApp au patron » ; « Copier » reste disponible.',
