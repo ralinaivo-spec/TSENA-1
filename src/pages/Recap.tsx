@@ -11,6 +11,7 @@ import { ACCOUNTS, MOVE_TYPES, addDays, mondayOf, report, today, type AccountId,
 import { dayText, daySections, longDate, sectionsDoc, totals, weekDays, weekSections, weekText, type Section } from '../lib/recap';
 import { get } from '../lib/db';
 import { daySynthesis } from '../lib/synthesis';
+import { grid } from '../lib/payouts';
 import { Help, Badge, Button, Empty, IconButton, PageHead, fmtDate, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { PrintDialog } from '../ui/print';
@@ -33,7 +34,8 @@ export function RecapPage() {
   const step = (n: number) => setDate(addDays(date, mode === 'week' ? 7 * n : n));
   const isFuture = (mode === 'week' ? addDays(monday, 7) : addDays(date, 1)) > today();
   const sections = mode === 'week' ? weekSections(r, days, withProfit) : daySections(r, withProfit);
-  const text = mode === 'week' ? weekText(r, days, company, withProfit) : dayText(r, company, withProfit);
+  const wg = mode === 'week' ? grid(monday, addDays(monday, 5)) : null;
+  const text = mode === 'week' ? weekText(r, days, company, withProfit, wg ? { sales: wg.salesTotal, expenses: wg.expensesTotal, rest: wg.rest } : undefined) : dayText(r, company, withProfit);
 
   return (
     <>

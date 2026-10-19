@@ -129,8 +129,12 @@ export function dayText(r: Report, company: Company, withProfit: boolean) {
   else if (s.deliv.pending) head.push(`_Provisoire : ${s.deliv.pending} livraison(s) pas encore confirmée(s) au versement_`);
   return toText(head, daySections(r, withProfit));
 }
-export function weekText(r: Report, days: WeekDay[], company: Company, withProfit: boolean) {
-  return toText([`*${company.name} — Récapitulatif de la semaine*`, `du ${longDate(r.from)} au ${longDate(r.to)}`], weekSections(r, days, withProfit));
+/** Message de la semaine : d'abord, bien visible, ventes − dépenses = reste à verser (comme le versement de la semaine) ;
+ *  puis le détail. Les soldes des comptes (caisse, mobile money) ne sont pas envoyés. */
+export function weekText(r: Report, days: WeekDay[], company: Company, withProfit: boolean, due?: { sales: number; expenses: number; rest: number }) {
+  const head = [`*${company.name} — Récapitulatif de la semaine*`, `du ${longDate(r.from)} au ${longDate(r.to)}`];
+  if (due) head.push('', '━━━━━━━━━━━━━━━', `💰 *TOTAL DES VENTES : ${fmtAr(due.sales)}*`, `🧾 *DÉPENSES : − ${fmtAr(due.expenses)}*`, `✅ *RESTE À VERSER : ${fmtAr(due.rest)}*`, '━━━━━━━━━━━━━━━');
+  return toText(head, weekSections(r, days, withProfit).filter((s) => s.title !== 'Soldes en fin de période'));
 }
 
 // ---------- Ticket imprimé ----------

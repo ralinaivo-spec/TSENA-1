@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Message WhatsApp de la semaine (Récapitulatifs → Semaine) : en tête, bien visibles et en gras, TOTAL DES VENTES, DÉPENSES et RESTE À VERSER (comme le versement de la semaine) ; la partie « Soldes en fin de période » (caisse, MVola, Orange Money, espèces attendues) n’est plus envoyée.',
     'Caisse du jour : un seul bouton « Envoyer par WhatsApp » (WhatsApp s’ouvre avec le récapitulatif, on choisit le contact ou le groupe) au lieu de « WhatsApp au gérant » / « WhatsApp au patron » ; « Copier » reste disponible.',
     'Date de commande : en semaine aussi, une commande saisie à partir de 17:30 (lundi → vendredi) prend le jour de travail suivant ; samedi à partir de 17:00 et dimanche → lundi (heures dans Paramètres → Société). « Paiement reçu » propose la date de commande quand elle n’est pas encore arrivée. L’avertissement « saisie(s) après la fermeture » permet de rattacher d’un coup les commandes déjà enregistrées.',
     'Échange pendant la livraison : les frais de livraison restent ceux de la commande (4 000 Ar), ils ne sont plus ajoutés une deuxième fois. Les commandes déjà fusionnées avec des frais en double (ex. 8 000 au lieu de 4 000) sont corrigées automatiquement, tant que le compte avec le livreur n’est pas fait.',
