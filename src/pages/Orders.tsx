@@ -1,12 +1,13 @@
 // Commandes clients : saisie (comme le cahier), préparation, remise au livreur, retour, échanges.
 import { useMyScope, variantPage } from '../lib/scope';
+import { assertOpenAt, closedBy } from '../lib/closed';
 import { ScopeBar } from '../ui/scope';
 import { useMemo, useState } from 'react';
 import { audit, currentUser, useCan } from '../lib/auth';
-import { bizNow, get, newId, save, useTable } from '../lib/db';
+import { all, bizNow, get, newId, save, useTable } from '../lib/db';
 import { fmtAr, fmtNum, nextNumber, parseNum, productVariants, useCatalog, variantLabel, type Product, type Variant , photoOf, matchQuery, matchExact, searchItems, productText, parseAr, stockOf, type Category } from '../lib/catalog';
 import {
-  paymentDateError, shopPaid, courierProvisional, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
+  paymentDateError, shopPaid, courierProvisional, orderDay, defaultOrderDate, setOrderDate, canUndoReturn, undoReturn, orderedTotal, choiceGiven, choiceKept, saveChoice, defaultReturnDay, returnAt, addPayment, availableOf, backToPrepare, cancelOrder, cancelDeliveryToShop, MAX_REPORTS, reportCount, canPostpone, postponeOrder, cancelAfterReports, CHANNELS, completeAtShop, confirmOrder, dispatchOrder, exchangeBalance, findCustomer, fmtPhone,
   canReassign, customerIdFor, choiceQty, hasPendingChoice, needsSettlement, reassignCourier, isOutsideHours, isPickupZone, isWalkIn, orderLabel, handOverAtShop, itemsTotal, keptTotal, linePrice, markReady, normPhone, ORDER_STATUS, orderTotal, paidTotal, PAY_METHODS, recordReturn, remaining,
   priceOrder, removeLine, reservedIndex, totalQty, useWholesale, editPayment, courierSplit, withLineWholesale, discountAr, stockShortages,
   type Courier, type Customer, type Order, type OrderLine, type OrderStatus, type PayMethod, type Payment, type Zone, orderText, customerText, findCustomerBy,
@@ -42,7 +43,7 @@ const TABS: { key: string; label: string; statuses: OrderStatus[]; match?: (o: O
   { key: 'annulees', label: 'Annulées / refusées', statuses: ['cancelled', 'refused'], match: (o) => o.status === 'cancelled' || !needsSettlement(o) },
 ];
 /** Date qui compte pour une commande terminée ou annulée : le jour où c'est arrivé, pas le jour de la commande. */
-const eventDate = (o: Order) => (o.status === 'cancelled' ? o.statusDates?.cancelled : ['delivered', 'partial', 'refused'].includes(o.status) ? o.returnedAt : undefined) || o.createdAt;
+const eventDate = (o: Order) => (o.status === 'cancelled' ? o.statusDates?.cancelled : ['delivered', 'partial', 'refused'].includes(o.status) ? o.returnedAt : undefined) || orderDay(o);
 const inTab = (t: (typeof TABS)[number], o: Order) => t.statuses.includes(o.status) && (!t.match || t.match(o));
 /**
  * Regroupe des commandes ou ventes par page (catégorie principale des articles : Boxer homme, Pyjamas homme…).
@@ -118,8 +119,8 @@ function OrderList({ tabKey }: { tabKey?: string }) {
   const base = (o: Order) => (!isWalkIn(o) || o.status === 'cancelled') && scope.mine(o) && (!courierF || o.courierId === courierF) && (!pageF || hasPage(o, pageF)) && (!q.trim() || (exactOnly ? matchExact(orderText(o), q) : matchQuery(orderText(o), q)));
   const list = useMemo(() => orders
     .filter((o) => base(o) && inTab(tab, o))
-    .filter((o) => (done && q.trim()) || inPeriod(done ? eventDate(o) : o.createdAt, period))
-    .sort((a, b) => { const da = done ? eventDate(a) : a.createdAt, db = done ? eventDate(b) : b.createdAt; return order === 'new' ? db.localeCompare(da) : da.localeCompare(db); }),
+    .filter((o) => (done && q.trim()) || inPeriod(done ? eventDate(o) : orderDay(o), period))
+    .sort((a, b) => { const da = done ? eventDate(a) : orderDay(a), db = done ? eventDate(b) : orderDay(b); return order === 'new' ? db.localeCompare(da) : da.localeCompare(db); }),
   [orders, tab.key, q, period, scope.on, courierF, pageF, order]);
   // Commandes de l'onglet cachées par la période (ex. annulée hier avec « Aujourd'hui ») : on le signale.
   const hidden = period.key === 'all' ? 0 : orders.filter((o) => base(o) && inTab(tab, o)).length - list.length;
@@ -136,6 +137,7 @@ function OrderList({ tabKey }: { tabKey?: string }) {
       <PageHead title="Commandes" subtitle="Commandes Facebook, téléphone et autres, jusqu’à la livraison et au règlement du livreur."
         actions={can('orders.create') && <><Button variant="ghost" icon="users" onClick={() => setFollowing(true)}>Client à suivre</Button><Button icon="plus" onClick={() => setCreating(true)}>Nouvelle commande</Button></>} />
       <ScopeBar scope={scope} mineLabel="Mes commandes" text={scope.locked ? 'Vous voyez seulement les commandes de vos pages' : 'Vous voyez les commandes que vous avez enregistrées.'} />
+      <WeekendOrdersNotice />
       <div className="tabs" role="tablist">
         {(() => { const n = prospects.filter((x) => x.status === 'open' && scope.mine({ createdBy: x.ownerId, createdByName: x.ownerName }) && bucketOf(x) !== 'later').length; return <button role="tab" aria-selected={tabKey === 'suivre'} onClick={() => switchTab('suivre')}>À suivre{n ? <span className="tab-count tab-count-hot">{n}</span> : null}</button>; })()}
         {TABS.map((t) => {
@@ -202,7 +204,7 @@ export function OrderRow({ o }: { o: Order }) {
             {isPickupZone(o.zoneId) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status) && <Badge>Sur boutique</Badge>}
           </div>
           <p className="small muted">{o.number}{o.phone ? ` · ${fmtPhone(o.phone)}` : ''} · {zone?.name || 'Zone ?'}{o.place ? ` — ${o.place}` : ''}</p>
-          <p className="small muted">{fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ` + ${o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0)} en choix` : ''}{courier ? ` · ${courier.name}` : ''} · {fmtDateTime(o.createdAt)}</p>
+          <p className="small muted">{fmtNum(totalQty(o))} article(s){o.lines.some((l) => l.isChoice) ? ` + ${o.lines.filter((l) => l.isChoice).reduce((s, l) => s + l.qty, 0)} en choix` : ''}{courier ? ` · ${courier.name}` : ''} · {o.orderDate ? <>commande du {new Date(o.orderDate).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })} <span title="Date de saisie">(saisie {fmtDateTime(o.createdAt)})</span></> : fmtDateTime(o.createdAt)}</p>
           {needsSettlement(o) && <p className="small"><Badge tone="warn">À régler avec {courier?.name ?? 'le livreur'}</Badge> le livreur doit verser {fmtAr(settleRow(o).e)}</p>}
           {['delivered', 'partial', 'refused'].includes(o.status) && (() => { const fs = feeState(o); return fs !== 'none' ? <p className="small fee-line">Frais livreur {fmtAr(courierSplit(o).fee)} · <Badge tone={FEE_STATE[fs].tone}>{FEE_STATE[fs].label}</Badge></p> : null; })()}
         </div>
@@ -267,6 +269,9 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
   const [newCourier, setNewCourier] = useState('');
   const [fee, setFee] = useState(String(order?.deliveryFee ?? (base ? get<Zone>('zones', base.zoneId || '')?.fee ?? '' : pre?.zoneId ? (isPickupZone(pre.zoneId) ? 0 : get<Zone>('zones', pre.zoneId)?.fee ?? '') : '')));
   const [wantedDate, setWantedDate] = useState(order?.wantedDate ?? '');
+  // Date de commande : aujourd'hui, ou lundi si la saisie est faite le samedi soir / le dimanche (modifiable).
+  const ymdL = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const [orderDateYmd, setOrderDateYmd] = useState(() => ymdL(defaultOrderDate(new Date(bizNow()), company)));
   const [lines, setLines] = useState<OrderLine[]>(order?.lines ? withLineWholesale(order.lines) : (pre?.lines ?? []).map((l) => ({ id: newId(), variantId: l.variantId, qty: l.qty, unitPrice: linePrice(l.variantId, false) })));
   const [discount, setDiscount] = useState(order?.discountPct ? String(order.discountPct) : order?.discount ? String(order.discount) : '');
   const [discUnit, setDiscUnit] = useState<'ar' | 'pct'>(order?.discountPct ? 'pct' : 'ar');
@@ -350,11 +355,15 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
       } else {
         const u = currentUser();
         const now = new Date(bizNow());
-        const payments = pays.filter((x) => (parseAr(x.amount) || 0) > 0).map((x) => ({ id: newId(), at: now.toISOString(), amount: parseAr(x.amount)!, method: x.method, ref: x.ref.trim() || undefined, receivedBy: 'shop' as const, userName: u?.fullName }));
+        // Date de commande différente du jour de saisie (week-end → lundi) : la commande et son acompte y sont rattachés.
+        const od = orderDateYmd && orderDateYmd !== ymdL(now) ? new Date(`${orderDateYmd}T08:00:00`) : null;
+        if (od) assertOpenAt(od.toISOString(), 'Date de commande');
+        const payAt = (od ?? now).toISOString();
+        const payments = pays.filter((x) => (parseAr(x.amount) || 0) > 0).map((x) => ({ id: newId(), at: payAt, amount: parseAr(x.amount)!, method: x.method, ref: x.ref.trim() || undefined, receivedBy: 'shop' as const, userName: u?.fullName }));
         const [o] = await save('orders', {
           ...data, number: nextNumber(exchangeOf ? 'ECH' : 'C', 'orders'), kind: exchangeOf ? 'exchange' : 'order', parentId: exchangeOf?.parent.id,
           returnLines: exchangeOf?.returnLines, credit: draft.credit || undefined, payments, status: 'confirmed', statusDates: { confirmed: now.toISOString() },
-          outsideHours: isOutsideHours(now, company), createdBy: u?.id, createdByName: u?.fullName,
+          outsideHours: isOutsideHours(now, company), createdBy: u?.id, createdByName: u?.fullName, ...(od ? { orderDate: od.toISOString() } : {}),
         });
         await audit(exchangeOf ? 'Échange créé' : 'Commande créée', `${(o as Order).number} — ${fmtPhone(p)} — ${fmtAr(total)}`, 'orders', o.id);
         toast(`Commande ${(o as Order).number} enregistrée${payments.length ? ` — payé ${fmtAr(payments.reduce((s, x) => s + x.amount, 0))} (${payments.map((x) => PAY_METHODS[x.method]).join(' + ')})` : ''}`); onClose(); onSaved?.(o as Order);
@@ -432,6 +441,8 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
           <DiscountField value={discount} unit={discUnit} onChange={setDiscount} onUnit={setDiscUnit} amount={discAr} />
           <TextField label="Date de livraison souhaitée" type="date" value={wantedDate} onChange={setWantedDate} />
         </div>
+        {!order && <TextField label="Date de commande" type="date" value={orderDateYmd} onChange={setOrderDateYmd}
+          hint={orderDateYmd !== ymdL(new Date(bizNow())) ? `Commande et acompte rattachés au ${new Date(`${orderDateYmd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit' })} (saisie le week-end ou à une autre date).` : 'Aujourd’hui. Le samedi soir et le dimanche, le lundi est proposé automatiquement.'} />}
         {!order && (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>
             <strong className="small">Paiement déjà reçu (facultatif)</strong>
@@ -644,7 +655,7 @@ function OrderDetail({ id }: { id: string }) {
         <div className="row-between" style={{ alignItems: 'flex-start' }}>
           <div className="stack-s">
             <div className="row" style={{ gap: 8 }}><h1 style={{ fontSize: '1.6rem' }}>{o.number}</h1><OrderStatusBadge o={o} />{o.outsideHours && <Badge>Reçue hors heures</Badge>}</div>
-            <p className="muted">{o.internal ? `Vente interne — employé : ${o.employeeName || '?'} (prix de revient arrondi)` : CHANNELS[o.channel]} · {fmtDateTime(o.createdAt)}{o.createdByName ? ` · par ${o.createdByName}` : ''}</p>
+            <p className="muted">{o.internal ? `Vente interne — employé : ${o.employeeName || '?'} (prix de revient arrondi)` : CHANNELS[o.channel]} · {o.orderDate ? `commande du ${new Date(o.orderDate).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} (saisie ${fmtDateTime(o.createdAt)})` : fmtDateTime(o.createdAt)}{can('couriers.settle') && !isWalkIn(o) && o.status !== 'cancelled' ? <> · <button type="button" className="link-btn" style={{ padding: 0 }} onClick={() => setModal('orderdate')}>Changer la date de commande</button></> : null}{o.createdByName ? ` · par ${o.createdByName}` : ''}</p>
           </div>
           <div className="page-actions">
             <PrintButton docs={printDocs(o, company)} />
@@ -772,6 +783,7 @@ function OrderDetail({ id }: { id: string }) {
       {modal === 'return' && <ReturnModal order={o} onClose={() => setModal('')} />}
       {modal === 'choice' && <ChoiceModal order={o} onClose={() => setModal('')} />}
       {modal === 'undoreturn' && <UndoReturnModal order={o} onClose={() => setModal('')} />}
+      {modal === 'orderdate' && <OrderDateModal order={o} onClose={() => setModal('')} />}
       {modal === 'dlvexchange' && <DeliveryExchange order={o} onClose={() => setModal('')} />}
       {modal === 'settle' && courier && <SettleModal courier={courier} orders={[o]} onClose={() => setModal('')} />}
       {modal === 'redate' && <RedateModal order={o} onClose={() => setModal('')} />}
@@ -915,6 +927,66 @@ export function ReturnModal({ order: o, onClose }: { order: Order; onClose: () =
         {toSettle && <p className="small muted">Étape suivante : le règlement avec le livreur (onglet « À régler »), pour une ou plusieurs commandes à la fois.</p>}
       </div>
     </Modal>
+  );
+}
+
+/** Commandes saisies le samedi soir / dimanche encore rattachées à ce jour-là (avant la règle « lundi ») : à rattacher au lundi. */
+function weekendOrders(company: ReturnType<typeof useCompany>) {
+  const since = Date.now() - 45 * 864e5;
+  return all<Order>('orders').filter((o) => !isWalkIn(o) && !o.orderDate && o.status !== 'cancelled' && new Date(o.createdAt).getTime() > since)
+    .map((o) => ({ o, to: defaultOrderDate(new Date(o.createdAt), company) }))
+    .filter((x) => x.to.getTime() !== new Date(x.o.createdAt).getTime() && !closedBy(dayOfIso(x.o.createdAt)) && !closedBy(dayOfIso(x.to.toISOString())));
+}
+export function WeekendOrdersNotice() {
+  const can = useCan(); const company = useCompany(); const ords = useTable<Order>('orders'); const pays = useTable('payouts');
+  const [open, setOpen] = useState(false);
+  const list = useMemo(() => (can('couriers.settle') ? weekendOrders(company) : []), [ords, pays, company.weekendFrom, can('couriers.settle')]);
+  if (!list.length) return null;
+  return (<>
+    <div className="notice"><Icon name="clock" /><span style={{ flex: 1 }}><strong>{list.length} commande(s) saisie(s) le week-end</strong> (samedi à partir de {company.weekendFrom || '17:00'} ou dimanche) sont encore rattachées à ce jour-là.</span><Button variant="ghost" onClick={() => setOpen(true)}>Rattacher au lundi…</Button></div>
+    {open && <WeekendModal list={list} onClose={() => setOpen(false)} />}
+  </>);
+}
+function WeekendModal({ list, onClose }: { list: { o: Order; to: Date }[]; onClose: () => void }) {
+  const [off, setOff] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+  const sel = list.filter((x) => !off[x.o.id]);
+  const f = (d: Date | string) => new Date(d).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return (
+    <Modal wide title="Commandes saisies le week-end → lundi" onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!sel.length} onClick={async () => {
+        setBusy(true);
+        try { for (const x of sel) await setOrderDate(get<Order>('orders', x.o.id) ?? x.o, x.to.toISOString(), 'Commande saisie le week-end'); toast(`${sel.length} commande(s) rattachée(s) au lundi`); onClose(); }
+        catch (e: any) { toast(e.message, 'error'); }
+        setBusy(false);
+      }}>Rattacher {sel.length} commande(s) au lundi</Button></>}>
+      <div className="stack-s">
+        <p className="small">La commande et l’acompte payé à la boutique le jour de la saisie passent au lundi (nouvelle semaine). Décochez celles à garder telles quelles.</p>
+        <ul className="list">{list.map((x) => (
+          <li key={x.o.id} className="list-item"><label className="row" style={{ gap: 10, flexWrap: 'nowrap', flex: 1 }}>
+            <input type="checkbox" checked={!off[x.o.id]} onChange={(e) => setOff({ ...off, [x.o.id]: !e.target.checked })} />
+            <span><strong>{x.o.number}</strong> {orderLabel(x.o)}<span className="small muted" style={{ display: 'block' }}>saisie {f(x.o.createdAt)} → commande du {f(x.to).replace(/ \d\d:\d\d$/, '')} · {ORDER_STATUS[x.o.status].label}</span></span>
+          </label><strong className="num">{fmtAr(orderTotal(x.o))}</strong></li>
+        ))}</ul>
+      </div>
+    </Modal>
+  );
+}
+
+/** Changer la date de commande (rattachement à un autre jour, ex. commande du week-end → lundi). */
+function OrderDateModal({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const cur = new Date(orderDay(o));
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const [day, setDay] = useState(`${cur.getFullYear()}-${p2(cur.getMonth() + 1)}-${p2(cur.getDate())}`);
+  const [reason, setReason] = useState('Commande saisie le week-end');
+  return (
+    <Confirm title={`Date de commande — ${o.number}`} confirmLabel="Changer la date" onClose={onClose}
+      onConfirm={async () => { await setOrderDate(o, new Date(`${day}T08:00:00`).toISOString(), reason.trim() || undefined); toast('Date de commande changée'); }}
+      message={<div className="stack-s">
+        <p className="small">Saisie le {fmtDateTime(o.createdAt)}. La commande (listes, période, semaine) et l’acompte payé à la boutique le jour de la saisie seront rattachés à cette date. Impossible dans une semaine déjà versée.</p>
+        <TextField label="Date de commande" type="date" value={day} onChange={setDay} />
+        <TextField label="Motif" value={reason} onChange={setReason} />
+      </div>} />
   );
 }
 

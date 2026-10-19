@@ -26,6 +26,8 @@ export interface Company extends BaseRecord {
   boostDeadlines?: Record<string, string>;
   /** Jour fermé (dimanche) : le compte boost se fait le jour ouvert suivant, avant cette heure. */
   boostClosedNext?: string;
+  /** Commandes saisies le samedi à partir de cette heure (et tout le dimanche) : rattachées au lundi. */
+  weekendFrom?: string;
 }
 
 export const DEFAULT_COMPANY: Company = {

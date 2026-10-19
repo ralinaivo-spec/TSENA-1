@@ -86,7 +86,7 @@ export function situation(from: string, to: string, pages?: string[]) {
     const sh = orderShares(o);
     const val = Math.max(0, itemsValue(o));
     // 2. Annulé : commandes de la période qui ont été annulées
-    if (o.status === 'cancelled' && inRange(o.createdAt, from, to)) {
+    if (o.status === 'cancelled' && inRange(o.orderDate || o.createdAt, from, to)) {
       let mine = false;
       for (const [p, f] of sh) { if (!keep(p)) continue; mine = true; const r = row(p); r.cancelled += val * f; r.cancelledN++; }
       if (mine) uniq.cancelled.add(o.id);

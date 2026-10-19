@@ -56,6 +56,8 @@ export interface Order extends BaseRecord {
   exchangeRequest?: { at: string; by?: string; returns: Record<string, number>; childId: string; childNumber: string };
   /** Choix du client (articles partis « en choix ») indiqué par le vendeur avant le retour du livreur ; repris par le gérant au règlement. */
   choiceNote?: { at: string; by?: string; kept: Record<string, number>; note?: string };
+  /** Date de commande (rattachement) quand elle diffère de la saisie : commande saisie le week-end → lundi. */
+  orderDate?: string;
   channel: 'facebook' | 'phone' | 'shop' | 'other';
   customerId?: string;
   phone: string;
@@ -159,6 +161,33 @@ export async function restoreDefaultZones() {
 }
 export async function seedZones() {
   await applyRemote(DEFAULT_ZONES.map(([id, name, fee], i) => ({ tbl: 'zones', id, data: { id, name, fee, order: i, active: true, pickup: id === 'zone-retrait' || undefined, createdAt: SEED, updatedAt: SEED } as BaseRecord })));
+}
+
+// ---------- Date de commande ----------
+/** Date à laquelle la commande est rattachée (listes, semaine, acompte) : date de commande, sinon date de saisie. */
+export const orderDay = (o: Pick<Order, 'orderDate' | 'createdAt'>) => o.orderDate || o.createdAt;
+/** Date de commande proposée pour une saisie à `d` : samedi à partir de l'heure « week-end » ou dimanche → lundi 08:00. */
+export function defaultOrderDate(d: Date, c: Company): Date {
+  const from = c.weekendFrom || '17:00';
+  const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const add = d.getDay() === 0 ? 1 : d.getDay() === 6 && t >= from ? 2 : 0;
+  if (!add) return d;
+  const m = new Date(d); m.setDate(d.getDate() + add); m.setHours(8, 0, 0, 0); return m;
+}
+/** Change la date de commande (gérant) : refusée si l'ancienne ou la nouvelle date est dans une semaine déjà versée.
+ *  Les acomptes payés à la boutique avant la nouvelle date et datés de la saisie suivent la commande. */
+export async function setOrderDate(o: Order, iso: string, reason?: string) {
+  assertOpenAt(orderDay(o), 'Changement de date de commande');
+  assertOpenAt(iso, 'Date de commande');
+  const old = orderDay(o);
+  const moveAt = (p: Payment) => p.receivedBy === 'shop' && ymdOf(new Date(p.at)) === ymdOf(new Date(old)) && p.at < iso;
+  const payments = (o.payments || []).map((p) => (moveAt(p) ? { ...p, at: iso } : p));
+  for (const p of (o.payments || []).filter(moveAt)) assertOpenAt(p.at, 'Acompte');
+  const u = currentUser();
+  const f = (x: string) => new Date(x).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  const text = `Date de commande : ${f(old)} → ${f(iso)}${reason ? ` — ${reason}` : ''}`;
+  await save('orders', { id: o.id, orderDate: iso, payments, events: [...(o.events || []), { at: new Date().toISOString(), text, user: u?.fullName }] });
+  await audit('Date de commande changée', `${o.number} : ${text}`, 'orders', o.id);
 }
 
 // ---------- Horaires ----------
@@ -591,7 +620,7 @@ export function paymentDateError(o: Order, iso: string, oldIso?: string): string
   const t = new Date(iso);
   if (isNaN(t.getTime())) return 'Date invalide.';
   if (t.getTime() > Date.now() + 60_000) return 'La date du paiement ne peut pas être dans le futur.';
-  if (o.createdAt && iso.slice(0, 10) < ymdOf(new Date(o.createdAt))) return `Le paiement ne peut pas être avant la commande (${new Date(o.createdAt).toLocaleDateString('fr-FR')}).`;
+  if (o.createdAt && ymdOf(new Date(iso)) < ymdOf(new Date(o.createdAt < orderDay(o) ? o.createdAt : orderDay(o)))) return `Le paiement ne peut pas être avant la commande (${new Date(o.createdAt).toLocaleDateString('fr-FR')}).`;
   const courierFlow = !!o.courierId && !!o.dispatchedAt && !isPickupZone(o.zoneId) && !isWalkIn(o);
   if (courierFlow && o.courierSettledAt) return 'Le compte avec le livreur est déjà fait pour cette commande : la date ne peut plus changer.';
   const closedAt = o.returnedAt ?? o.statusDates?.delivered;

@@ -84,7 +84,7 @@ function ToDeliver() {
   const [confirm, setConfirm] = useState(false);
   const f = useDelivFilters('all');
   const scope = useMyScope();
-  const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId) && (!scope.strict || scope.mine(o)) && passes(o, f, o.createdAt));
+  const ready = orders.filter((o) => o.status === 'ready' && !isPickupZone(o.zoneId) && (!scope.strict || scope.mine(o)) && passes(o, f, o.orderDate || o.createdAt));
   const preparing = orders.filter((o) => ['new', 'confirmed'].includes(o.status) && o.channel !== 'shop').length;
   const groups = useMemo(() => {
     const m = new Map<string, Order[]>();

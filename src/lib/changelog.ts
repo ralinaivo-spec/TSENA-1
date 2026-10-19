@@ -3,6 +3,8 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Date de commande : une commande saisie le samedi à partir de 17:00 (réglable dans Paramètres → Société) ou le dimanche prend automatiquement le lundi comme date de commande, avec son acompte : elle compte dans la nouvelle semaine. Champ « Date de commande » dans la nouvelle commande (modifiable) ; dans la liste « commande du lun. 19/10 (saisie sam. 17/10 18:10) » ; « Changer la date de commande » sur la fiche (gérant, pas dans une semaine déjà versée).',
+    'Commandes : avertissement « N commande(s) saisie(s) le week-end » avec « Rattacher au lundi… » pour corriger d’un coup celles déjà enregistrées (cases à décocher si besoin).',
     'Paiements : « Date réelle du paiement » dans « Paiement reçu » et « Corriger un paiement ». La caisse du jour, le récapitulatif et le versement de la semaine suivent cette date. Refusée si elle est dans le futur, avant la commande ou dans une semaine déjà versée ; pour une livraison, modifiable tant que le compte avec le livreur n’est pas fait (il peut livrer et encaisser plus tard), verrouillée ensuite ; sans livreur, pas après la remise de la commande. Le changement reste visible sous le paiement.',
     'Retour du livreur avec acompte : un montant noté d’avance comme « encaissé par le livreur » (ex. le reste prévu) n’est plus additionné. Au retour il est remplacé par ce que le livreur a réellement encaissé, proposé automatiquement = total après le choix du client − acompte payé à la boutique (ex. 45 000 − 40 000 = 5 000). Plus de faux « trop perçu » ni de faux reste chez le livreur.',
   ] },

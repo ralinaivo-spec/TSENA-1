@@ -204,7 +204,7 @@ export function dayReview(ymd: string, pages?: string[]) {
   const pend = out.filter((o) => choiceBlocking(o));
   if (out.length) warnings.push(`${out.length} livraison(s) encore chez les livreurs (pas encore confirmées livrées ou refusées) : leurs retours éventuels ne sont pas encore déduits.`);
   if (pend.length) warnings.push(`${pend.length} livraison(s) avec un « choix à préciser » : le choix gardé par le client n’est pas encore compté.`);
-  const ready = orders.filter((o) => (o.status === 'confirmed' || o.status === 'ready') && dayOf(o.createdAt) <= ymd);
+  const ready = orders.filter((o) => (o.status === 'confirmed' || o.status === 'ready') && dayOf(o.orderDate || o.createdAt) <= ymd);
   if (ready.length) warnings.push(`${ready.length} commande(s) confirmée(s) ou prête(s) pas encore remise(s) au livreur : elles ne sont pas dans les ventes du jour.`);
   if (list.some((r) => r.pages.includes('Sans page'))) warnings.push('Des ventes concernent un article sans page (catégorie) : elles sont comptées dans « Sans page ».');
   const zero = list.filter((r) => r.kind !== 'return' && r.amount <= 0);

@@ -229,7 +229,7 @@ export function allDeltas(): { r: BoostReading; messages: number; spend: number;
 
 /** Commandes en ligne créées ce jour-là contenant au moins un article de la page. */
 export function ordersOn(pageId: string, date: string) {
-  return all<Order>('orders').filter((o) => !isWalkIn(o) && o.status !== 'cancelled' && dayOf(o.createdAt) === date && o.lines.some((l) => variantPage(l.variantId) === pageId)).length;
+  return all<Order>('orders').filter((o) => !isWalkIn(o) && o.status !== 'cancelled' && dayOf(o.orderDate || o.createdAt) === date && o.lines.some((l) => variantPage(l.variantId) === pageId)).length;
 }
 
 export interface DayStats { date: string; theo: number; real?: number; gap?: number; spend: number; orders: number; perBoost: Map<string, number>; spendPerBoost: Map<string, number>; starts: Set<string>; missing: number; entered: boolean }

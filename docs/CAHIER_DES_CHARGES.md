@@ -736,3 +736,10 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Commande sans livreur (vente en boutique, retrait) : pas après la remise de la commande.
 - Historique sous le paiement et journal : « date JJ/MM HH:MM → JJ/MM HH:MM », nom et motif.
 
+### Date de commande (commandes du week-end) *(ajout du 19/10/2026)*
+- Chaque commande a une **date de saisie** (inchangée) et une **date de commande** (rattachement). Par défaut, la date de commande = jour de saisie, sauf saisie le **samedi à partir de 17:00** (Paramètres → Société, « samedi à partir de ») ou le **dimanche** : elle devient le **lundi** suivant (08:00).
+- Champ « Date de commande » dans la nouvelle commande (modifiable). L'acompte saisi avec la commande prend cette date.
+- La date de commande sert aux listes et à la période des commandes, à la « Situation » (annulées), au compte des commandes des boosts, aux avertissements du récapitulatif. Les ventes en livraison restent comptées au départ du colis (inchangé).
+- Liste : « commande du lun. 19/10 (saisie sam. 17/10 18:10) ». Fiche : « Changer la date de commande » (gérant) ; refusé si l'ancienne ou la nouvelle date est dans une semaine déjà versée ; l'acompte payé à la boutique le jour de la saisie suit ; historique et journal.
+- Commandes existantes : avertissement « N commande(s) saisie(s) le week-end » (45 derniers jours, semaines non versées) → « Rattacher au lundi… » avec cases à cocher.
+

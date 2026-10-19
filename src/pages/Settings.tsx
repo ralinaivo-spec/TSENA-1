@@ -112,6 +112,8 @@ function CompanyTab() {
           );
         })}
       </div>
+      <TextField label="Commandes du week-end rattachées au lundi : samedi à partir de" type="time" value={form.weekendFrom || '17:00'} onChange={(v) => setForm({ ...form, weekendFrom: v || undefined })}
+        hint="Une commande saisie le samedi à partir de cette heure, ou le dimanche, prend le lundi comme date de commande (modifiable dans la commande)." />
       <div className="card stack" style={{ background: 'var(--surface-2)' }}>
         <div><h3>Compte boost : heure limite</h3><Help>Les boosts tournent tous les jours : le compte boost doit être fait chaque jour, dimanche compris, avant cette heure (le jour même). Après, le responsable reçoit une alerte et le gérant et le super-admin sont prévenus. Vide = heure de fermeture.</Help></div>
         {[1, 2, 3, 4, 5, 6, 0].map((d) => {
