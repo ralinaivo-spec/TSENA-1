@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Caisse du jour : un seul bouton « Envoyer par WhatsApp » (WhatsApp s’ouvre avec le récapitulatif, on choisit le contact ou le groupe) au lieu de « WhatsApp au gérant » / « WhatsApp au patron » ; « Copier » reste disponible.',
     'Date de commande : en semaine aussi, une commande saisie à partir de 17:30 (lundi → vendredi) prend le jour de travail suivant ; samedi à partir de 17:00 et dimanche → lundi (heures dans Paramètres → Société). « Paiement reçu » propose la date de commande quand elle n’est pas encore arrivée. L’avertissement « saisie(s) après la fermeture » permet de rattacher d’un coup les commandes déjà enregistrées.',
     'Échange pendant la livraison : les frais de livraison restent ceux de la commande (4 000 Ar), ils ne sont plus ajoutés une deuxième fois. Les commandes déjà fusionnées avec des frais en double (ex. 8 000 au lieu de 4 000) sont corrigées automatiquement, tant que le compte avec le livreur n’est pas fait.',
     'Échange pendant la livraison : plus de deuxième commande « ECH ». La commande d’origine est modifiée (même numéro) : l’article rendu revient tout de suite en stock (le livreur le rapporte en prenant le nouveau), le nouvel article passe chez le livreur, le montant, l’acompte et le compte du livreur suivent ; historique « Échange : … → … ». Les échanges déjà faits en deux commandes : avertissement « Fusionner » dans Commandes.',

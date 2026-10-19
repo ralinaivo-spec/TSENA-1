@@ -207,17 +207,12 @@ function Review({ date, r, text, canExp }: { date: string; r: ReturnType<typeof 
         {ok && <p className="small pos"><strong>✓ Vérification confirmée.</strong> Vous pouvez envoyer le récapitulatif.</p>}
         <div className={`row ${ok ? '' : 'is-locked'}`} aria-disabled={!ok}>
           {ok ? <>
-            <a className="btn btn-primary btn-wa" href={wa(company.managerPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('gérant')}><Icon name="share" />WhatsApp au gérant</a>
-            <a className="btn btn-primary btn-wa" href={wa(company.bossPhone, text)} target="_blank" rel="noreferrer" onClick={() => sent('patron')}><Icon name="share" />WhatsApp au patron</a>
-            <a className="btn btn-ghost" href={wa('', text)} target="_blank" rel="noreferrer" onClick={() => sent('autre contact ou groupe')}>Autre contact ou groupe</a>
+            <a className="btn btn-primary btn-wa" href={wa('', text)} target="_blank" rel="noreferrer" onClick={() => sent('WhatsApp')}><Icon name="share" />Envoyer par WhatsApp</a>
             <Button variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(text); sent('copie'); toast('Récapitulatif copié'); } catch { toast('Copie impossible sur cet appareil', 'error'); } }}>Copier</Button>
-          </> : <>
-            <Button icon="share" disabled>WhatsApp au gérant</Button>
-            <Button icon="share" disabled>WhatsApp au patron</Button>
-          </>}
+          </> : <Button icon="share" disabled>Envoyer par WhatsApp</Button>}
         </div>
         {!ok && <p className="small muted">L’envoi s’active une fois les cases cochées et la vérification confirmée.</p>}
-        <p className="small muted">{company.managerPhone ? `Gérant : ${fmtPhone(company.managerPhone)}` : 'Gérant : numéro non renseigné'} · {company.bossPhone ? `Patron : ${fmtPhone(company.bossPhone)}` : 'Patron : numéro non renseigné'}</p>
+        <p className="small muted">WhatsApp s’ouvre avec le message : choisissez le contact ou le groupe.</p>
         <details><summary className="small">Voir le message qui sera envoyé</summary><pre className="recap-text">{text}</pre></details>
       </div>
     </>

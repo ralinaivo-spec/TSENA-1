@@ -750,3 +750,6 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Anciens échanges en deux commandes (origine en livraison + ECH pas terminée) : avertissement dans Commandes, bouton « Fusionner » (même traitement).
 - Échange après une livraison terminée ou refusée : reste une commande échange à part (livraison nouvelle).
 
+### Envoi du récapitulatif *(modification du 19/10/2026)*
+- Caisse du jour, « 3. Vérifier puis envoyer » : **un seul bouton « Envoyer par WhatsApp »** (message prêt, choix du contact ou du groupe dans WhatsApp) + « Copier ». Plus de boutons séparés gérant / patron.
+

@@ -40,8 +40,8 @@ await p.locator('.sidebar .recap-shortcut').click(); await p.waitForTimeout(1200
 for (const c of await p.locator('.review-check input').all()) await c.check();
 await p.getByRole('button', { name: 'Confirmer la vérification' }).click(); await p.waitForTimeout(300);
 await ctx.route('https://wa.me/**', (r) => r.fulfill({ body: 'ok' }));
-{ const href = await p.getByRole('link', { name: /WhatsApp au gérant/ }).getAttribute('href'); const msg = decodeURIComponent(href.split('text=')[1]); console.log(msg); ok(msg.includes('TOTAL DES VENTES') && !msg.includes('DÉPENSES') && !msg.includes('NET'), 'message vendeur : ventes seulement'); }
-const [pop] = await Promise.all([ctx.waitForEvent('page'), p.getByRole('link', { name: /WhatsApp au gérant/ }).click()]);
+{ const href = await p.getByRole('link', { name: /Envoyer par WhatsApp/ }).getAttribute('href'); const msg = decodeURIComponent(href.split('text=')[1]); console.log(msg); ok(msg.includes('TOTAL DES VENTES') && !msg.includes('DÉPENSES') && !msg.includes('NET'), 'message vendeur : ventes seulement'); }
+const [pop] = await Promise.all([ctx.waitForEvent('page'), p.getByRole('link', { name: /Envoyer par WhatsApp/ }).click()]);
 await pop.close(); await p.waitForTimeout(500);
 ok((await p.locator('.daycash-send').innerText()).includes('déjà envoyé'), 'mention « déjà envoyé » après l’envoi');
 ok(await p.locator('.sidebar .recap-shortcut.is-sent').count() === 1, 'raccourci passe à « Récap envoyé »');
