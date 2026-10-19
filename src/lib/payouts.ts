@@ -13,6 +13,7 @@ import { addDays, dayOf, type AccountId, type CashMove, type FinanceCategory } f
 import { variantLabel, type Category, type Product, type Variant } from './catalog';
 import { choiceBlocking, orderLabel, type Order } from './orders';
 import { allDeltas } from './boosts';
+import { orderShares } from './situation';
 import { payoutId, type Payout } from './closed';
 import { DEFAULT_COMPANY, type Company } from './settings';
 
@@ -148,15 +149,28 @@ export function dayRecap(ymd: string, only?: { pages: string[]; userName?: strin
     if (set && !set.has(rootOf(l.categoryId) || '')) continue;
     if (l.channel === 'shop') { shop += l.amount; shopN.add(l.order.id); } else { online += l.amount; onlineN.add(l.order.id); }
   }
+  // Mobile Money reçu ce jour-là (MVola, Orange Money, Airtel Money), d'après la date du paiement.
+  // Vendeur limité à ses pages : part de ses pages dans chaque commande.
+  const mobile = { mvola: 0, orange: 0, airtel: 0, total: 0, count: 0 };
+  for (const o of all<Order>('orders')) {
+    if (o.deleted) continue;
+    const pays = (o.payments || []).filter((p) => p.method !== 'cash' && p.at && dayOf(p.at) === ymd);
+    if (!pays.length) continue;
+    let f = 1;
+    if (set) { f = 0; for (const [pg, x] of orderShares(o)) if (set.has(pg)) f += x; }
+    if (f <= 0) continue;
+    for (const p of pays) { const v = p.amount * f; mobile[p.method as 'mvola' | 'orange' | 'airtel'] += v; mobile.total += v; }
+    mobile.count++;
+  }
   const pages = g.pages.filter((p) => g.pageTotals[p.id] && (!set || set.has(p.id))).sort((a, b) => (g.pageTotals[b.id] ?? 0) - (g.pageTotals[a.id] ?? 0));
   if (set) {
     // Vendeur limité à ses pages : seulement ses pages et les dépenses qu'il a saisies lui-même.
     const expenseMoves = g.expenseMoves.filter((m) => m.userName && m.userName === only!.userName);
     const sales = pages.reduce((t, p) => t + (g.pageTotals[p.id] ?? 0), 0);
     const expenses = expenseMoves.reduce((t, m) => t - m.amount, 0);
-    return { g: { ...g, expenseMoves }, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, sales, expenses, net: sales - expenses, mine: true };
+    return { g: { ...g, expenseMoves }, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, mobile, sales, expenses, net: sales - expenses, mine: true };
   }
-  return { g, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, sales: g.salesTotal, expenses: g.expensesTotal, net: g.rest, mine: false };
+  return { g, pages, shop, online, shopCount: shopN.size, onlineCount: onlineN.size, mobile, sales: g.salesTotal, expenses: g.expensesTotal, net: g.rest, mine: false };
 }
 const ar = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} Ar`;
 export function dayRecapText(ymd: string, companyName: string, sender?: string, only?: { pages: string[]; userName?: string }, withExpenses = true) {

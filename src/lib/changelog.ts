@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-19', items: [
+    'Caisse du jour : nouvelle carte « Mobile Money reçu » (total du jour, avec le détail MVola / Orange / Airtel), visible aussi par les vendeurs (leurs pages seulement).',
     'Articles « au choix » : dès que le vendeur indique le choix du client, les articles gardés comptent dans les ventes du jour (Caisse du jour, récap WhatsApp, récapitulatifs, situation) sans attendre le retour du livreur ; au retour, seule une différence éventuelle est corrigée, jamais compté deux fois.',
     'Récap WhatsApp du soir : en tête, encadré et en gras, 💰 TOTAL DES VENTES, 🏪 VENTES SUR PLACE et 🚚 VENTES EN LIVRAISON (avec le nombre) ; pour le gérant aussi 🧾 DÉPENSES et ✅ MONTANT NET.',
     'Caisse du jour : en haut, le total des ventes, les ventes sur place et les ventes en livraison (avec le nombre), pour les vendeurs comme pour le gérant.',

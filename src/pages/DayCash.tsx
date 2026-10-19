@@ -57,6 +57,8 @@ export function DayCashPage() {
         <div className="card stat stat-strong"><span className="small muted">{r.mine ? 'Ventes de mes pages' : 'Total des ventes (tous les vendeurs)'}</span><strong className="stat-value num">{fmtAr(r.sales)}</strong></div>
         <div className="card stat"><span className="small muted">Ventes sur place ({r.shopCount})</span><strong className="stat-value num">{fmtAr(r.shop)}</strong></div>
         <div className="card stat"><span className="small muted">Ventes en livraison ({r.onlineCount})</span><strong className="stat-value num">{fmtAr(r.online)}</strong></div>
+        <div className="card stat"><span className="small muted">Mobile Money reçu ({r.mobile.count})</span><strong className="stat-value num">{fmtAr(r.mobile.total)}</strong>
+          <span className="small muted">MVola {fmtAr(r.mobile.mvola)} · Orange {fmtAr(r.mobile.orange)} · Airtel {fmtAr(r.mobile.airtel)}</span></div>
         {canExp && <div className="card stat"><span className="small muted">{r.mine ? 'Mes dépenses (caisse commune)' : 'Dépenses de la caisse commune'}</span><strong className={`stat-value num ${r.expenses ? 'neg' : ''}`}>{fmtAr(r.expenses)}</strong></div>}
         {canExp && <div className="card stat"><span className="small muted">Montant net du jour</span><strong className="stat-value num">{fmtAr(r.net)}</strong></div>}
       </div>
