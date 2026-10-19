@@ -28,6 +28,8 @@ export interface Company extends BaseRecord {
   boostClosedNext?: string;
   /** Commandes saisies le samedi à partir de cette heure (et tout le dimanche) : rattachées au lundi. */
   weekendFrom?: string;
+  /** Lundi → vendredi : commandes saisies à partir de cette heure rattachées au jour suivant. */
+  weekdayFrom?: string;
 }
 
 export const DEFAULT_COMPANY: Company = {

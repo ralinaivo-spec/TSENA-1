@@ -443,7 +443,7 @@ export function OrderForm({ order, exchangeOf, onClose, onSaved, prefill: pre }:
           <TextField label="Date de livraison souhaitée" type="date" value={wantedDate} onChange={setWantedDate} />
         </div>
         {!order && <TextField label="Date de commande" type="date" value={orderDateYmd} onChange={setOrderDateYmd}
-          hint={orderDateYmd !== ymdL(new Date(bizNow())) ? `Commande et acompte rattachés au ${new Date(`${orderDateYmd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit' })} (saisie le week-end ou à une autre date).` : 'Aujourd’hui. Le samedi soir et le dimanche, le lundi est proposé automatiquement.'} />}
+          hint={orderDateYmd !== ymdL(new Date(bizNow())) ? `Commande et acompte rattachés au ${new Date(`${orderDateYmd}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit' })} (saisie après la fermeture ou à une autre date).` : 'Aujourd’hui. Après la fermeture (17:30 en semaine, 17:00 le samedi, dimanche), le jour de travail suivant est proposé automatiquement.'} />}
         {!order && (
           <div className="card stack" style={{ background: 'var(--surface-2)' }}>
             <strong className="small">Paiement déjà reçu (facultatif)</strong>
@@ -962,7 +962,7 @@ export function WeekendOrdersNotice() {
   const list = useMemo(() => (can('couriers.settle') ? weekendOrders(company) : []), [ords, pays, company.weekendFrom, can('couriers.settle')]);
   if (!list.length) return null;
   return (<>
-    <div className="notice"><Icon name="clock" /><span style={{ flex: 1 }}><strong>{list.length} commande(s) saisie(s) le week-end</strong> (samedi à partir de {company.weekendFrom || '17:00'} ou dimanche) sont encore rattachées à ce jour-là.</span><Button variant="ghost" onClick={() => setOpen(true)}>Rattacher au lundi…</Button></div>
+    <div className="notice"><Icon name="clock" /><span style={{ flex: 1 }}><strong>{list.length} commande(s) saisie(s) après la fermeture</strong> (lun.–ven. à partir de {company.weekdayFrom || '17:30'}, samedi à partir de {company.weekendFrom || '17:00'}, dimanche) sont encore rattachées au jour de saisie.</span><Button variant="ghost" onClick={() => setOpen(true)}>Rattacher au jour suivant…</Button></div>
     {open && <WeekendModal list={list} onClose={() => setOpen(false)} />}
   </>);
 }
@@ -972,15 +972,15 @@ function WeekendModal({ list, onClose }: { list: { o: Order; to: Date }[]; onClo
   const sel = list.filter((x) => !off[x.o.id]);
   const f = (d: Date | string) => new Date(d).toLocaleString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   return (
-    <Modal wide title="Commandes saisies le week-end → lundi" onClose={onClose}
+    <Modal wide title="Commandes saisies après la fermeture → jour de travail suivant" onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!sel.length} onClick={async () => {
         setBusy(true);
-        try { for (const x of sel) await setOrderDate(get<Order>('orders', x.o.id) ?? x.o, x.to.toISOString(), 'Commande saisie le week-end'); toast(`${sel.length} commande(s) rattachée(s) au lundi`); onClose(); }
+        try { for (const x of sel) await setOrderDate(get<Order>('orders', x.o.id) ?? x.o, x.to.toISOString(), 'Commande saisie après la fermeture'); toast(`${sel.length} commande(s) rattachée(s) au jour de travail suivant`); onClose(); }
         catch (e: any) { toast(e.message, 'error'); }
         setBusy(false);
-      }}>Rattacher {sel.length} commande(s) au lundi</Button></>}>
+      }}>Rattacher {sel.length} commande(s)</Button></>}>
       <div className="stack-s">
-        <p className="small">La commande et l’acompte payé à la boutique le jour de la saisie passent au lundi (nouvelle semaine). Décochez celles à garder telles quelles.</p>
+        <p className="small">La commande et l’acompte payé à la boutique le jour de la saisie passent au jour de travail suivant (le lundi pour le week-end : nouvelle semaine). Décochez celles à garder telles quelles.</p>
         <ul className="list">{list.map((x) => (
           <li key={x.o.id} className="list-item"><label className="row" style={{ gap: 10, flexWrap: 'nowrap', flex: 1 }}>
             <input type="checkbox" checked={!off[x.o.id]} onChange={(e) => setOff({ ...off, [x.o.id]: !e.target.checked })} />
@@ -1111,7 +1111,8 @@ function PayModal({ order: o, onClose }: { order: Order; onClose: () => void }) 
   const due = Math.abs(remaining(o));
   const [lines, setLines] = useState<PayLine[]>([{ method: refund ? 'cash' : 'mvola', amount: String(due), ref: '' }]);
   const [by, setBy] = useState<'shop' | 'courier'>('shop');
-  const [when, setWhen] = useState(() => toLocalInput(new Date().toISOString()));
+  // Commande rattachée à un jour qui n'est pas encore arrivé (saisie après la fermeture) : l'acompte prend cette date.
+  const [when, setWhen] = useState(() => toLocalInput(o.orderDate && o.orderDate > new Date().toISOString() ? o.orderDate : new Date().toISOString()));
   const at = fromLocalInput(when);
   const dateErr = at ? paymentDateError(o, at) : 'Date à saisir.';
   const sum = payLinesSum(lines);

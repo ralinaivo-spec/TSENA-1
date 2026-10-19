@@ -737,11 +737,11 @@ Rapports → **Récap global** (remplace « Récapitulatif mensuel » ; l'ancien
 - Historique sous le paiement et journal : « date JJ/MM HH:MM → JJ/MM HH:MM », nom et motif.
 
 ### Date de commande (commandes du week-end) *(ajout du 19/10/2026)*
-- Chaque commande a une **date de saisie** (inchangée) et une **date de commande** (rattachement). Par défaut, la date de commande = jour de saisie, sauf saisie le **samedi à partir de 17:00** (Paramètres → Société, « samedi à partir de ») ou le **dimanche** : elle devient le **lundi** suivant (08:00).
+- Chaque commande a une **date de saisie** (inchangée) et une **date de commande** (rattachement). Par défaut, la date de commande = jour de saisie, sauf saisie **après la fermeture** (Paramètres → Société) : **lundi → vendredi à partir de 17:30** → jour suivant ; **samedi à partir de 17:00** ou **dimanche** → **lundi** (08:00). « Paiement reçu » propose la date de commande si elle n'est pas encore arrivée (paiement accepté jusqu'à cette date).
 - Champ « Date de commande » dans la nouvelle commande (modifiable). L'acompte saisi avec la commande prend cette date.
 - La date de commande sert aux listes et à la période des commandes, à la « Situation » (annulées), au compte des commandes des boosts, aux avertissements du récapitulatif. Les ventes en livraison restent comptées au départ du colis (inchangé).
 - Liste : « commande du lun. 19/10 (saisie sam. 17/10 18:10) ». Fiche : « Changer la date de commande » (gérant) ; refusé si l'ancienne ou la nouvelle date est dans une semaine déjà versée ; l'acompte payé à la boutique le jour de la saisie suit ; historique et journal.
-- Commandes existantes : avertissement « N commande(s) saisie(s) le week-end » (45 derniers jours, semaines non versées) → « Rattacher au lundi… » avec cases à cocher.
+- Commandes existantes : avertissement « N commande(s) saisie(s) après la fermeture » (45 derniers jours, semaines non versées) → « Rattacher au jour suivant… » avec cases à cocher.
 
 ### Échange pendant la livraison = une seule commande *(modification du 19/10/2026)*
 - « Le client veut échanger » (commande en livraison) : 1. ce que le client rend ; 2. ce qu'il prend à la place (formulaire, livreur et lieu repris, frais en plus 0 par défaut). À l'enregistrement, **la commande d'origine est modifiée** (même numéro) : lignes rendues retirées, nouvelles lignes ajoutées ; la commande échange temporaire est fusionnée puis supprimée.

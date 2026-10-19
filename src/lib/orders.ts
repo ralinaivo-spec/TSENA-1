@@ -170,11 +170,13 @@ export async function seedZones() {
 // ---------- Date de commande ----------
 /** Date à laquelle la commande est rattachée (listes, semaine, acompte) : date de commande, sinon date de saisie. */
 export const orderDay = (o: Pick<Order, 'orderDate' | 'createdAt'>) => o.orderDate || o.createdAt;
-/** Date de commande proposée pour une saisie à `d` : samedi à partir de l'heure « week-end » ou dimanche → lundi 08:00. */
+/** Date de commande proposée pour une saisie à `d` (après la fermeture → jour de travail suivant, 08:00) :
+ *  lundi → vendredi à partir de 17:30 → lendemain ; samedi à partir de 17:00 et dimanche → lundi. */
 export function defaultOrderDate(d: Date, c: Company): Date {
-  const from = c.weekendFrom || '17:00';
+  const sat = c.weekendFrom || '17:00', wk = c.weekdayFrom || '17:30';
   const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  const add = d.getDay() === 0 ? 1 : d.getDay() === 6 && t >= from ? 2 : 0;
+  const day = d.getDay();
+  const add = day === 0 ? 1 : day === 6 ? (t >= sat ? 2 : 0) : t >= wk ? 1 : 0;
   if (!add) return d;
   const m = new Date(d); m.setDate(d.getDate() + add); m.setHours(8, 0, 0, 0); return m;
 }
@@ -680,7 +682,7 @@ export async function cancelOrder(o: Order, reason: string, atGiven?: string) {
 export function paymentDateError(o: Order, iso: string, oldIso?: string): string {
   const t = new Date(iso);
   if (isNaN(t.getTime())) return 'Date invalide.';
-  if (t.getTime() > Date.now() + 60_000) return 'La date du paiement ne peut pas être dans le futur.';
+  if (t.getTime() > Math.max(Date.now(), o.orderDate ? new Date(o.orderDate).getTime() : 0) + 60_000) return 'La date du paiement ne peut pas être dans le futur (au plus tard la date de commande).';
   if (o.createdAt && ymdOf(new Date(iso)) < ymdOf(new Date(o.createdAt < orderDay(o) ? o.createdAt : orderDay(o)))) return `Le paiement ne peut pas être avant la commande (${new Date(o.createdAt).toLocaleDateString('fr-FR')}).`;
   const courierFlow = !!o.courierId && !!o.dispatchedAt && !isPickupZone(o.zoneId) && !isWalkIn(o);
   if (courierFlow && o.courierSettledAt) return 'Le compte avec le livreur est déjà fait pour cette commande : la date ne peut plus changer.';
