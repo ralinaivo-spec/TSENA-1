@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Historique des impressions envoyées aux postes : bouton « Réessayer » (ticket en attente ou en erreur, relancé tout de suite) et « Réimprimer » (ticket déjà sorti) ; le poste dont l’imprimante est à reconnecter est signalé dans la liste.',
     'Poste d’impression : les tickets en attente repartent tout seuls dès que l’imprimante du poste fonctionne (nouvel essai toutes les 20 s, ou dès une impression réussie sur le poste).',
     'Fenêtre « Imprimer » : les tickets déjà en attente sur le poste choisi sont affichés (avec « Ce document est déjà en attente ») et peuvent être annulés ; alerte si un ticket envoyé est encore en attente après 25 s ; corbeille pour annuler un ticket en attente ou effacer une erreur dans l’historique, et bouton pour tout effacer.',
     'Poste d’impression partagé : si son imprimante est « déconnectée » sur le poste, les tickets ne partent plus en erreur. Ils attendent, le poste affiche « Reconnecter l’imprimante » (un clic les fait sortir) et les autres appareils voient « imprimante à reconnecter sur le poste ». Faire d’un appareil le poste reconnecte aussi son imprimante.',

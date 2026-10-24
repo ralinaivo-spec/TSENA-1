@@ -38,7 +38,7 @@ export interface Printer {
   btSpeed?: BtSpeed;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string; /** L'imprimante du poste attend un clic « Reconnecter » sur le poste. */ alert?: string | null }
-export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
+export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; retryAt?: string; byName?: string; printedAt?: string; error?: string }
 
 /** Choix toujours disponibles, sans réglage. */
 export const SYSTEM_PRINTER: Printer = { id: '@system', name: 'Fenêtre d’impression de l’appareil', kind: 'system', paper: '58', charset: 'cp850', logo: true, cut: false };
@@ -96,6 +96,14 @@ async function clearStationAlert(printerId: string) {
   bumpRetry();
 }
 /** Retire des tickets envoyés à un poste (doublons, tickets qui ne sont plus utiles). */
+/** Relance un ticket en attente ou en erreur sur son poste (le poste réessaie tout de suite). */
+export async function retryJob(j: PrintJob) {
+  await save('printJobs', { id: j.id, status: 'pending', error: null as unknown as undefined, retryAt: nowIso() });
+  sentJobs.set(j.id, get<PrintStation>('printStations', j.stationId)?.name ?? 'poste'); warned.delete(j.id);
+  syncNow();
+}
+/** Réimprime un ticket déjà sorti : nouvel envoi du même document au même poste. */
+export async function reprintJob(j: PrintJob) { return printTo('station:' + j.stationId, j.doc, j.copies || 1); }
 export async function cancelJobs(ids: string[]) { for (const id of ids) await remove('printJobs', id); syncNow(); }
 
 /** Déconnecte l'imprimante de cet appareil sans la supprimer (pour l'associer à un autre appareil). */
@@ -182,11 +190,11 @@ export function usePrintStationWorker() {
   }, [mine?.stationId]);
   useEffect(() => {
     if (!mine) return;
-    const todo = jobs.filter((j) => j.stationId === mine.stationId && j.status === 'pending' && Date.now() - new Date(j.createdAt).getTime() < 24 * 3600_000 && !busy.has(j.id));
+    const todo = jobs.filter((j) => j.stationId === mine.stationId && j.status === 'pending' && Date.now() - new Date(j.createdAt).getTime() < 24 * 3600_000 && !busy.has(jobKey(j)));
     if (!todo.length) return;
     (async () => {
       for (const j of todo.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
-        busy.add(j.id);
+        busy.add(jobKey(j));
         const p = findPrinter(mine.printerId);
         try {
           if (!p) throw new Error('Imprimante du poste introuvable');
@@ -197,7 +205,7 @@ export function usePrintStationWorker() {
           if (needsTap(e)) {
             // Le navigateur exige un clic pour se reconnecter (après réouverture du logiciel, imprimante éteinte…) :
             // le ticket reste en attente et un bandeau « Reconnecter l'imprimante » s'affiche sur le poste.
-            busy.delete(j.id);
+            busy.delete(jobKey(j));
             await setMeta('stationNeedsTap', msg);
             await save('printStations', { id: mine.stationId, alert: msg });
             break;
@@ -211,6 +219,7 @@ export function usePrintStationWorker() {
   }, [jobs, mine?.stationId, retry]);
 }
 const busy = new Set<string>();
+const jobKey = (j: PrintJob) => `${j.id}|${j.retryAt ?? ''}`;
 /** Erreurs qui demandent seulement de recliquer (le navigateur veut un geste de l'utilisateur pour se reconnecter). */
 const needsTap = (e: any) => ['PrinterPaused', 'SecurityError', 'NotFoundError', 'NotAllowedError', 'NetworkError', 'InvalidStateError'].includes(e?.name) || /gesture|geste|user activation|disconnected|GATT|open|appair/i.test(e?.message ?? '');
 

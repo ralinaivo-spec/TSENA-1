@@ -5,7 +5,7 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, retryJob, reprintJob, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type BtSpeed, type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
@@ -134,6 +134,7 @@ export function PrintersTab() {
                 <div className="list-item-main">
                   <span className="list-item-title">{s.name}{s.id === mine?.stationId ? ' (cet appareil)' : ''}</span>
                   <p className="small muted">{s.printerName || '—'} · {isOnline(s) ? 'en ligne' : `vu ${timeAgo(s.lastSeen)}`}</p>
+                  {s.alert && <p className="small" style={{ margin: 0 }}><Badge tone="warn">Imprimante à reconnecter</Badge> Sur l’appareil « {s.name} », cliquez « Reconnecter l’imprimante » (bandeau en haut de l’écran) : les tickets en attente sortiront.</p>}
                 </div>
                 {can('settings.company') && s.id !== mine?.stationId && <IconButton icon="trash" label="Retirer" onClick={() => setDelStation(s)} />}
               </li>
@@ -148,6 +149,9 @@ export function PrintersTab() {
                 <li key={j.id} className="list-item">
                   <div className="list-item-main"><span className="list-item-title">{j.doc?.title}</span><p className="small muted">{fmtDateTime(j.createdAt)} · {j.byName || ''} → {stations.find((s) => s.id === j.stationId)?.name || 'poste retiré'}{j.error ? ` · ${j.error}` : ''}</p></div>
                   <Badge tone={j.status === 'done' ? 'ok' : j.status === 'error' ? 'danger' : 'warn'}>{j.status === 'done' ? 'Imprimé' : j.status === 'error' ? 'Erreur' : 'En attente'}</Badge>
+                  {j.status !== 'done'
+                    ? <Button variant="ghost" className="btn-sm" icon="refresh" onClick={async () => { await retryJob(j); toast('Ticket relancé sur le poste'); }}>Réessayer</Button>
+                    : <Button variant="ghost" className="btn-sm" icon="printer" onClick={async () => { try { toast(await reprintJob(j)); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } }}>Réimprimer</Button>}
                   {j.status !== 'done' && <IconButton icon="trash" label={j.status === 'pending' ? 'Annuler ce ticket (il ne sortira pas)' : 'Effacer'} onClick={async () => { await cancelJobs([j.id]); toast(j.status === 'pending' ? 'Ticket annulé : il ne sortira pas' : 'Effacé'); }} />}
                 </li>
               ))}
