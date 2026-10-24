@@ -7,11 +7,11 @@ import { getCloud, syncNow } from '../sync';
 import { DEFAULT_COMPANY, type Company } from '../settings';
 import { colsOf, type Paper, type PrintDoc } from './doc';
 import { charsetProbe, encodeDoc, type Charset } from './escpos';
-import { shareImage, systemPrint, writeRaw } from './devices';
+import { disconnectRaw, shareImage, systemPrint, writeRaw } from './devices';
 
 export * from './doc';
 export { CHARSETS, type Charset } from './escpos';
-export { support, pairBluetooth, pairUsb, pairSerial, docHtml } from './devices';
+export { support, pairBluetooth, pairUsb, pairSerial, docHtml, btConnected } from './devices';
 
 export type PrinterKind = 'system' | 'bluetooth' | 'usb' | 'serial';
 export const KINDS: Record<PrinterKind, string> = {
@@ -31,6 +31,8 @@ export interface Printer {
   ref?: string;        // identifiant de l'appareil appairé
   deviceName?: string; // nom donné par l'imprimante
   baud?: number;
+  /** Déconnectée volontairement (libérée pour un autre appareil) : rien n'est envoyé tant qu'on ne la reconnecte pas. */
+  paused?: boolean;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string }
 export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
@@ -56,7 +58,7 @@ export function useTargets(): Target[] {
   const printers = usePrinters();
   const stations = useTable<PrintStation>('printStations');
   const myStation = useMeta<{ stationId: string } | null>('myStation', null);
-  const t: Target[] = printers.map((p) => ({ id: p.id, label: p.name, detail: `${KINDS[p.kind]} · ${p.paper === 'a4' ? 'A4' : p.paper + ' mm'}`, kind: 'printer' }));
+  const t: Target[] = printers.map((p) => ({ id: p.id, label: p.name, detail: `${KINDS[p.kind]} · ${p.paper === 'a4' ? 'A4' : p.paper + ' mm'}${p.paused ? ' · déconnectée de cet appareil' : ''}`, kind: 'printer' }));
   for (const s of stations) {
     if (s.id === myStation?.stationId) continue;
     const online = !!s.lastSeen && Date.now() - new Date(s.lastSeen).getTime() < 3 * 60_000;
@@ -75,8 +77,23 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   const logo = p.logo ? company().logo ?? '' : null; // null : pas de logo sur cette imprimante
   if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies);
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
+  if (p.paused) throw new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`);
   const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
   await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName);
+}
+
+/** Déconnecte l'imprimante de cet appareil sans la supprimer (pour l'associer à un autre appareil). */
+export async function disconnectPrinter(p: Printer) {
+  if (p.kind !== 'system' && p.ref) await disconnectRaw(p.kind, p.ref);
+  await savePrinter({ ...p, paused: true });
+  const mine = getMeta<{ stationId: string; printerId: string } | null>('myStation', null);
+  if (mine?.printerId === p.id) await stopStation(); // un autre appareil va devenir le poste
+}
+/** Reconnecte l'imprimante (à appeler depuis un clic). */
+export async function reconnectPrinter(p: Printer) {
+  const q = { ...p, paused: false };
+  if (q.kind !== 'system' && q.ref) await writeRaw(q.kind, q.ref, new Uint8Array([0x1b, 0x40]), q.baud, q.deviceName);
+  await savePrinter(q);
 }
 
 /** Imprime le ticket « Test des accents » pour trouver le bon jeu de caractères. */

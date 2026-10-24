@@ -113,6 +113,28 @@ async function writeSerial(ref: string, data: Uint8Array, baud: number) {
   try { await w.write(data); } finally { w.releaseLock(); }
 }
 
+/** Libère l'imprimante (sans l'oublier) : une imprimante Bluetooth ne se connecte qu'à un appareil à la fois,
+ *  il faut la libérer ici pour l'associer à un autre téléphone ou ordinateur. */
+export async function disconnectRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string) {
+  if (kind === 'bluetooth') {
+    for (const [k, dev] of [...btDevices]) {
+      if (k !== ref && dev?.id !== ref) continue;
+      try { if (dev.gatt?.connected) dev.gatt.disconnect(); } catch { /* déjà libérée */ }
+      try { await dev.forget?.(); } catch { /* non disponible */ }
+      btDevices.delete(k);
+    }
+    btChars.delete(ref);
+    return;
+  }
+  if (kind === 'usb') {
+    for (const d of (await nav.usb?.getDevices?.()) ?? []) if (usbRef(d) === ref && d.opened) { try { await d.close(); } catch { /* */ } }
+    return;
+  }
+  for (const port of (await nav.serial?.getPorts?.()) ?? []) { if (port.writable || port.readable) { try { await port.close(); } catch { /* */ } } }
+}
+/** L'imprimante est-elle connectée en ce moment (Bluetooth) ? */
+export const btConnected = (ref: string) => { const d = btDevices.get(ref); return !!d?.gatt?.connected; };
+
 export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number, name?: string) {
   if (kind === 'bluetooth') return writeBluetooth(ref, data, name);
   if (kind === 'usb') return writeUsb(ref, data);

@@ -5,7 +5,7 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
@@ -58,6 +58,7 @@ export function PrintersTab() {
   const auto = useMeta<boolean>('printAutoTicket', false);
   const [edit, setEdit] = useState<Printer | 'new' | null>(null);
   const [del, setDel] = useState<Printer | null>(null);
+  const [disc, setDisc] = useState<Printer | null>(null);
   const [station, setStation] = useState(false);
   const [delStation, setDelStation] = useState<PrintStation | null>(null);
   const myStation = stations.find((s) => s.id === mine?.stationId);
@@ -89,9 +90,15 @@ export function PrintersTab() {
                 <div className="list-item-main">
                   <span className="list-item-title">{p.name} {def === p.id && <Badge tone="brand">Par défaut</Badge>}</span>
                   <p className="small muted">{KINDS[p.kind]} · {PAPERS[p.paper]}{p.deviceName ? ` · ${p.deviceName}` : ''}{p.kind !== 'system' && !p.ref ? ' · pas encore appairée' : ''}</p>
+                  {p.kind !== 'system' && p.ref && (p.paused
+                    ? <p className="small" style={{ margin: 0 }}><Badge tone="neutral">Déconnectée</Badge> <span className="muted">Libérée : un autre appareil peut s’y associer (ex. pour devenir le poste d’impression).</span></p>
+                    : <p className="small" style={{ margin: 0 }}><Badge tone="ok">Associée à cet appareil</Badge></p>)}
                 </div>
-                <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
-                  <Button variant="ghost" onClick={() => test(p)}>Test</Button>
+                <div className="row" style={{ gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {p.kind !== 'system' && p.ref && (p.paused
+                    ? <Button variant="ghost" icon="refresh" onClick={async () => { try { await reconnectPrinter(p); toast(`« ${p.name} » reconnectée à cet appareil`); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(`Reconnexion impossible : ${e?.message ?? e}. Vérifiez qu’elle est allumée et libérée sur l’autre appareil.`, 'error'); } }}>Reconnecter</Button>
+                    : <Button variant="ghost" onClick={() => setDisc(p)}>Déconnecter</Button>)}
+                  {!p.paused && <Button variant="ghost" onClick={() => test(p)}>Test</Button>}
                   {def !== p.id && <Button variant="quiet" className="hide-sm" onClick={() => setMeta('printDefault', p.id)}>Par défaut</Button>}
                   <IconButton icon="edit" label="Modifier" onClick={() => setEdit(p)} />
                   <IconButton icon="trash" label="Supprimer" onClick={() => setDel(p)} />
@@ -110,7 +117,7 @@ export function PrintersTab() {
 
       <div className="card stack">
         <div><h2>Poste d’impression partagé</h2>
-          <Help>Comme une imprimante en réseau : l’appareil relié à l’imprimante (ex. l’ordinateur de la caisse) devient « poste d’impression », et <strong>tous les autres appareils</strong> (téléphones, iPhone, tablettes, autres ordinateurs) y impriment en choisissant son nom dans « Imprimer ». Les tickets passent par le cloud : le poste doit rester allumé, connecté à Internet, avec Trésor en ligne ouvert (dans Chrome). Celui qui envoie est prévenu quand le ticket est sorti. Conseil : sur le poste, reliez l’imprimante en <strong>USB</strong> ou en <strong>Bluetooth appairé (port série)</strong> : elle se reconnecte toute seule à la réouverture ; en Bluetooth direct, un bandeau demande un clic sur « Reconnecter » après chaque réouverture.</Help></div>
+          <Help>Comme une imprimante en réseau : <strong>n’importe quel appareil</strong> relié à l’imprimante (l’ordinateur de la caisse, ou un <strong>téléphone Android</strong> avec Chrome ; pas un iPhone, qui ne permet pas le Bluetooth direct) devient « poste d’impression », et <strong>tous les autres appareils</strong> (téléphones, iPhone, tablettes, autres ordinateurs) y impriment en choisissant son nom dans « Imprimer ». Les tickets passent par le cloud : le poste doit rester allumé, connecté à Internet, avec Trésor en ligne ouvert (dans Chrome). Celui qui envoie est prévenu quand le ticket est sorti. Conseil : sur le poste, reliez l’imprimante en <strong>USB</strong> ou en <strong>Bluetooth appairé (port série)</strong> : elle se reconnecte toute seule à la réouverture ; en Bluetooth direct, un bandeau demande un clic sur « Reconnecter » après chaque réouverture. Pour changer d’appareil poste : « Déconnecter » l’imprimante ici, puis l’associer sur l’autre appareil.</Help></div>
         {!getCloud() && <div className="notice"><Icon name="cloudOff" /><span>Reliez d’abord le cloud (onglet « Cloud et synchronisation ») pour utiliser un poste partagé.</span></div>}
         {myStation ? (
           <div className="notice notice-ok"><Icon name="check" /><span><strong>Cet appareil est le poste « {myStation.name} ».</strong> Il imprime sur « {myStation.printerName} » les tickets envoyés par les autres. <button className="link-btn" onClick={() => setStation(true)}>Modifier</button> · <button className="link-btn" onClick={async () => { await stopStation(); toast('Cet appareil n’est plus un poste d’impression'); }}>Arrêter</button></span></div>
@@ -153,6 +160,7 @@ export function PrintersTab() {
       </div>
 
       {edit && <PrinterForm printer={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
+      {disc && <Confirm title="Déconnecter cette imprimante ?" confirmLabel="Déconnecter" message={<div className="stack-s"><p style={{ margin: 0 }}>« {disc.name} » sera libérée de cet appareil <strong>sans être supprimée</strong> : ses réglages restent, et « Reconnecter » la reprend en un clic.</p><p className="small muted" style={{ margin: 0 }}>Une imprimante Bluetooth ne se connecte qu’à un seul appareil à la fois : une fois libérée, associez-la sur le téléphone ou l’ordinateur qui doit devenir le poste d’impression.</p>{mine?.printerId === disc.id && <p className="small" style={{ margin: 0 }}><strong>Cet appareil est le poste d’impression : il arrêtera de l’être.</strong></p>}</div>} onConfirm={async () => { await disconnectPrinter(disc); toast(`« ${disc.name} » déconnectée : vous pouvez l’associer à un autre appareil`); }} onClose={() => setDisc(null)} />}
       {del && <Confirm title="Supprimer cette imprimante ?" message={`« ${del.name} » sera retirée de cet appareil.`} confirmLabel="Supprimer" danger onConfirm={async () => { await deletePrinter(del.id); if (mine?.printerId === del.id) await stopStation(); toast('Imprimante supprimée'); }} onClose={() => setDel(null)} />}
       {station && <StationForm current={myStation} printers={printers} onClose={() => setStation(false)} />}
       {delStation && <Confirm title="Retirer ce poste ?" message={`Les autres appareils ne pourront plus envoyer de tickets à « ${delStation.name} ».`} confirmLabel="Retirer" danger onConfirm={async () => { await remove('printStations', delStation.id); toast('Poste retiré'); }} onClose={() => setDelStation(null)} />}
