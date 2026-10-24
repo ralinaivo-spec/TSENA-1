@@ -37,7 +37,7 @@ export interface Printer {
   /** Taille des paquets Bluetooth (par défaut : sûr, 20 octets). */
   btSpeed?: BtSpeed;
 }
-export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string }
+export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string; /** L'imprimante du poste attend un clic « Reconnecter » sur le poste. */ alert?: string | null }
 export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
 
 /** Choix toujours disponibles, sans réglage. */
@@ -65,7 +65,7 @@ export function useTargets(): Target[] {
   for (const s of stations) {
     if (s.id === myStation?.stationId) continue;
     const online = !!s.lastSeen && Date.now() - new Date(s.lastSeen).getTime() < 3 * 60_000;
-    t.push({ id: 'station:' + s.id, label: s.name, detail: `Poste d’impression partagé${s.printerName ? ' · ' + s.printerName : ''}${online ? '' : ' · hors ligne'}`, kind: 'station', online });
+    t.push({ id: 'station:' + s.id, label: s.name, detail: `Poste d’impression partagé${s.printerName ? ' · ' + s.printerName : ''}${online ? '' : ' · hors ligne'}${s.alert ? ' · imprimante à reconnecter sur le poste' : ''}`, kind: 'station', online: online && !s.alert });
   }
   t.push({ id: SYSTEM_PRINTER.id, label: SYSTEM_PRINTER.name, detail: 'AirPrint, imprimantes installées sur l’ordinateur, PDF…', kind: 'printer' });
   t.push({ id: SHARE_TARGET, label: 'Partager en image', detail: 'WhatsApp, Messenger, enregistrer dans les photos…', kind: 'share' });
@@ -80,7 +80,7 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   const logo = p.logo ? company().logo ?? '' : null; // null : pas de logo sur cette imprimante
   if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies);
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
-  if (p.paused) throw new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`);
+  if (p.paused) throw Object.assign(new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`), { name: 'PrinterPaused' });
   const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
   await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName, p.btSpeed);
 }
@@ -117,7 +117,7 @@ export async function printTo(targetId: string, doc: PrintDoc, copies = 1): Prom
     const [job] = await save('printJobs', { stationId, doc, copies, status: 'pending', byName: currentUser()?.fullName, fromDevice: getMeta('deviceId', '') });
     sentJobs.set(job.id, st?.name ?? 'poste');
     syncNow();
-    return `Envoyé à « ${st?.name ?? 'poste'} » : impression dans quelques secondes`;
+    return st?.alert ? `Envoyé à « ${st.name} » : le ticket attend qu’on clique « Reconnecter l’imprimante » sur ce poste` : `Envoyé à « ${st?.name ?? 'poste'} » : impression dans quelques secondes`;
   }
   const p = findPrinter(targetId);
   if (!p) throw new Error('Imprimante introuvable sur cet appareil.');
@@ -138,8 +138,12 @@ export function defaultTarget(): string {
 export async function makeStation(name: string, printerId: string) {
   const p = findPrinter(printerId);
   const prev = getMeta<{ stationId: string } | null>('myStation', null);
-  const [st] = await save('printStations', { id: prev?.stationId || newId(), name, printerName: p?.name, paper: p?.paper, lastSeen: nowIso(), deviceId: getMeta('deviceId', '') });
+  // Imprimante « déconnectée » sur cet appareil : le poste la reprend (appelé depuis un clic).
+  let alert: string | null = null;
+  if (p && p.paused) { try { await reconnectPrinter(p); } catch (e: any) { await savePrinter({ ...p, paused: false }); alert = e?.message ?? 'à reconnecter'; } }
+  const [st] = await save('printStations', { id: prev?.stationId || newId(), name, printerName: p?.name, paper: p?.paper, lastSeen: nowIso(), deviceId: getMeta('deviceId', ''), alert });
   await setMeta('myStation', { stationId: st.id, printerId });
+  await setMeta('stationNeedsTap', alert);
 }
 export async function stopStation() {
   const mine = getMeta<{ stationId: string } | null>('myStation', null);
@@ -181,6 +185,7 @@ export function usePrintStationWorker() {
             // le ticket reste en attente et un bandeau « Reconnecter l'imprimante » s'affiche sur le poste.
             busy.delete(j.id);
             await setMeta('stationNeedsTap', msg);
+            await save('printStations', { id: mine.stationId, alert: msg });
             break;
           }
           await save('printJobs', { id: j.id, status: 'error', error: msg });
@@ -193,21 +198,23 @@ export function usePrintStationWorker() {
 }
 const busy = new Set<string>();
 /** Erreurs qui demandent seulement de recliquer (le navigateur veut un geste de l'utilisateur pour se reconnecter). */
-const needsTap = (e: any) => ['SecurityError', 'NotFoundError', 'NotAllowedError', 'NetworkError', 'InvalidStateError'].includes(e?.name) || /gesture|geste|user activation|disconnected|GATT|open|appair/i.test(e?.message ?? '');
+const needsTap = (e: any) => ['PrinterPaused', 'SecurityError', 'NotFoundError', 'NotAllowedError', 'NetworkError', 'InvalidStateError'].includes(e?.name) || /gesture|geste|user activation|disconnected|GATT|open|appair/i.test(e?.message ?? '');
 
 /** Bandeau sur le poste d'impression quand l'imprimante doit être reconnectée d'un clic. */
 export function useStationReconnect() {
   const need = useMeta<string | null>('stationNeedsTap', null);
   const mine = useMeta<{ stationId: string; printerId: string } | null>('myStation', null);
   const pending = useTable<PrintJob>('printJobs').filter((j) => j.stationId === mine?.stationId && j.status === 'pending').length;
+  const paused = !!mine && !!usePrinters().find((p) => p.id === mine.printerId)?.paused;
   return {
-    need: !!mine && !!need, pending, message: need,
+    need: !!mine && (!!need || paused), pending, message: need,
     /** À appeler depuis un clic : reconnecte l'imprimante puis relance les tickets en attente. */
     async reconnect() {
       const p = mine && findPrinter(mine.printerId);
       if (!p) throw new Error('Imprimante du poste introuvable');
-      if (p.kind !== 'system' && p.ref) await writeRaw(p.kind, p.ref, new Uint8Array([0x1b, 0x40]), p.baud, p.deviceName, p.btSpeed);
+      await reconnectPrinter(p); // reprend aussi une imprimante « déconnectée » sur cet appareil
       await setMeta('stationNeedsTap', null);
+      if (mine) await save('printStations', { id: mine.stationId, alert: null });
       bumpRetry();
     },
   };

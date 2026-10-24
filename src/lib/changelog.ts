@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Poste d’impression partagé : si son imprimante est « déconnectée » sur le poste, les tickets ne partent plus en erreur. Ils attendent, le poste affiche « Reconnecter l’imprimante » (un clic les fait sortir) et les autres appareils voient « imprimante à reconnecter sur le poste ». Faire d’un appareil le poste reconnecte aussi son imprimante.',
     'Imprimantes Bluetooth « classiques » (ex. JK-301PL, invisibles dans « Chercher l’imprimante ») : explications pour les appairer dans les réglages Bluetooth du téléphone Android puis les choisir en « Port série / Bluetooth appairé ».',
     'Correction : ticket coupé au milieu en Bluetooth sur téléphone Android. L’envoi se fait maintenant en petits paquets confirmés, renvoyés automatiquement en cas de raté ; réglage « Envoi Bluetooth » (Normal conseillé) dans la fiche de l’imprimante.',
     'Imprimantes : bouton « Déconnecter » pour libérer l’imprimante de cet appareil sans la supprimer (pour l’associer au téléphone ou à l’ordinateur qui devient le poste d’impression), puis « Reconnecter » en un clic.',
