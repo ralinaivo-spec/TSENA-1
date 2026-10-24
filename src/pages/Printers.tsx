@@ -13,6 +13,8 @@ import { Icon } from '../ui/icons';
 
 const ua = navigator.userAgent;
 const isMac = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua);
+const isAndroid = /Android/.test(ua);
+const where = isMac ? 'du Mac (Réglages Système → Bluetooth)' : isAndroid ? 'du téléphone (Paramètres → Bluetooth)' : 'de l’ordinateur';
 const directOk = support.bluetooth || support.usb || support.serial;
 const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|CriOS|FxiOS|Firefox/.test(ua);
 
@@ -35,7 +37,7 @@ function TicketPrinterGuide({ open }: { open: boolean }) {
         <ol className="guide-steps">
           <li><strong>Allumez l’imprimante</strong> (papier en place) et ouvrez le logiciel dans <strong>Chrome</strong> ou <strong>Edge</strong>.</li>
           <li><strong>Ajouter une imprimante</strong> → Branchement <strong>« Bluetooth (direct) »</strong> → <strong>Chercher l’imprimante</strong> → choisissez son nom (ex. <em>KPrinter_6193</em>) → Associer.</li>
-          <li>Si son nom n’apparaît pas dans la liste : {isMac ? <>ouvrez <strong>Réglages Système → Bluetooth</strong> sur le Mac, appairez <em>KPrinter_…</em> (code souvent <strong>0000</strong> ou <strong>1234</strong>), </> : <>appairez-la d’abord dans les réglages Bluetooth de l’ordinateur (code souvent <strong>0000</strong> ou <strong>1234</strong>), </>}puis choisissez le branchement <strong>« Port série / Bluetooth appairé »</strong> et sélectionnez <em>KPrinter_…</em>.</li>
+          <li>Si son nom n’apparaît pas dans la liste (imprimantes Bluetooth « classiques », ex. <em>JK-301PL</em>) : appairez-la d’abord dans les réglages Bluetooth {where} (code souvent <strong>0000</strong> ou <strong>1234</strong>), puis choisissez le branchement <strong>« Port série / Bluetooth appairé »</strong> et sélectionnez <em>KPrinter_…</em>.</li>
           <li>Avec le câble USB : branchement <strong>« USB (direct) »</strong> → choisissez <em>POS-58</em> / <em>Printer POS-58</em>.</li>
           <li>Papier <strong>58 mm</strong>, puis <strong>Test des accents</strong> : un petit ticket sort avec des lignes A, B, C, D. Choisissez dans « Jeu de caractères » la lettre dont la ligne <em>é è à ç</em> est bien écrite.</li>
           <li>Enregistrez, mettez-la <strong>« Par défaut »</strong>. Ensuite, le bouton <strong>Imprimer</strong> (ticket de caisse, ticket client, bon de livraison, étiquette) l’utilise directement. Après chaque réouverture du logiciel, la première impression peut demander de recliquer sur l’imprimante dans la liste (sécurité du navigateur).</li>
@@ -210,7 +212,7 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
                 <span className="choice-text"><strong>{KINDS[k]}</strong><span className="small muted">{{
                   bluetooth: available(k) ? 'Android (Chrome), ordinateur (Chrome/Edge). Allumez l’imprimante avant de chercher.' : 'Pas disponible sur ce navigateur (iPhone/Safari, Firefox).',
                   usb: available(k) ? 'Ordinateur avec Chrome ou Edge, imprimante branchée par câble.' : 'Pas disponible sur ce navigateur.',
-                  serial: available(k) ? 'Ordinateur : imprimante Bluetooth appairée dans Windows/macOS, ou câble USB-série.' : 'Pas disponible sur ce navigateur.',
+                  serial: available(k) ? 'Imprimante Bluetooth « classique » (ex. JK-301PL) déjà appairée dans les réglages Bluetooth du téléphone Android ou de l’ordinateur, ou câble USB-série.' : (isAndroid ? 'Pas disponible : mettez à jour Google Chrome sur ce téléphone (Play Store), puis rouvrez le logiciel.' : 'Pas disponible sur ce navigateur.'),
                   system: 'Tous les appareils : la fenêtre d’impression s’ouvre, vous y choisissez l’imprimante.',
                 }[k]}</span></span>
               </label>
@@ -223,8 +225,8 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
             {p.ref ? <Badge tone="ok">Appairée : {p.deviceName}</Badge> : <span className="small muted">Une liste des appareils proches va s’ouvrir.</span>}
           </div>
         )}
-        {p.kind === 'bluetooth' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Le nom de l’imprimante n’apparaît pas ? Elle utilise peut-être le Bluetooth « classique » : appairez-la dans les réglages Bluetooth {isMac ? 'du Mac' : 'de l’ordinateur'}, puis choisissez « Port série / Bluetooth appairé ».</p>}
-        {p.kind === 'serial' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Appairez d’abord l’imprimante dans les réglages Bluetooth {isMac ? 'du Mac (Réglages Système → Bluetooth)' : 'de l’ordinateur'}, puis cherchez-la ici : elle apparaît sous son nom (ex. « KPrinter_6193 » ou « cu.KPrinter_6193 »).</p>}
+        {p.kind === 'bluetooth' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Le nom de l’imprimante n’apparaît pas dans la liste ? Elle utilise le Bluetooth « classique » (ex. JK-301PL) : appairez-la dans les réglages Bluetooth {where}, puis choisissez ci-dessus « Port série / Bluetooth appairé ».</p>}
+        {p.kind === 'serial' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Appairez d’abord l’imprimante dans les réglages Bluetooth {where}, puis cliquez sur « Chercher l’imprimante » : elle apparaît sous son nom (ex. « KPrinter_… »).</p>}
         <div className="grid-2">
           <SelectField label="Papier" value={p.paper} onChange={(v) => set({ paper: v as Paper })} options={(Object.keys(PAPERS) as Paper[]).filter((k) => direct ? k !== 'a4' : true).map((k) => ({ value: k, label: PAPERS[k] }))} />
           {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).map((k) => ({ value: k, label: CHARSETS[k] }))} />}
