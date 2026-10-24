@@ -3,6 +3,8 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Poste d’impression : les tickets en attente repartent tout seuls dès que l’imprimante du poste fonctionne (nouvel essai toutes les 20 s, ou dès une impression réussie sur le poste).',
+    'Fenêtre « Imprimer » : les tickets déjà en attente sur le poste choisi sont affichés (avec « Ce document est déjà en attente ») et peuvent être annulés ; alerte si un ticket envoyé est encore en attente après 25 s ; corbeille pour annuler un ticket en attente ou effacer une erreur dans l’historique, et bouton pour tout effacer.',
     'Poste d’impression partagé : si son imprimante est « déconnectée » sur le poste, les tickets ne partent plus en erreur. Ils attendent, le poste affiche « Reconnecter l’imprimante » (un clic les fait sortir) et les autres appareils voient « imprimante à reconnecter sur le poste ». Faire d’un appareil le poste reconnecte aussi son imprimante.',
     'Imprimantes Bluetooth « classiques » (ex. JK-301PL, invisibles dans « Chercher l’imprimante ») : explications pour les appairer dans les réglages Bluetooth du téléphone Android puis les choisir en « Port série / Bluetooth appairé ».',
     'Correction : ticket coupé au milieu en Bluetooth sur téléphone Android. L’envoi se fait maintenant en petits paquets confirmés, renvoyés automatiquement en cas de raté ; réglage « Envoi Bluetooth » (Normal conseillé) dans la fiche de l’imprimante.',

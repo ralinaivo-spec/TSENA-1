@@ -61,11 +61,12 @@ export function useTargets(): Target[] {
   const printers = usePrinters();
   const stations = useTable<PrintStation>('printStations');
   const myStation = useMeta<{ stationId: string } | null>('myStation', null);
+  const jobs = useTable<PrintJob>('printJobs');
   const t: Target[] = printers.map((p) => ({ id: p.id, label: p.name, detail: `${KINDS[p.kind]} · ${p.paper === 'a4' ? 'A4' : p.paper + ' mm'}${p.paused ? ' · déconnectée de cet appareil' : ''}`, kind: 'printer' }));
   for (const s of stations) {
     if (s.id === myStation?.stationId) continue;
     const online = !!s.lastSeen && Date.now() - new Date(s.lastSeen).getTime() < 3 * 60_000;
-    t.push({ id: 'station:' + s.id, label: s.name, detail: `Poste d’impression partagé${s.printerName ? ' · ' + s.printerName : ''}${online ? '' : ' · hors ligne'}${s.alert ? ' · imprimante à reconnecter sur le poste' : ''}`, kind: 'station', online: online && !s.alert });
+    t.push({ id: 'station:' + s.id, label: s.name, detail: `Poste d’impression partagé${s.printerName ? ' · ' + s.printerName : ''}${online ? '' : ' · hors ligne'}${s.alert ? ' · imprimante à reconnecter sur le poste' : ''}${(() => { const n = jobs.filter((j) => j.stationId === s.id && j.status === 'pending').length; return n ? ` · ${n} en attente` : ''; })()}`, kind: 'station', online: online && !s.alert });
   }
   t.push({ id: SYSTEM_PRINTER.id, label: SYSTEM_PRINTER.name, detail: 'AirPrint, imprimantes installées sur l’ordinateur, PDF…', kind: 'printer' });
   t.push({ id: SHARE_TARGET, label: 'Partager en image', detail: 'WhatsApp, Messenger, enregistrer dans les photos…', kind: 'share' });
@@ -83,7 +84,19 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   if (p.paused) throw Object.assign(new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`), { name: 'PrinterPaused' });
   const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
   await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName, p.btSpeed);
+  void clearStationAlert(p.id); // l'imprimante répond : le poste peut reprendre les tickets en attente
 }
+
+/** L'imprimante du poste fonctionne de nouveau : on retire l'alerte et on relance les tickets en attente. */
+async function clearStationAlert(printerId: string) {
+  const mine = getMeta<{ stationId: string; printerId: string } | null>('myStation', null);
+  if (!mine || mine.printerId !== printerId) return;
+  if (getMeta<string | null>('stationNeedsTap', null)) await setMeta('stationNeedsTap', null);
+  if (get<PrintStation>('printStations', mine.stationId)?.alert) await save('printStations', { id: mine.stationId, alert: null });
+  bumpRetry();
+}
+/** Retire des tickets envoyés à un poste (doublons, tickets qui ne sont plus utiles). */
+export async function cancelJobs(ids: string[]) { for (const id of ids) await remove('printJobs', id); syncNow(); }
 
 /** Déconnecte l'imprimante de cet appareil sans la supprimer (pour l'associer à un autre appareil). */
 export async function disconnectPrinter(p: Printer) {
@@ -97,6 +110,7 @@ export async function reconnectPrinter(p: Printer) {
   const q = { ...p, paused: false };
   if (q.kind !== 'system' && q.ref) await writeRaw(q.kind, q.ref, new Uint8Array([0x1b, 0x40]), q.baud, q.deviceName, q.btSpeed);
   await savePrinter(q);
+  await clearStationAlert(q.id);
 }
 
 /** Imprime le ticket « Test des accents » pour trouver le bon jeu de caractères. */
@@ -163,7 +177,8 @@ export function usePrintStationWorker() {
     beat();
     const b = setInterval(beat, 60_000);
     const s = setInterval(() => syncNow(), 5_000); // récupère vite les impressions demandées
-    return () => { clearInterval(b); clearInterval(s); };
+    const r = setInterval(() => bumpRetry(), 20_000); // réessaie seul les tickets en attente (imprimante rallumée…)
+    return () => { clearInterval(b); clearInterval(s); clearInterval(r); };
   }, [mine?.stationId]);
   useEffect(() => {
     if (!mine) return;
@@ -171,7 +186,6 @@ export function usePrintStationWorker() {
     if (!todo.length) return;
     (async () => {
       for (const j of todo.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
-        if (getMeta<string | null>('stationNeedsTap', null)) break; // imprimante à reconnecter : on attend un clic
         busy.add(j.id);
         const p = findPrinter(mine.printerId);
         try {
@@ -229,10 +243,26 @@ export function useSentJobsWatcher(notify: (text: string, kind: 'ok' | 'error') 
   useEffect(() => {
     for (const j of jobs) {
       const name = sentJobs.get(j.id);
-      if (!name || j.status === 'pending') continue;
+      if (!name) continue;
+      if (j.status === 'pending') continue;
       sentJobs.delete(j.id);
       if (j.status === 'done') notify(`Ticket imprimé sur « ${name} »`, 'ok');
       else notify(`Le poste « ${name} » n’a pas pu imprimer : ${j.error ?? 'erreur'}`, 'error');
     }
   }, [jobs]);
+  // Toujours en attente après 25 s : on prévient (poste fermé, imprimante à reconnecter…).
+  useEffect(() => {
+    const t = setInterval(() => {
+      for (const [id, name] of sentJobs) {
+        const j = get<PrintJob>('printJobs', id);
+        if (!j) { sentJobs.delete(id); continue; }
+        if (j.status !== 'pending' || warned.has(id) || Date.now() - new Date(j.createdAt).getTime() < 25_000) continue;
+        warned.add(id);
+        const st = get<PrintStation>('printStations', j.stationId);
+        notify(`« ${j.doc?.title ?? 'Ticket'} » toujours en attente sur « ${name} »${st?.alert ? ' : il faut cliquer « Reconnecter l’imprimante » sur ce poste' : ' : le poste est-il allumé avec Trésor en ligne ouvert ?'}`, 'error');
+      }
+    }, 5_000);
+    return () => clearInterval(t);
+  }, []);
 }
+const warned = new Set<string>();

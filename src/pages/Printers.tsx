@@ -5,7 +5,7 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type BtSpeed, type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
@@ -148,9 +148,13 @@ export function PrintersTab() {
                 <li key={j.id} className="list-item">
                   <div className="list-item-main"><span className="list-item-title">{j.doc?.title}</span><p className="small muted">{fmtDateTime(j.createdAt)} · {j.byName || ''} → {stations.find((s) => s.id === j.stationId)?.name || 'poste retiré'}{j.error ? ` · ${j.error}` : ''}</p></div>
                   <Badge tone={j.status === 'done' ? 'ok' : j.status === 'error' ? 'danger' : 'warn'}>{j.status === 'done' ? 'Imprimé' : j.status === 'error' ? 'Erreur' : 'En attente'}</Badge>
+                  {j.status !== 'done' && <IconButton icon="trash" label={j.status === 'pending' ? 'Annuler ce ticket (il ne sortira pas)' : 'Effacer'} onClick={async () => { await cancelJobs([j.id]); toast(j.status === 'pending' ? 'Ticket annulé : il ne sortira pas' : 'Effacé'); }} />}
                 </li>
               ))}
             </ul>
+            {(() => { const stuck = jobs.filter((j) => j.status !== 'done'); return stuck.length > 0 && (
+              <Button variant="ghost" icon="trash" onClick={async () => { await cancelJobs(stuck.map((j) => j.id)); toast(`${stuck.length} ticket(s) en attente ou en erreur effacé(s)`); }}>Effacer les tickets en attente et en erreur ({stuck.length})</Button>
+            ); })()}
           </details>
         )}
       </div>
