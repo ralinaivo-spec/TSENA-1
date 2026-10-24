@@ -30,7 +30,7 @@ export function PrintDialog({ docs, onClose }: { docs: DocChoice[]; onClose: () 
   async function go() {
     setBusy(true);
     try { const msg = await printTo(target, doc, copies); toast(msg, msg.includes('attend') ? 'error' : 'ok', msg.includes('attend') ? { sticky: true } : { ms: 10000 }); onClose(); }
-    catch (e: any) { if (e?.name !== 'NotFoundError' && e?.name !== 'AbortError') toast(e?.message ?? String(e), 'error', { sticky: true }); }
+    catch (e: any) { if (e?.name !== 'NotFoundError' && e?.name !== 'AbortError') toast(e?.message ?? String(e), 'error', { sticky: true, action: { label: 'Réglages imprimante', run: () => navigate('/parametres/imprimantes') } }); }
     finally { setBusy(false); }
   }
 

@@ -3,6 +3,11 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Poste d’impression sur téléphone Android : l’écran reste allumé tant que le logiciel est ouvert (écran éteint = téléphone endormi = Bluetooth coupé), la liaison avec l’imprimante est entretenue toutes les 25 s et se reconnecte toute seule si elle tombe, connexion dès l’ouverture (sans attendre un ticket) ; liste des réglages Android à faire une fois (batterie de Chrome « Non restreinte », chargeur, câble USB OTG…).',
+    'Impression plus rapide, sans perte de qualité : le poste reçoit les tickets en 1 à 2 secondes (petite vérification toutes les 2 s au lieu d’une synchronisation toutes les 5 s) et l’envoi Bluetooth est 5 à 10 fois plus rapide (paquets rythmés sans attente de confirmation ; mode « Très sûr » disponible) ; logo converti une seule fois.',
+    'Coupure passagère sur le poste : le ticket n’est plus mis en erreur, il repart tout seul quelques secondes plus tard (erreur seulement après 6 essais).',
+    'Paramètres → Imprimantes : état réel de la liaison en direct, vert « Connectée » / « Prête » ou rouge « Non connectée » avec un bouton « Se reconnecter maintenant ».',
+    'Notification d’erreur d’impression : lien « Voir l’historique et réimprimer » qui ouvre directement l’historique des impressions.',
     'Tickets : 2 cm d’espace blanc en bas pour déchirer sans couper le texte (réglable de 1 à 3 cm dans la fiche de l’imprimante).',
     'Tickets plus compacts (moins de papier) : « A ENCAISSER », « TOTAL » et le nom / téléphone du client en gras taille normale, QR code plus petit sans texte dessous, marge un peu plus large, moins de papier blanc à la fin ; « Ticket client » est choisi par défaut dans la fenêtre Imprimer d’une commande.',
     'Tickets, bons de livraison et étiquettes revus : marge à gauche et à droite, écriture moins grosse (nom, téléphone et totaux en double hauteur au lieu de double taille), plus de montants répétés (« 1 x 20 000 », sous-total d’un seul article, « dont articles / dont frais » et « reste à payer » quand rien n’est encore payé).',

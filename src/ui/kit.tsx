@@ -55,13 +55,13 @@ export function restoreScroll(route: string) {
 }
 
 // ---- Notifications ----
-interface Toast { id: number; text: string; kind: 'ok' | 'error' | 'info'; sticky?: boolean }
+interface Toast { id: number; text: string; kind: 'ok' | 'error' | 'info'; sticky?: boolean; action?: { label: string; run: () => void } }
 let toasts: Toast[] = [];
 const toastSubs = new Set<() => void>();
 const closeToast = (id: number) => { toasts = toasts.filter((x) => x.id !== id); toastSubs.forEach((f) => f()); };
 /** Notification. `sticky` : reste affichée jusqu'à ce qu'on la ferme (×) ; `ms` : durée d'affichage. */
-export function toast(text: string, kind: Toast['kind'] = 'ok', opts: { sticky?: boolean; ms?: number } = {}) {
-  const t = { id: Date.now() + Math.random(), text, kind, sticky: opts.sticky };
+export function toast(text: string, kind: Toast['kind'] = 'ok', opts: { sticky?: boolean; ms?: number; action?: { label: string; run: () => void } } = {}) {
+  const t = { id: Date.now() + Math.random(), text, kind, sticky: opts.sticky, action: opts.action };
   toasts = [...toasts.filter((x) => x.sticky).slice(-3), ...toasts.filter((x) => !x.sticky).slice(-2), t];
   toastSubs.forEach((f) => f());
   if (!opts.sticky) setTimeout(() => closeToast(t.id), opts.ms ?? (kind === 'error' ? 6000 : 3500));
@@ -73,7 +73,7 @@ export function Toasts() {
       {list.map((t) => (
         <div key={t.id} className={`toast toast-${t.kind}`}>
           <Icon name={t.kind === 'error' ? 'alert' : 'check'} size={18} />
-          <span style={{ flex: 1 }}>{t.text}</span>
+          <span style={{ flex: 1 }}>{t.text}{t.action && <> <button type="button" className="toast-action" onClick={() => { t.action!.run(); closeToast(t.id); }}>{t.action.label}</button></>}</span>
           <button type="button" className="toast-close" aria-label="Fermer" title="Fermer" onClick={() => closeToast(t.id)}><Icon name="x" size={16} /></button>
         </div>
       ))}

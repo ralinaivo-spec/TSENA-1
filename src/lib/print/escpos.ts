@@ -69,6 +69,9 @@ export async function logoRaster(dataUrl: string, dots: number): Promise<number[
   return [GS, 0x76, 0x30, 0x00, bytesPerRow & 0xff, bytesPerRow >> 8, h & 0xff, h >> 8, ...data];
 }
 
+/** Logos déjà convertis en points d'imprimante (évite de refaire le calcul à chaque ticket). */
+const rasterCache = new Map<string, number[]>();
+
 export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Charset; cut: boolean; logo?: string | null; copies?: number; feedMm?: number }): Promise<Uint8Array> {
   // Espace blanc en bas pour déchirer le ticket sans couper le texte (8 points par mm ; ESC J avance de n points, 255 au plus).
   const tail = (): number[] => { const out: number[] = []; let dots = Math.round((o.feedMm ?? 20) * 8); while (dots > 0) { const n = Math.min(255, dots); out.push(ESC, 0x4a, n); dots -= n; } return out; };
@@ -76,7 +79,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   const rows = layout(doc, o.cols);
   // Un logo par ligne « logo » : celui de la page si le document en a un, sinon celui de la société.
   const rasters = new Map<string, number[]>();
-  for (const r of rows) { const src = r.logo ? logoFor(r, o.logo) : undefined; if (src && !rasters.has(src)) { try { rasters.set(src, await logoRaster(src, dots)); } catch { rasters.set(src, []); } } }
+  for (const r of rows) { const src = r.logo ? logoFor(r, o.logo) : undefined; if (src && !rasters.has(src)) { const key = `${dots}|${src}`; let ras = rasterCache.get(key); if (!ras) { try { ras = await logoRaster(src, dots); } catch { ras = []; } rasterCache.set(key, ras); } rasters.set(src, ras); } }
   const one: number[] = [ESC, 0x40]; // initialisation
   one.push(ESC, 0x74, TABLE[o.charset] ?? 2);
   let bold = false, big = 0;

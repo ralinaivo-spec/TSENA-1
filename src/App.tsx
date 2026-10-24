@@ -151,7 +151,7 @@ function SyncPill() {
 function Shell() {
   const user = useMe();
   usePrintStationWorker();
-  useSentJobsWatcher((text, kind) => toast(text, kind, kind === 'error' ? { sticky: true } : { ms: 10000 })); // impressions envoyées : bien visibles
+  useSentJobsWatcher((text, kind) => toast(text, kind, kind === 'error' ? { sticky: true, action: { label: 'Voir l’historique et réimprimer', run: openPrintHistory } } : { ms: 10000 })); // impressions envoyées : bien visibles
   const can = useCan();
   const company = useCompany();
   const route = useRoute();
@@ -224,6 +224,14 @@ function Shell() {
 }
 
 /** Après une mise à jour : bandeau « Logiciel mis à jour » avec la date et les nouveautés (une fois par version). */
+/** Ouvre Paramètres → Imprimantes sur l'historique des impressions (Réessayer / Réimprimer). */
+function openPrintHistory() {
+  navigate('/parametres/imprimantes');
+  let n = 0;
+  const go = () => { const el = document.getElementById('print-history') as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } else if (n++ < 20) setTimeout(go, 150); };
+  setTimeout(go, 200);
+}
+
 /** Poste d'impression partagé : l'imprimante doit être reconnectée d'un clic (exigence du navigateur). */
 function StationBanner() {
   const st = useStationReconnect();

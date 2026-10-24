@@ -73,6 +73,20 @@ async function freshConfig(): Promise<CloudConfig | null> {
 let running = false;
 let again = false;
 
+/** Vérification légère (quelques octets) : y a-t-il du nouveau dans le cloud ? Si oui, synchronise tout de suite.
+ *  Utilisée par le poste d'impression pour recevoir les tickets en 1 à 2 secondes. */
+export async function checkRemote(): Promise<void> {
+  if (running || !getCloud() || !navigator.onLine) return;
+  try {
+    const cfg = await freshConfig();
+    if (!cfg) return;
+    const res = await fetch(`${cfg.url}/rest/v1/records?select=rev&order=rev.desc&limit=1`, { headers: headers(cfg) });
+    if (!res.ok) return;
+    const [t] = await res.json();
+    if (t && t.rev > getMeta<number>('lastRev', 0)) await syncNow();
+  } catch { /* la synchronisation normale prendra le relais */ }
+}
+
 export async function syncNow(): Promise<void> {
   if (running) { again = true; return; }
   running = true;

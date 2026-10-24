@@ -1,11 +1,11 @@
 // Paramètres → Imprimantes : imprimantes de cet appareil, poste d'impression partagé, options.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCan } from '../lib/auth';
 import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, retryJob, reprintJob, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  BT_SPEEDS, CHARSETS, btRemembers, linkState, onLinkChange, useWakeState, type LinkState, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, retryJob, reprintJob, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type BtSpeed, type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
@@ -28,6 +28,55 @@ function BrowserNotice() {
 }
 
 /** Pas à pas pour une imprimante à tickets 58 mm (Bluetooth + USB), surtout sur Mac. */
+/** État réel de la liaison avec l'imprimante (vert : connectée / prête ; rouge : à reconnecter), mis à jour en direct. */
+function PrinterLink({ p }: { p: Printer }) {
+  const [st, setSt] = useState<LinkState | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (p.kind === 'system' || !p.ref) return;
+    let alive = true;
+    const read = () => { void linkState(p.kind as 'bluetooth', p.ref!).then((x) => { if (alive) setSt(x); }); };
+    read();
+    const off = onLinkChange(read);
+    const t = setInterval(read, 3000);
+    return () => { alive = false; off(); clearInterval(t); };
+  }, [p.kind, p.ref]);
+  if (!st) return null;
+  const ok = st !== 'disconnected';
+  return (
+    <p className="small row" style={{ margin: 0, gap: 6, alignItems: 'center' }}>
+      <span className={`dot ${ok ? 'dot-ok' : 'dot-danger'}`} />
+      <strong style={{ color: ok ? 'var(--ok)' : 'var(--danger)' }}>{st === 'connected' ? 'Connectée' : st === 'ready' ? 'Prête (se connecte toute seule)' : 'Non connectée'}</strong>
+      {!ok && <Button variant="primary" className="btn-sm" icon="refresh" busy={busy} onClick={async () => { setBusy(true); try { await reconnectPrinter(p); toast(`« ${p.name} » connectée`); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(`Connexion impossible : ${e?.message ?? e}. Vérifiez que l’imprimante est allumée et qu’aucun autre appareil n’y est connecté.`, 'error', { sticky: true }); } finally { setBusy(false); } }}>Se reconnecter maintenant</Button>}
+    </p>
+  );
+}
+
+/** Poste d'impression : ce qui garde la liaison active, et les réglages du téléphone qui la coupent. */
+function StationHealth() {
+  const wake = useWakeState();
+  const wakeOn = useMeta<boolean>('stationWakeLock', true);
+  const android = /Android/.test(navigator.userAgent);
+  return (
+    <div className="card stack-s station-health" style={{ background: 'var(--surface-2)' }}>
+      <strong>Pour que le poste ne coupe jamais</strong>
+      <Toggle checked={wakeOn !== false} onChange={(v) => setMeta('stationWakeLock', v)} label="Garder l’écran allumé tant que Trésor en ligne est ouvert (conseillé : écran éteint = téléphone endormi = Bluetooth coupé)" />
+      <p className="small muted" style={{ margin: 0 }}>Écran : {wake === 'on' ? '✅ maintenu allumé' : wake === 'unsupported' ? '⚠️ ce navigateur ne peut pas le garder allumé : réglez la mise en veille de l’écran sur « Jamais » / 30 min' : '⏸ pas encore actif (revenez sur l’application)'} · Liaison avec l’imprimante : ✅ maintenue toutes les 25 s, reconnexion automatique si elle tombe · Réception des tickets : toutes les 2 s</p>
+      <details className="small"><summary><strong>Réglages {android ? 'du téléphone Android' : 'de l’appareil'} à faire une fois</strong></summary>
+        <ol className="guide-steps" style={{ marginTop: 8 }}>
+          <li><strong>Laissez le téléphone branché au chargeur</strong> et Trésor en ligne <strong>ouvert à l’écran</strong> (pas en arrière-plan, pas une autre application par-dessus).</li>
+          {android && <li><strong>Batterie de Chrome sans restriction</strong> : Paramètres → Applications → Chrome → Batterie → <strong>« Non restreinte »</strong> (ou « Pas d’optimisation »). Si Trésor en ligne est installé comme application, faites pareil pour lui. Retirez Chrome des « applications en veille / mises en veille profonde » (Samsung : Paramètres → Batterie → Limites d’utilisation en arrière-plan).</li>}
+          {android && <li><strong>Économiseur de batterie désactivé</strong> sur le poste (il coupe le Bluetooth et endort les pages).</li>}
+          <li><strong>Mise en veille de l’écran</strong> : 30 min ou « Jamais » si l’option ci-dessus ne suffit pas.</li>
+          {!btRemembers() && android && <li><strong>Reconnexion automatique après réouverture</strong> (facultatif) : dans Chrome, ouvrez <em>chrome://flags</em>, cherchez <em>« Web Bluetooth new permissions backend »</em>, mettez <strong>Enabled</strong>, redémarrez Chrome. Chrome se souviendra alors de l’imprimante : plus besoin de cliquer « Reconnecter » quand le logiciel est rouvert.</li>}
+          <li><strong>Imprimante</strong> : sur secteur, à moins de 3 mètres, et <strong>un seul appareil connecté à elle</strong> (déconnectez-la des autres téléphones / ordinateurs). Si elle s’éteint seule après quelques minutes, désactivez son arrêt automatique (notice ou application du fabricant).</li>
+          <li><strong>Le plus fiable</strong> : relier l’imprimante au téléphone par un <strong>câble USB OTG</strong> (USB-C ou micro-USB vers USB, ~5 000 Ar) et choisir « USB (direct) » : pas de coupure Bluetooth, et reconnexion automatique même après réouverture.</li>
+        </ol>
+      </details>
+    </div>
+  );
+}
+
 function TicketPrinterGuide({ open }: { open: boolean }) {
   return (
     <details className="card printer-guide" open={open}>
@@ -94,7 +143,7 @@ export function PrintersTab() {
                   <p className="small muted">{KINDS[p.kind]} · {PAPERS[p.paper]}{p.deviceName ? ` · ${p.deviceName}` : ''}{p.kind !== 'system' && !p.ref ? ' · pas encore appairée' : ''}</p>
                   {p.kind !== 'system' && p.ref && (p.paused
                     ? <p className="small" style={{ margin: 0 }}><Badge tone="neutral">Déconnectée</Badge> <span className="muted">Libérée : un autre appareil peut s’y associer (ex. pour devenir le poste d’impression).</span></p>
-                    : <p className="small" style={{ margin: 0 }}><Badge tone="ok">Associée à cet appareil</Badge></p>)}
+                    : <PrinterLink p={p} />)}
                 </div>
                 <div className="row" style={{ gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   {p.kind !== 'system' && p.ref && (p.paused
@@ -122,7 +171,9 @@ export function PrintersTab() {
           <Help>Comme une imprimante en réseau : <strong>n’importe quel appareil</strong> relié à l’imprimante (l’ordinateur de la caisse, ou un <strong>téléphone Android</strong> avec Chrome ; pas un iPhone, qui ne permet pas le Bluetooth direct) devient « poste d’impression », et <strong>tous les autres appareils</strong> (téléphones, iPhone, tablettes, autres ordinateurs) y impriment en choisissant son nom dans « Imprimer ». Les tickets passent par le cloud : le poste doit rester allumé, connecté à Internet, avec Trésor en ligne ouvert (dans Chrome). Celui qui envoie est prévenu quand le ticket est sorti. Conseil : sur le poste, reliez l’imprimante en <strong>USB</strong> ou en <strong>Bluetooth appairé (port série)</strong> : elle se reconnecte toute seule à la réouverture ; en Bluetooth direct, un bandeau demande un clic sur « Reconnecter » après chaque réouverture. Pour changer d’appareil poste : « Déconnecter » l’imprimante ici, puis l’associer sur l’autre appareil.</Help></div>
         {!getCloud() && <div className="notice"><Icon name="cloudOff" /><span>Reliez d’abord le cloud (onglet « Cloud et synchronisation ») pour utiliser un poste partagé.</span></div>}
         {myStation ? (
-          <div className="notice notice-ok"><Icon name="check" /><span><strong>Cet appareil est le poste « {myStation.name} ».</strong> Il imprime sur « {myStation.printerName} » les tickets envoyés par les autres. <button className="link-btn" onClick={() => setStation(true)}>Modifier</button> · <button className="link-btn" onClick={async () => { await stopStation(); toast('Cet appareil n’est plus un poste d’impression'); }}>Arrêter</button></span></div>
+<>          <div className="notice notice-ok"><Icon name="check" /><span><strong>Cet appareil est le poste « {myStation.name} ».</strong> Il imprime sur « {myStation.printerName} » les tickets envoyés par les autres. <button className="link-btn" onClick={() => setStation(true)}>Modifier</button> · <button className="link-btn" onClick={async () => { await stopStation(); toast('Cet appareil n’est plus un poste d’impression'); }}>Arrêter</button></span></div>
+          <StationHealth />
+          </>
         ) : (
           <Button variant="ghost" icon="cloud" disabled={!getCloud()} onClick={() => setStation(true)}>Faire de cet appareil un poste d’impression</Button>
         )}
@@ -142,7 +193,7 @@ export function PrintersTab() {
           </ul>
         )}
         {recent.length > 0 && (
-          <details>
+          <details id="print-history">
             <summary className="small">Dernières impressions envoyées aux postes</summary>
             <ul className="list">
               {recent.map((j) => (
