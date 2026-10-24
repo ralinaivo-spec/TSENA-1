@@ -1,0 +1,27 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const ctx = await b.newContext({ viewport: { width: 1300, height: 950 } });
+await ctx.addInitScript(() => {
+  window.__chunks = []; let n = 0;
+  const ch = { properties: { writeWithoutResponse: true, write: false }, async writeValueWithoutResponse(d) { n++; if (n % 17 === 0) { const e = new Error('GATT operation already in progress.'); e.name = 'NetworkError'; throw e; } window.__chunks.push(Array.from(d)); } };
+  const dev = { id: 'bt1', name: 'KPrinter_6193_BLE', gatt: { connected: false, async connect() { this.connected = true; return { getPrimaryServices: async () => [{ getCharacteristics: async () => [ch] }] }; } } };
+  ch.service = { device: dev };
+  Object.defineProperty(navigator, 'bluetooth', { value: { requestDevice: async () => dev } });
+});
+const p = await ctx.newPage();
+p.on('pageerror', e => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/');
+await p.getByLabel("Nom d'utilisateur").fill('super-adm');
+await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(800);
+await p.goto('http://localhost:5173/#/parametres/imprimantes'); await p.waitForTimeout(800);
+await p.getByRole('button', { name: 'Ajouter une imprimante' }).first().click(); await p.waitForTimeout(300);
+await p.locator('.modal').getByText('Bluetooth (direct)').click();
+await p.getByRole('button', { name: 'Chercher l’imprimante' }).click(); await p.waitForTimeout(500);
+await p.screenshot({ path: '/tmp/claude-0/t/bt1.png' });
+await p.getByRole('button', { name: 'Page de test' }).click(); await p.waitForTimeout(6000);
+const c = await p.evaluate(() => window.__chunks);
+const total = c.reduce((t, x) => t + x.length, 0), max = Math.max(...c.map(x => x.length));
+const tail = c.flat().slice(-6).map(x => x.toString(16)).join(' ');
+console.log('chunks', c.length, 'bytes', total, 'max chunk', max, 'tail', tail);
+await b.close();

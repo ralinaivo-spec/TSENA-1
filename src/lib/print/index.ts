@@ -7,10 +7,11 @@ import { getCloud, syncNow } from '../sync';
 import { DEFAULT_COMPANY, type Company } from '../settings';
 import { colsOf, type Paper, type PrintDoc } from './doc';
 import { charsetProbe, encodeDoc, type Charset } from './escpos';
-import { disconnectRaw, shareImage, systemPrint, writeRaw } from './devices';
+import { disconnectRaw, shareImage, systemPrint, writeRaw, type BtSpeed } from './devices';
 
 export * from './doc';
 export { CHARSETS, type Charset } from './escpos';
+export { BT_SPEEDS, type BtSpeed } from './devices';
 export { support, pairBluetooth, pairUsb, pairSerial, docHtml, btConnected } from './devices';
 
 export type PrinterKind = 'system' | 'bluetooth' | 'usb' | 'serial';
@@ -33,6 +34,8 @@ export interface Printer {
   baud?: number;
   /** Déconnectée volontairement (libérée pour un autre appareil) : rien n'est envoyé tant qu'on ne la reconnecte pas. */
   paused?: boolean;
+  /** Taille des paquets Bluetooth (par défaut : sûr, 20 octets). */
+  btSpeed?: BtSpeed;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string }
 export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
@@ -79,7 +82,7 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
   if (p.paused) throw new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`);
   const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
-  await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName);
+  await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName, p.btSpeed);
 }
 
 /** Déconnecte l'imprimante de cet appareil sans la supprimer (pour l'associer à un autre appareil). */
@@ -92,7 +95,7 @@ export async function disconnectPrinter(p: Printer) {
 /** Reconnecte l'imprimante (à appeler depuis un clic). */
 export async function reconnectPrinter(p: Printer) {
   const q = { ...p, paused: false };
-  if (q.kind !== 'system' && q.ref) await writeRaw(q.kind, q.ref, new Uint8Array([0x1b, 0x40]), q.baud, q.deviceName);
+  if (q.kind !== 'system' && q.ref) await writeRaw(q.kind, q.ref, new Uint8Array([0x1b, 0x40]), q.baud, q.deviceName, q.btSpeed);
   await savePrinter(q);
 }
 
@@ -100,7 +103,7 @@ export async function reconnectPrinter(p: Printer) {
 export async function printCharsetProbe(p: Printer) {
   if (p.kind === 'system') throw new Error('Le test des accents ne concerne que les imprimantes Bluetooth, USB ou port série.');
   if (!p.ref) throw new Error('Cherchez d’abord l’imprimante.');
-  await writeRaw(p.kind, p.ref, charsetProbe(), p.baud, p.deviceName);
+  await writeRaw(p.kind, p.ref, charsetProbe(), p.baud, p.deviceName, p.btSpeed);
 }
 
 /** Imprime vers un choix (imprimante, poste partagé ou image). Renvoie un message pour l'utilisateur. */
@@ -203,7 +206,7 @@ export function useStationReconnect() {
     async reconnect() {
       const p = mine && findPrinter(mine.printerId);
       if (!p) throw new Error('Imprimante du poste introuvable');
-      if (p.kind !== 'system' && p.ref) await writeRaw(p.kind, p.ref, new Uint8Array([0x1b, 0x40]), p.baud, p.deviceName);
+      if (p.kind !== 'system' && p.ref) await writeRaw(p.kind, p.ref, new Uint8Array([0x1b, 0x40]), p.baud, p.deviceName, p.btSpeed);
       await setMeta('stationNeedsTap', null);
       bumpRetry();
     },

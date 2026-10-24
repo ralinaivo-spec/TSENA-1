@@ -5,8 +5,8 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
-  type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
+  BT_SPEEDS, CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  type BtSpeed, type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
@@ -228,6 +228,7 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
         <div className="grid-2">
           <SelectField label="Papier" value={p.paper} onChange={(v) => set({ paper: v as Paper })} options={(Object.keys(PAPERS) as Paper[]).filter((k) => direct ? k !== 'a4' : true).map((k) => ({ value: k, label: PAPERS[k] }))} />
           {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).map((k) => ({ value: k, label: CHARSETS[k] }))} />}
+          {p.kind === 'bluetooth' && <SelectField label="Envoi Bluetooth" hint="Si le ticket s’arrête au milieu : choisissez « Normal »." value={p.btSpeed ?? 'safe'} onChange={(v) => set({ btSpeed: v as BtSpeed })} options={(Object.keys(BT_SPEEDS) as BtSpeed[]).map((k) => ({ value: k, label: BT_SPEEDS[k] }))} />}
           {p.kind === 'serial' && <SelectField label="Vitesse du port" value={String(p.baud ?? 9600)} onChange={(v) => set({ baud: Number(v) })} options={[9600, 19200, 38400, 115200].map((b) => ({ value: String(b), label: `${b} bauds` }))} />}
         </div>
         <Toggle checked={p.logo} onChange={(v) => set({ logo: v })} label="Imprimer le logo en haut du ticket" />

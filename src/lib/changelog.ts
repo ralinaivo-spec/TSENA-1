@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Correction : ticket coupé au milieu en Bluetooth sur téléphone Android. L’envoi se fait maintenant en petits paquets confirmés, renvoyés automatiquement en cas de raté ; réglage « Envoi Bluetooth » (Normal conseillé) dans la fiche de l’imprimante.',
     'Imprimantes : bouton « Déconnecter » pour libérer l’imprimante de cet appareil sans la supprimer (pour l’associer au téléphone ou à l’ordinateur qui devient le poste d’impression), puis « Reconnecter » en un clic.',
     'Poste d’impression partagé (imprimante « en réseau ») : tous les appareils impriment sur l’imprimante de l’ordinateur de la caisse ; celui qui envoie est prévenu quand le ticket est sorti ; si l’imprimante doit être reconnectée, les tickets attendent et un bandeau « Reconnecter l’imprimante » s’affiche sur le poste.',
     'Imprimantes à tickets 58 mm (ex. JK-5803H / POS-58 / KPrinter) : guide pas à pas dans Paramètres → Imprimantes, sans pilote ni logiciel à installer (Bluetooth, Bluetooth appairé ou USB, dans Chrome ou Edge).',

@@ -52,15 +52,38 @@ async function btCharacteristic(ref: string, name?: string): Promise<any> {
   throw new Error('Cette imprimante Bluetooth n’accepte pas l’impression directe.');
 }
 
-async function writeBluetooth(ref: string, data: Uint8Array, name?: string) {
+/** Taille des paquets Bluetooth. Sur Android, la liaison n'accepte souvent que 20 octets par paquet :
+ *  au-delà, la fin du paquet est perdue et le ticket s'arrête au milieu. 20 = sûr partout ; plus grand = plus rapide. */
+export type BtSpeed = 'safe' | 'fast' | 'max';
+export const BT_SPEEDS: Record<BtSpeed, string> = {
+  safe: 'Normal — sûr sur tous les appareils (conseillé, surtout sur téléphone)',
+  fast: 'Rapide — ordinateurs (Mac, PC)',
+  max: 'Très rapide — si l’imprimante le supporte',
+};
+const CHUNK: Record<BtSpeed, number> = { safe: 20, fast: 100, max: 180 };
+
+async function writeBluetooth(ref: string, data: Uint8Array, name?: string, speed: BtSpeed = 'safe') {
   let ch = await btCharacteristic(ref, name);
   if (!ch.service?.device?.gatt?.connected) { btChars.delete(ref); ch = await btCharacteristic(ref, name); } // imprimante éteinte puis rallumée
-  // Petits paquets : les imprimantes bon marché ont une petite mémoire et perdent les paquets trop gros ou trop rapides.
-  const size = 100;
+  const size = CHUNK[speed] ?? 20;
+  // Écriture « avec accusé de réception » si l'imprimante la propose : chaque paquet est confirmé avant le suivant,
+  // rien ne se perd. Sinon, envoi sans accusé avec une petite pause pour ne pas déborder sa mémoire.
+  const withResp = !!ch.properties.write && !!(ch.writeValueWithResponse || ch.writeValue);
+  const pause = speed === 'safe' ? 8 : 20;
   for (let i = 0; i < data.length; i += size) {
     const part = data.slice(i, i + size);
-    if (ch.properties.writeWithoutResponse && ch.writeValueWithoutResponse) { await ch.writeValueWithoutResponse(part); await sleep(20); }
-    else await (ch.writeValueWithResponse ? ch.writeValueWithResponse(part) : ch.writeValue(part));
+    for (let attempt = 0; ; attempt++) {
+      try {
+        if (withResp) await (ch.writeValueWithResponse ? ch.writeValueWithResponse(part) : ch.writeValue(part));
+        else { await ch.writeValueWithoutResponse(part); await sleep(pause); }
+        break;
+      } catch (e: any) {
+        // « GATT operation already in progress » / liaison occupée : on attend un peu et on renvoie le même paquet.
+        if (attempt >= 6) throw new Error(`Envoi Bluetooth interrompu (${Math.round((i / data.length) * 100)} % envoyé) : rapprochez le téléphone de l’imprimante et réessayez. ${e?.message ?? ''}`);
+        await sleep(60 * (attempt + 1));
+        if (!ch.service?.device?.gatt?.connected) { btChars.delete(ref); ch = await btCharacteristic(ref, name); }
+      }
+    }
   }
 }
 
@@ -135,8 +158,8 @@ export async function disconnectRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: s
 /** L'imprimante est-elle connectée en ce moment (Bluetooth) ? */
 export const btConnected = (ref: string) => { const d = btDevices.get(ref); return !!d?.gatt?.connected; };
 
-export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number, name?: string) {
-  if (kind === 'bluetooth') return writeBluetooth(ref, data, name);
+export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number, name?: string, speed?: BtSpeed) {
+  if (kind === 'bluetooth') return writeBluetooth(ref, data, name, speed);
   if (kind === 'usb') return writeUsb(ref, data);
   return writeSerial(ref, data, baud || 9600);
 }
