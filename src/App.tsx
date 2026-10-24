@@ -1,7 +1,7 @@
 // Structure de l'application : démarrage, accès, menu adapté au rôle, pages.
 import { useEffect, useState, type ReactNode } from 'react';
 import { RecapShortcut } from './ui/eveningRecap';
-import { usePrintStationWorker } from './lib/print';
+import { usePrintStationWorker, useSentJobsWatcher, useStationReconnect } from './lib/print';
 import { TreasuryPage } from './pages/Treasury';
 import { RecapPage } from './pages/Recap';
 import { WorkDateBanner } from './pages/Tools';
@@ -16,7 +16,7 @@ import { dailyRestorePoint } from './lib/restorePoints';
 import { logMissedBoosts } from './lib/boosts';
 import { EmailResetScreen } from './pages/Auth';
 import { Icon, type IconName } from './ui/icons';
-import { Button, IconButton, Toasts, markMenuNav, navigate, restoreScroll, useBackTarget, useRoute } from './ui/kit';
+import { Button, IconButton, Toasts, markMenuNav, toast, navigate, restoreScroll, useBackTarget, useRoute } from './ui/kit';
 import { BrandLogo, FirstSetupScreen, LockScreen, LoginScreen } from './pages/Auth';
 import { DashboardPage } from './pages/Dashboard';
 import { InstallScreen, wantsInstallPage } from './pages/Install';
@@ -151,6 +151,7 @@ function SyncPill() {
 function Shell() {
   const user = useMe();
   usePrintStationWorker();
+  useSentJobsWatcher((text, kind) => toast(text, kind));
   const can = useCan();
   const company = useCompany();
   const route = useRoute();
@@ -207,7 +208,7 @@ function Shell() {
           <SyncPill />
         </header>
         <main className="main">
-          <div className="content"><UpdatedBanner /><WorkDateBanner /><NotifBar /><BackBar items={items} />{current.page()}</div>
+          <div className="content"><UpdatedBanner /><StationBanner /><WorkDateBanner /><NotifBar /><BackBar items={items} />{current.page()}</div>
         </main>
         <nav className="bottom-nav" aria-label="Raccourcis">
           {mobileItems.map((i) => (
@@ -223,6 +224,20 @@ function Shell() {
 }
 
 /** Après une mise à jour : bandeau « Logiciel mis à jour » avec la date et les nouveautés (une fois par version). */
+/** Poste d'impression partagé : l'imprimante doit être reconnectée d'un clic (exigence du navigateur). */
+function StationBanner() {
+  const st = useStationReconnect();
+  const [busy, setBusy] = useState(false);
+  if (!st.need) return null;
+  return (
+    <div className="notice notice-warn" role="alert"><Icon name="printer" />
+      <div style={{ flex: 1 }}><strong>Poste d’impression : imprimante à reconnecter</strong>
+        <div className="small">{st.pending ? `${st.pending} ticket(s) envoyé(s) par les autres appareils attend(ent). ` : ''}Vérifiez que l’imprimante est allumée, puis cliquez sur « Reconnecter ».</div></div>
+      <Button icon="printer" busy={busy} onClick={async () => { setBusy(true); try { await st.reconnect(); toast('Imprimante reconnectée : les tickets en attente sortent'); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); } }}>Reconnecter l’imprimante</Button>
+    </div>
+  );
+}
+
 function UpdatedBanner() {
   const seen = useMeta<string | null>('seenBuild', null);
   // Appareil déjà utilisé avant cette version (journal non vide) : on annonce la mise à jour, même sans version notée.

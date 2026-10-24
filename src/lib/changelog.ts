@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Poste d’impression partagé (imprimante « en réseau ») : tous les appareils impriment sur l’imprimante de l’ordinateur de la caisse ; celui qui envoie est prévenu quand le ticket est sorti ; si l’imprimante doit être reconnectée, les tickets attendent et un bandeau « Reconnecter l’imprimante » s’affiche sur le poste.',
     'Imprimantes à tickets 58 mm (ex. JK-5803H / POS-58 / KPrinter) : guide pas à pas dans Paramètres → Imprimantes, sans pilote ni logiciel à installer (Bluetooth, Bluetooth appairé ou USB, dans Chrome ou Edge).',
     'Nouveau « Test des accents » : un ticket avec les lignes A, B, C, D pour choisir le jeu de caractères qui imprime bien é è à ç (PC850 par défaut).',
     'Bluetooth : reconnexion plus simple (la liste ne montre que votre imprimante) et envoi plus sûr pour les petites imprimantes ; avertissement si le navigateur (Safari, Firefox) ne peut pas imprimer directement.',

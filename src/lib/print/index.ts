@@ -1,6 +1,6 @@
 // Imprimantes : celles de cet appareil (gardées sur l'appareil), les postes d'impression partagés
 // (via le cloud : un téléphone sans Bluetooth envoie, le poste relié à l'imprimante imprime).
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { all, get, getMeta, newId, nowIso, remove, save, setMeta, useMeta, useTable, type BaseRecord } from '../db';
 import { currentUser } from '../auth';
 import { getCloud, syncNow } from '../sync';
@@ -33,7 +33,7 @@ export interface Printer {
   baud?: number;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string }
-export interface PrintJob extends BaseRecord { stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
+export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
 
 /** Choix toujours disponibles, sans réglage. */
 export const SYSTEM_PRINTER: Printer = { id: '@system', name: 'Fenêtre d’impression de l’appareil', kind: 'system', paper: '58', charset: 'cp850', logo: true, cut: false };
@@ -94,7 +94,8 @@ export async function printTo(targetId: string, doc: PrintDoc, copies = 1): Prom
     const stationId = targetId.slice(8);
     const st = get<PrintStation>('printStations', stationId);
     if (!getCloud()) throw new Error('Le cloud n’est pas relié : impossible d’envoyer au poste d’impression.');
-    await save('printJobs', { stationId, doc, copies, status: 'pending', byName: currentUser()?.fullName });
+    const [job] = await save('printJobs', { stationId, doc, copies, status: 'pending', byName: currentUser()?.fullName, fromDevice: getMeta('deviceId', '') });
+    sentJobs.set(job.id, st?.name ?? 'poste');
     syncNow();
     return `Envoyé à « ${st?.name ?? 'poste'} » : impression dans quelques secondes`;
   }
@@ -130,6 +131,8 @@ export async function stopStation() {
 export function usePrintStationWorker() {
   const mine = useMeta<{ stationId: string; printerId: string } | null>('myStation', null);
   const jobs = useTable<PrintJob>('printJobs');
+  const [retry, setRetry] = useState(0);
+  useEffect(() => { const f = () => setRetry((n) => n + 1); retrySubs.add(f); return () => { retrySubs.delete(f); }; }, []);
   useEffect(() => {
     if (!mine) return;
     const beat = () => save('printStations', { id: mine.stationId, lastSeen: nowIso() });
@@ -144,6 +147,7 @@ export function usePrintStationWorker() {
     if (!todo.length) return;
     (async () => {
       for (const j of todo.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+        if (getMeta<string | null>('stationNeedsTap', null)) break; // imprimante à reconnecter : on attend un clic
         busy.add(j.id);
         const p = findPrinter(mine.printerId);
         try {
@@ -151,12 +155,57 @@ export function usePrintStationWorker() {
           await printOn(p, j.doc, j.copies || 1);
           await save('printJobs', { id: j.id, status: 'done', printedAt: nowIso() });
         } catch (e: any) {
-          await save('printJobs', { id: j.id, status: 'error', error: e?.message ?? String(e) });
+          const msg = e?.message ?? String(e);
+          if (needsTap(e)) {
+            // Le navigateur exige un clic pour se reconnecter (après réouverture du logiciel, imprimante éteinte…) :
+            // le ticket reste en attente et un bandeau « Reconnecter l'imprimante » s'affiche sur le poste.
+            busy.delete(j.id);
+            await setMeta('stationNeedsTap', msg);
+            break;
+          }
+          await save('printJobs', { id: j.id, status: 'error', error: msg });
         }
       }
       // Ménage : les impressions de plus de 7 jours sont effacées.
       for (const old of all<PrintJob>('printJobs').filter((x) => x.status !== 'pending' && Date.now() - new Date(x.createdAt).getTime() > 7 * 24 * 3600_000)) await remove('printJobs', old.id);
     })();
-  }, [jobs, mine?.stationId]);
+  }, [jobs, mine?.stationId, retry]);
 }
 const busy = new Set<string>();
+/** Erreurs qui demandent seulement de recliquer (le navigateur veut un geste de l'utilisateur pour se reconnecter). */
+const needsTap = (e: any) => ['SecurityError', 'NotFoundError', 'NotAllowedError', 'NetworkError', 'InvalidStateError'].includes(e?.name) || /gesture|geste|user activation|disconnected|GATT|open|appair/i.test(e?.message ?? '');
+
+/** Bandeau sur le poste d'impression quand l'imprimante doit être reconnectée d'un clic. */
+export function useStationReconnect() {
+  const need = useMeta<string | null>('stationNeedsTap', null);
+  const mine = useMeta<{ stationId: string; printerId: string } | null>('myStation', null);
+  const pending = useTable<PrintJob>('printJobs').filter((j) => j.stationId === mine?.stationId && j.status === 'pending').length;
+  return {
+    need: !!mine && !!need, pending, message: need,
+    /** À appeler depuis un clic : reconnecte l'imprimante puis relance les tickets en attente. */
+    async reconnect() {
+      const p = mine && findPrinter(mine.printerId);
+      if (!p) throw new Error('Imprimante du poste introuvable');
+      if (p.kind !== 'system' && p.ref) await writeRaw(p.kind, p.ref, new Uint8Array([0x1b, 0x40]), p.baud, p.deviceName);
+      await setMeta('stationNeedsTap', null);
+      bumpRetry();
+    },
+  };
+}
+const retrySubs = new Set<() => void>();
+const bumpRetry = () => retrySubs.forEach((f) => f());
+
+/** Tickets envoyés depuis cet appareil vers un poste : on prévient quand ils sont imprimés (ou en erreur). */
+const sentJobs = new Map<string, string>();
+export function useSentJobsWatcher(notify: (text: string, kind: 'ok' | 'error') => void) {
+  const jobs = useTable<PrintJob>('printJobs');
+  useEffect(() => {
+    for (const j of jobs) {
+      const name = sentJobs.get(j.id);
+      if (!name || j.status === 'pending') continue;
+      sentJobs.delete(j.id);
+      if (j.status === 'done') notify(`Ticket imprimé sur « ${name} »`, 'ok');
+      else notify(`Le poste « ${name} » n’a pas pu imprimer : ${j.error ?? 'erreur'}`, 'error');
+    }
+  }, [jobs]);
+}

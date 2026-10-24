@@ -110,7 +110,7 @@ export function PrintersTab() {
 
       <div className="card stack">
         <div><h2>Poste d’impression partagé</h2>
-          <Help>Pour imprimer depuis un iPhone ou un téléphone sans Bluetooth : l’appareil relié à l’imprimante (ex. le téléphone Android ou l’ordinateur de la caisse) devient « poste d’impression ». Les autres appareils lui envoient les tickets par le cloud. Le poste doit rester allumé avec Trésor en ligne ouvert.</Help></div>
+          <Help>Comme une imprimante en réseau : l’appareil relié à l’imprimante (ex. l’ordinateur de la caisse) devient « poste d’impression », et <strong>tous les autres appareils</strong> (téléphones, iPhone, tablettes, autres ordinateurs) y impriment en choisissant son nom dans « Imprimer ». Les tickets passent par le cloud : le poste doit rester allumé, connecté à Internet, avec Trésor en ligne ouvert (dans Chrome). Celui qui envoie est prévenu quand le ticket est sorti. Conseil : sur le poste, reliez l’imprimante en <strong>USB</strong> ou en <strong>Bluetooth appairé (port série)</strong> : elle se reconnecte toute seule à la réouverture ; en Bluetooth direct, un bandeau demande un clic sur « Reconnecter » après chaque réouverture.</Help></div>
         {!getCloud() && <div className="notice"><Icon name="cloudOff" /><span>Reliez d’abord le cloud (onglet « Cloud et synchronisation ») pour utiliser un poste partagé.</span></div>}
         {myStation ? (
           <div className="notice notice-ok"><Icon name="check" /><span><strong>Cet appareil est le poste « {myStation.name} ».</strong> Il imprime sur « {myStation.printerName} » les tickets envoyés par les autres. <button className="link-btn" onClick={() => setStation(true)}>Modifier</button> · <button className="link-btn" onClick={async () => { await stopStation(); toast('Cet appareil n’est plus un poste d’impression'); }}>Arrêter</button></span></div>
@@ -241,6 +241,7 @@ function StationForm({ current, printers, onClose }: { current?: PrintStation; p
       <div className="stack">
         <TextField label="Nom du poste (vu par les autres appareils)" required value={name} onChange={setName} />
         <SelectField label="Imprimante utilisée par ce poste" value={pid} onChange={setPid} options={choices.map((c) => ({ value: c.id, label: c.name }))} />
+        {chosen?.kind === 'bluetooth' && <div className="notice"><Icon name="alert" /><span>En Bluetooth direct, le navigateur demande un clic pour se reconnecter après chaque réouverture du logiciel (un bandeau « Reconnecter l’imprimante » s’affichera). En USB ou en « Port série / Bluetooth appairé », le poste se reconnecte tout seul.</span></div>}
         {chosen?.kind === 'system' && <div className="notice"><Icon name="alert" /><span>Avec la fenêtre d’impression, quelqu’un devra cliquer « Imprimer » sur ce poste à chaque ticket. Préférez une imprimante en Bluetooth ou USB direct.</span></div>}
         {printers.length === 0 && <p className="small muted">Ajoutez d’abord l’imprimante à tickets de cet appareil (Bluetooth ou USB) pour qu’il imprime tout seul.</p>}
       </div>
