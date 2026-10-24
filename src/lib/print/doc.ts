@@ -55,10 +55,10 @@ export interface Row { s: string; bold?: boolean; big?: boolean; /** double haut
 export const logoFor = (r: Row, allowed: string | null | undefined) => (allowed === null ? undefined : r.logoSrc || allowed || undefined);
 
 /** Transforme les blocs en lignes de texte de largeur fixe (utilisé pour l'aperçu, l'image et l'imprimante).
- *  Une colonne de marge à gauche et à droite : le texte ne touche pas le bord du papier. */
+ *  Marge : 2 colonnes à gauche, 1 à droite (le texte ne touche pas le bord du papier). */
 export function layout(doc: PrintDoc, paperCols: number): Row[] {
-  const cols = paperCols - 2;
-  const M = ' ';
+  const cols = paperCols - 3;
+  const M = '  ';
   const rows: Row[] = [];
   const push = (r: Row) => rows.push(r.s ? { ...r, s: M + r.s } : r);
   for (const b of doc.blocks) {
@@ -164,7 +164,7 @@ export function ticketDoc(o: Order, company: Company, opts: { cashGiven?: number
   const zone = get<Zone>('zones', o.zoneId || '');
   const courier = get<Courier>('couriers', o.courierId || '');
   const b: Block[] = [...header(c), L('=')];
-  b.push(T(`${o.internal ? 'VENTE INTERNE' : walkIn ? 'TICKET' : o.kind === 'exchange' ? 'ÉCHANGE' : 'COMMANDE'} ${o.number}`, { align: 'center', bold: true }));
+  b.push(T(`${o.internal ? 'VENTE INTERNE' : walkIn ? 'TICKET' : o.kind === 'exchange' ? 'ECHANGE' : 'COMMANDE'} ${o.number}`, { align: 'center', bold: true }));
   b.push(T(dt(o.createdAt), { align: 'center' }));
   if (o.createdByName) b.push(T(`Vendeur : ${o.createdByName}`, { align: 'center' }));
   if (o.internal) { b.push(L()); b.push(T(`Employé : ${o.employeeName || '?'}`, { bold: true })); b.push(T('Prix de revient arrondi')); }
@@ -199,7 +199,7 @@ export function ticketDoc(o: Order, company: Company, opts: { cashGiven?: number
   if (o.credit) b.push(P('Articles repris', '- ' + ar(o.credit)));
   if (fee) b.push(P('Frais de livraison', ar(fee)));
   const due = o.kind === 'exchange' ? exchangeBalance(o) : orderTotal(o);
-  b.push(P('TOTAL', ar(Math.max(0, due)), { bold: true, tall: true }));
+  b.push(P('TOTAL', ar(Math.max(0, due)), { bold: true }));
   const pays = o.payments || [];
   for (const p of pays) b.push(P(`Payé ${PAY_METHODS[p.method]}${p.ref ? ' ' + p.ref : ''}`, ar(p.amount)));
   const cashPaid = pays.filter((p) => p.method === 'cash').reduce((s, p) => s + p.amount, 0);
@@ -209,11 +209,10 @@ export function ticketDoc(o: Order, company: Company, opts: { cashGiven?: number
     b.push(P('Monnaie rendue', ar(given - cashPaid), { bold: true }));
   }
   const rest = due - paidTotal(o);
-  if (rest > 0 && pays.length) b.push(P('RESTE À PAYER', ar(rest), { bold: true })); // sans paiement, il répéterait le TOTAL
+  if (rest > 0 && pays.length) b.push(P('RESTE A PAYER', ar(rest), { bold: true })); // sans paiement, il répéterait le TOTAL
   else if (rest < 0) b.push(P('À rendre au client', ar(-rest), { bold: true }));
   b.push(L('='));
   b.push(T(thanks(c, !walkIn), { align: 'center' }));
-  b.push({ k: 'feed', n: 2 });
   return { title: `Ticket ${o.number}`, blocks: b };
 }
 
@@ -245,7 +244,7 @@ export function deliveryNoteDoc(o: Order, company: Company): PrintDoc {
   b.push(P('Frais de livraison', ar(o.deliveryFee || 0)));
   const paid = paidTotal(o);
   if (paid) b.push(P('Déjà payé', '- ' + ar(paid)));
-  b.push(P('LE CLIENT PAIE', ar(Math.max(0, remaining(o))), { bold: true, tall: true }));
+  b.push(P('LE CLIENT PAIE', ar(Math.max(0, remaining(o))), { bold: true }));
   // Détail boutique / livreur seulement s'il diffère des lignes ci-dessus (paiement déjà reçu).
   { const x = courierSplit(o); if (paid) { b.push(P('  dont pour la boutique', ar(x.toCollect))); if (x.feeKept) b.push(P('  dont frais livreur', ar(x.feeKept))); } if (x.feeOwed) b.push(T(`Frais livreur ${ar(x.feeOwed)} déjà payés à la boutique`)); }
   if (remaining(o) < 0) b.push(P('À rendre au client', ar(-remaining(o)), { bold: true }));
@@ -268,8 +267,8 @@ export function parcelLabelDoc(o: Order, company: Company): PrintDoc {
   const b: Block[] = [T(c.name, { align: 'center', bold: true }), L('=')];
   b.push(T(o.number, { align: 'center', bold: true, big: true }));
   b.push(L());
-  b.push(T(o.name || 'Client', { bold: true, tall: true }));
-  if (o.phone) b.push(T(fmtPhone(o.phone), { bold: true, tall: true }));
+  b.push(T(o.name || 'Client', { bold: true }));
+  if (o.phone) b.push(T(fmtPhone(o.phone), { bold: true }));
   b.push(T(`${zone?.name || ''}${o.place ? ' - ' + o.place : ''}`, { bold: true }));
   if (o.wantedDate) b.push(T(`Souhaitée le ${new Date(o.wantedDate + 'T12:00:00').toLocaleDateString('fr-FR')}`));
   if (courier) b.push(T(`Livreur : ${courier.name}`));
@@ -285,16 +284,14 @@ export function parcelLabelDoc(o: Order, company: Company): PrintDoc {
   const pays = o.payments || [];
   for (const p of pays) b.push(P(`Déjà payé ${PAY_METHODS[p.method]}`, '- ' + ar(p.amount)));
   if (rest > 0) {
-    b.push(P('À ENCAISSER', ar(rest), { bold: true, tall: true }));
+    b.push(P('A ENCAISSER', ar(rest), { bold: true }));
     // Détail seulement après un paiement partiel (sinon il répète les lignes Articles / Frais).
     if (pays.length) { b.push(P('  dont articles', ar(x.toCollect))); if (x.feeKept) b.push(P('  dont frais livraison', ar(x.feeKept))); }
-  } else b.push(T('RIEN À ENCAISSER - DÉJÀ PAYÉ', { align: 'center', bold: true }));
+  } else b.push(T('RIEN A ENCAISSER - DEJA PAYE', { align: 'center', bold: true }));
   if (o.notes) { b.push(L()); b.push(T(`Obs. : ${o.notes}`)); }
   b.push(L());
   b.push(T(thanks(c, true), { align: 'center' }));
   b.push({ k: 'qr', data: orderUrl(o.id) });
-  b.push(T('Usage interne : scanner pour ouvrir la commande', { align: 'center' }));
-  b.push({ k: 'feed', n: 2 });
   return { title: `Étiquette ${o.number}`, blocks: b };
 }
 
@@ -320,7 +317,7 @@ export function routeSheetDoc(courier: Courier | undefined, orders: Order[], c: 
     b.push(T(`${o.name ? o.name + ' - ' : ''}${fmtPhone(o.phone)}`));
     b.push(T(`${zone?.name || ''}${o.place ? ' - ' + o.place : ''}`));
     for (const l of o.lines) b.push(T(`  ${fmtNum(l.qty)} x ${itemName(l.variantId)}${l.isChoice ? ' (CHOIX)' : ''}`));
-    b.push(P('À ENCAISSER', ar(x.toCollect), { bold: true }));
+    b.push(P('A ENCAISSER', ar(x.toCollect), { bold: true }));
     if (!x.toCollect && x.feeOwed) b.push(T('Déjà payé par Mobile Money : rien à encaisser'));
     b.push(P(`  + frais livreur${x.feeOwed ? ' (déjà payés)' : ''}`, ar(x.fee)));
     b.push(P('  Le client paie au total', ar(x.clientPays)));
@@ -334,7 +331,7 @@ export function routeSheetDoc(courier: Courier | undefined, orders: Order[], c: 
   b.push(P('Info : total payé par les clients', ar(clients)));
   b.push(P('Info : frais livreur (gardés)', ar(fees - owed)));
   if (owed) b.push(P('Frais à reverser au livreur', '- ' + ar(owed), { bold: true }));
-  b.push(P('TOTAL À VERSER', ar(collect - owed), { bold: true, tall: true }));
+  b.push(P('TOTAL A VERSER', ar(collect - owed), { bold: true }));
   b.push(T('Les frais de livraison ne sont pas à verser : ils restent au livreur.'));
   b.push(T('Si une livraison n’est pas faite ou revient, cochez-la et ne versez pas son montant : elle sera reportée.'));
   b.push({ k: 'feed' });
@@ -359,10 +356,9 @@ export function testDoc(c: Company, printerName: string): PrintDoc {
       T('Accents : é è ê à â ç ô û ù ï « »'),
       T('Si les accents sont mal imprimés, changez le « jeu de caractères » de l’imprimante dans Trésor en ligne.'),
       P('Article exemple', ar(25000)),
-      P('TOTAL', ar(25000), { bold: true, tall: true }),
+      P('TOTAL', ar(25000), { bold: true }),
       L('='),
       T('Impression réussie !', { align: 'center', bold: true }),
-      { k: 'feed', n: 2 },
     ],
   };
 }

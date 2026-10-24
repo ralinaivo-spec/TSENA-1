@@ -623,8 +623,9 @@ export function RedateModal({ settlement, order, onClose }: { settlement?: Couri
 /** Documents imprimables d'une commande : ticket, et bon de livraison si elle part avec un livreur. */
 function printDocs(o: Order, company: ReturnType<typeof useCompany>): DocChoice[] {
   const d: DocChoice[] = [{ key: 'ticket', label: isWalkIn(o) ? 'Ticket de caisse' : 'Ticket client', build: () => ticketDoc(o, company) }];
-  if (!isWalkIn(o) && !isPickupZone(o.zoneId)) d.unshift({ key: 'bon', label: 'Bon de livraison', build: () => deliveryNoteDoc(o, company) });
-  if (!isWalkIn(o) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status)) d.unshift({ key: 'etiquette', label: 'Étiquette du colis (58 mm)', build: () => parcelLabelDoc(o, company) });
+  // Ticket client en premier (choix par défaut à l'impression), puis bon de livraison et étiquette.
+  if (!isWalkIn(o) && !isPickupZone(o.zoneId)) d.push({ key: 'bon', label: 'Bon de livraison', build: () => deliveryNoteDoc(o, company) });
+  if (!isWalkIn(o) && !['delivered', 'partial', 'refused', 'cancelled'].includes(o.status)) d.push({ key: 'etiquette', label: 'Étiquette du colis (58 mm)', build: () => parcelLabelDoc(o, company) });
   return d;
 }
 

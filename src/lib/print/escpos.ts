@@ -85,7 +85,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
       const len = data.length + 3;
       one.push(ESC, 0x61, 1);
       one.push(GS, 0x28, 0x6b, 4, 0, 0x31, 0x41, 0x32, 0x00); // modèle 2
-      one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x43, 6);          // taille des points
+      one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x43, 4);          // taille des points (petit QR : économise le papier)
       one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x45, 0x31);       // correction M
       one.push(GS, 0x28, 0x6b, len & 0xff, len >> 8, 0x31, 0x50, 0x30, ...data);
       one.push(GS, 0x28, 0x6b, 3, 0, 0x31, 0x51, 0x30, 0x0a); // impression

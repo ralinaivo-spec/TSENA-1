@@ -173,7 +173,7 @@ export function docHtml(doc: PrintDoc, paper: Paper, logo?: string | null): stri
   return layout(doc, cols).map((r: Row) => {
     if (r.logo) { const src = logoFor(r, logo); return src ? `<div class="tk-logo"><img src="${src}" alt=""></div>` : ''; }
     if (r.cut) return '<div class="tk-cut"></div>';
-    if (r.qr) return `<div class="tk-qr">${qrSvg(r.qr, 3)}</div>`;
+    if (r.qr) return `<div class="tk-qr">${qrSvg(r.qr, 2)}</div>`;
     const cls = [r.bold && 'b', r.big && 'big', r.tall && 'tall'].filter(Boolean).join(' ');
     return `<div class="tk-row ${cls}">${esc(r.s) || '&nbsp;'}</div>`;
   }).join('');
@@ -224,7 +224,7 @@ export async function docImage(doc: PrintDoc, paper: Paper, logo?: string | null
   for (const r of rows) { const src = r.logo ? logoFor(r, logo) : undefined; if (src && !imgs.has(src)) { const im = new Image(); im.src = src; try { await im.decode(); imgs.set(src, im); } catch { imgs.set(src, null); } } }
   const imgOf = (r: Row) => { const src = logoFor(r, logo); return src ? imgs.get(src) ?? null : null; };
   const hOf = (im: HTMLImageElement | null) => (im ? Math.min(140, (im.height * Math.min(width * 0.5, im.width)) / im.width) : 0);
-  const qrPx = 5;
+  const qrPx = 3;
   const qrH = (r: Row) => (qrMatrix(r.qr!).length + 8) * qrPx;
   const height = pad * 2 + rows.reduce((h, r) => h + (r.qr ? qrH(r) : r.logo ? (imgOf(r) ? hOf(imgOf(r)) + 10 : 0) : r.cut ? 30 : r.big || r.tall ? lineH * 2 : lineH), 0);
   const canvas = document.createElement('canvas');

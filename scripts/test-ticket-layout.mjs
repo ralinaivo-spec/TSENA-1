@@ -20,7 +20,7 @@ await p.evaluate(async () => {
 });
 await p.reload(); await p.waitForTimeout(1500);
 await p.goto('http://localhost:5173/#/commandes/o1'); await p.waitForTimeout(1000);
-await p.getByRole('button', { name: 'Imprimer' }).first().click(); await p.waitForTimeout(600);
+await p.getByRole('button', { name: 'Imprimer' }).first().click(); await p.waitForTimeout(600); console.log('default pressed:', await p.locator('.segmented button[aria-pressed=true]').innerText());
 for (const name of ['Étiquette du colis (58 mm)', 'Bon de livraison', 'Ticket client']) {
   await p.getByRole('button', { name }).click(); await p.waitForTimeout(400);
   await p.locator('.ticket-preview').screenshot({ path: `/tmp/claude-0/t/tk-${name.slice(0,4)}.png` });

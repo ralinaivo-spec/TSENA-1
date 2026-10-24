@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Tickets plus compacts (moins de papier) : « A ENCAISSER », « TOTAL » et le nom / téléphone du client en gras taille normale, QR code plus petit sans texte dessous, marge un peu plus large, moins de papier blanc à la fin ; « Ticket client » est choisi par défaut dans la fenêtre Imprimer d’une commande.',
     'Tickets, bons de livraison et étiquettes revus : marge à gauche et à droite, écriture moins grosse (nom, téléphone et totaux en double hauteur au lieu de double taille), plus de montants répétés (« 1 x 20 000 », sous-total d’un seul article, « dont articles / dont frais » et « reste à payer » quand rien n’est encore payé).',
     'Message de fin : « Merci pour votre achat » (vente sur place) ou « Merci pour votre commande » (commande livrée, aussi sur l’étiquette) ; le message personnalisé de la page ou de la société reste prioritaire.',
     'Accents : les imprimantes réglées sur l’ancien « PC858 » utilisent maintenant PC850, qui imprime correctement « À », « é »… sur les imprimantes chinoises.',
