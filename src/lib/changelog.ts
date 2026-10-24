@@ -3,6 +3,9 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Tickets, bons de livraison et étiquettes revus : marge à gauche et à droite, écriture moins grosse (nom, téléphone et totaux en double hauteur au lieu de double taille), plus de montants répétés (« 1 x 20 000 », sous-total d’un seul article, « dont articles / dont frais » et « reste à payer » quand rien n’est encore payé).',
+    'Message de fin : « Merci pour votre achat » (vente sur place) ou « Merci pour votre commande » (commande livrée, aussi sur l’étiquette) ; le message personnalisé de la page ou de la société reste prioritaire.',
+    'Accents : les imprimantes réglées sur l’ancien « PC858 » utilisent maintenant PC850, qui imprime correctement « À », « é »… sur les imprimantes chinoises.',
     'Notifications d’impression plus visibles : « Envoyé » et « Imprimé » restent 10 secondes ; les erreurs et les tickets en attente restent affichés jusqu’à ce qu’on les ferme. Toutes les notifications ont maintenant un bouton × pour les fermer.',
     'Historique des impressions envoyées aux postes : bouton « Réessayer » (ticket en attente ou en erreur, relancé tout de suite) et « Réimprimer » (ticket déjà sorti) ; le poste dont l’imprimante est à reconnecter est signalé dans la liste.',
     'Poste d’impression : les tickets en attente repartent tout seuls dès que l’imprimante du poste fonctionne (nouvel essai toutes les 20 s, ou dès une impression réussie sur le poste).',

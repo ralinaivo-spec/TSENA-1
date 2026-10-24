@@ -4,14 +4,16 @@ import { layout, logoFor, type PrintDoc } from './doc';
 export type Charset = 'cp850' | 'cp858' | 'wpc1252' | 'wpc1252cn' | 'ascii';
 export const CHARSETS: Record<Charset, string> = {
   cp850: 'A — PC850 (recommandé : marche sur presque toutes les imprimantes)',
-  cp858: 'B — PC858 (imprimantes Epson)',
+  cp858: 'A — PC850 (ancien réglage « PC858 »)',
   wpc1252: 'C — Windows-1252 (imprimantes Epson)',
   wpc1252cn: 'D — Windows-1252 (imprimantes 58 mm chinoises : JK-5803H, POS-58…)',
   ascii: 'E — Sans accents (si aucune autre ne marche)',
 };
 /** Numéro de la page de code envoyé à l'imprimante (commande ESC t n). */
-const TABLE: Record<Charset, number> = { cp850: 2, cp858: 19, wpc1252: 16, wpc1252cn: 11, ascii: 0 };
-const ENC: Record<Charset, 'cp850' | 'cp858' | 'wpc1252' | 'ascii'> = { cp850: 'cp850', cp858: 'cp858', wpc1252: 'wpc1252', wpc1252cn: 'wpc1252', ascii: 'ascii' };
+// « PC858 » (n° 19 chez Epson) correspond à une autre langue sur beaucoup d'imprimantes chinoises (lettres accentuées
+// remplacées par des traits) : les imprimantes réglées ainsi utilisent désormais PC850 (n° 2), identique sauf l'euro.
+const TABLE: Record<Charset, number> = { cp850: 2, cp858: 2, wpc1252: 16, wpc1252cn: 11, ascii: 0 };
+const ENC: Record<Charset, 'cp850' | 'cp858' | 'wpc1252' | 'ascii'> = { cp850: 'cp850', cp858: 'cp850', wpc1252: 'wpc1252', wpc1252cn: 'wpc1252', ascii: 'ascii' };
 
 // Correspondance des lettres accentuées pour les pages de code PC850/PC858.
 const CP858: Record<string, number> = {
@@ -75,7 +77,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   for (const r of rows) { const src = r.logo ? logoFor(r, o.logo) : undefined; if (src && !rasters.has(src)) { try { rasters.set(src, await logoRaster(src, dots)); } catch { rasters.set(src, []); } } }
   const one: number[] = [ESC, 0x40]; // initialisation
   one.push(ESC, 0x74, TABLE[o.charset] ?? 2);
-  let bold = false, big = false;
+  let bold = false, big = 0;
   for (const r of rows) {
     if (r.logo) { const src = logoFor(r, o.logo); const logo = src ? rasters.get(src) ?? [] : []; if (logo.length) one.push(ESC, 0x61, 1, ...logo, ESC, 0x61, 0); continue; }
     if (r.qr) {
@@ -92,7 +94,8 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
     }
     if (r.cut) { one.push(ESC, 0x64, 4); if (o.cut) one.push(GS, 0x56, 0x42, 0x00); continue; }
     if (!!r.bold !== bold) { bold = !!r.bold; one.push(ESC, 0x45, bold ? 1 : 0); }
-    if (!!r.big !== big) { big = !!r.big; one.push(GS, 0x21, big ? 0x11 : 0x00); }
+    const size = r.big ? 0x11 : r.tall ? 0x01 : 0x00;
+    if (size !== big) { big = size; one.push(GS, 0x21, size); }
     one.push(...encodeText(r.s.replace(/\s+$/, ''), o.charset), 0x0a);
   }
   if (bold) one.push(ESC, 0x45, 0);
@@ -114,7 +117,7 @@ export function charsetProbe(): Uint8Array {
   line('est bien ecrite :');
   line('');
   for (const k of Object.keys(TABLE) as Charset[]) {
-    if (k === 'ascii') continue;
+    if (k === 'ascii' || k === 'cp858') continue;
     out.push(ESC, 0x74, TABLE[k]);
     out.push(ESC, 0x45, 1, ...encodeText(`${CHARSETS[k][0]}`, 'ascii'), ESC, 0x45, 0, 0x20, ...encodeText('é è à ç ê ô û ï É', k), 0x0a);
   }

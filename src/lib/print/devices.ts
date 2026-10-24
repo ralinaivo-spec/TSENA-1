@@ -174,7 +174,7 @@ export function docHtml(doc: PrintDoc, paper: Paper, logo?: string | null): stri
     if (r.logo) { const src = logoFor(r, logo); return src ? `<div class="tk-logo"><img src="${src}" alt=""></div>` : ''; }
     if (r.cut) return '<div class="tk-cut"></div>';
     if (r.qr) return `<div class="tk-qr">${qrSvg(r.qr, 3)}</div>`;
-    const cls = [r.bold && 'b', r.big && 'big'].filter(Boolean).join(' ');
+    const cls = [r.bold && 'b', r.big && 'big', r.tall && 'tall'].filter(Boolean).join(' ');
     return `<div class="tk-row ${cls}">${esc(r.s) || '&nbsp;'}</div>`;
   }).join('');
 }
@@ -183,7 +183,7 @@ export function docHtml(doc: PrintDoc, paper: Paper, logo?: string | null): stri
 export function systemPrint(doc: PrintDoc, paper: Paper, logo?: string | null, copies = 1): Promise<void> {
   return new Promise((resolve) => {
     const lay = layout(doc, paper === '58' ? 32 : 48);
-    const rows = lay.length + lay.filter((r) => r.qr).length * 7;
+    const rows = lay.length + lay.filter((r) => r.big || r.tall).length + lay.filter((r) => r.qr).length * 7;
     const area = document.createElement('div');
     area.className = `print-area ticket paper-${paper}`;
     const one = `<div class="tk-page">${docHtml(doc, paper, logo)}</div>`;
@@ -226,7 +226,7 @@ export async function docImage(doc: PrintDoc, paper: Paper, logo?: string | null
   const hOf = (im: HTMLImageElement | null) => (im ? Math.min(140, (im.height * Math.min(width * 0.5, im.width)) / im.width) : 0);
   const qrPx = 5;
   const qrH = (r: Row) => (qrMatrix(r.qr!).length + 8) * qrPx;
-  const height = pad * 2 + rows.reduce((h, r) => h + (r.qr ? qrH(r) : r.logo ? (imgOf(r) ? hOf(imgOf(r)) + 10 : 0) : r.cut ? 30 : r.big ? lineH * 2 : lineH), 0);
+  const height = pad * 2 + rows.reduce((h, r) => h + (r.qr ? qrH(r) : r.logo ? (imgOf(r) ? hOf(imgOf(r)) + 10 : 0) : r.cut ? 30 : r.big || r.tall ? lineH * 2 : lineH), 0);
   const canvas = document.createElement('canvas');
   canvas.width = width * scale; canvas.height = height * scale;
   const ctx = canvas.getContext('2d')!;
@@ -250,8 +250,9 @@ export async function docImage(doc: PrintDoc, paper: Paper, logo?: string | null
     ctx.font = `${r.bold ? 'bold ' : ''}${size}px "Courier New", ui-monospace, monospace`;
     // Chaque caractère dans sa case : alignement exact des colonnes.
     const cw = r.big ? charW * 2 : charW;
-    [...r.s].forEach((ch, i) => ctx.fillText(ch, pad + i * cw, y + (r.big ? 4 : 2)));
-    y += r.big ? lineH * 2 : lineH;
+    if (r.tall) { ctx.save(); ctx.translate(0, y + 4); ctx.scale(1, 2); [...r.s].forEach((ch, i) => ctx.fillText(ch, pad + i * cw, 0)); ctx.restore(); }
+    else [...r.s].forEach((ch, i) => ctx.fillText(ch, pad + i * cw, y + (r.big ? 4 : 2)));
+    y += r.big || r.tall ? lineH * 2 : lineH;
   }
   return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('Image impossible'))), 'image/png'));
 }

@@ -429,6 +429,7 @@ button.stat { text-align: left; font: inherit; color: inherit; cursor: pointer; 
 .ticket .tk-row { overflow: hidden; }
 .ticket .b { font-weight: 700; }
 .ticket .big { font-size: 2em; line-height: 1.15; font-weight: 700; }
+.ticket .tall { transform: scaleY(2); transform-origin: top left; margin-bottom: 1.25em; font-weight: 700; }
 .ticket .tk-logo { text-align: center; padding: 4px 0 8px; }
 .ticket .tk-logo img { max-width: 60%; max-height: 90px; filter: grayscale(1) contrast(1.4); }
 .ticket .tk-cut { border-top: 1px dashed #999; margin: 12px 0; }

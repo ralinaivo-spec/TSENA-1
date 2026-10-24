@@ -39,7 +39,7 @@ function TicketPrinterGuide({ open }: { open: boolean }) {
           <li><strong>Ajouter une imprimante</strong> → Branchement <strong>« Bluetooth (direct) »</strong> → <strong>Chercher l’imprimante</strong> → choisissez son nom (ex. <em>KPrinter_6193</em>) → Associer.</li>
           <li>Si son nom n’apparaît pas dans la liste (imprimantes Bluetooth « classiques », ex. <em>JK-301PL</em>) : appairez-la d’abord dans les réglages Bluetooth {where} (code souvent <strong>0000</strong> ou <strong>1234</strong>), puis choisissez le branchement <strong>« Port série / Bluetooth appairé »</strong> et sélectionnez <em>KPrinter_…</em>.</li>
           <li>Avec le câble USB : branchement <strong>« USB (direct) »</strong> → choisissez <em>POS-58</em> / <em>Printer POS-58</em>.</li>
-          <li>Papier <strong>58 mm</strong>, puis <strong>Test des accents</strong> : un petit ticket sort avec des lignes A, B, C, D. Choisissez dans « Jeu de caractères » la lettre dont la ligne <em>é è à ç</em> est bien écrite.</li>
+          <li>Papier <strong>58 mm</strong>, puis <strong>Test des accents</strong> : un petit ticket sort avec des lignes A, C, D. Choisissez dans « Jeu de caractères » la lettre dont la ligne <em>é è à ç</em> est bien écrite.</li>
           <li>Enregistrez, mettez-la <strong>« Par défaut »</strong>. Ensuite, le bouton <strong>Imprimer</strong> (ticket de caisse, ticket client, bon de livraison, étiquette) l’utilise directement. Après chaque réouverture du logiciel, la première impression peut demander de recliquer sur l’imprimante dans la liste (sécurité du navigateur).</li>
         </ol>
       </div>
@@ -237,7 +237,7 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
         {p.kind === 'serial' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Appairez d’abord l’imprimante dans les réglages Bluetooth {where}, puis cliquez sur « Chercher l’imprimante » : elle apparaît sous son nom (ex. « KPrinter_… »).</p>}
         <div className="grid-2">
           <SelectField label="Papier" value={p.paper} onChange={(v) => set({ paper: v as Paper })} options={(Object.keys(PAPERS) as Paper[]).filter((k) => direct ? k !== 'a4' : true).map((k) => ({ value: k, label: PAPERS[k] }))} />
-          {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).map((k) => ({ value: k, label: CHARSETS[k] }))} />}
+          {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).filter((k) => k !== 'cp858' || p.charset === 'cp858').map((k) => ({ value: k, label: CHARSETS[k] }))} />}
           {p.kind === 'bluetooth' && <SelectField label="Envoi Bluetooth" hint="Si le ticket s’arrête au milieu : choisissez « Normal »." value={p.btSpeed ?? 'safe'} onChange={(v) => set({ btSpeed: v as BtSpeed })} options={(Object.keys(BT_SPEEDS) as BtSpeed[]).map((k) => ({ value: k, label: BT_SPEEDS[k] }))} />}
           {p.kind === 'serial' && <SelectField label="Vitesse du port" value={String(p.baud ?? 9600)} onChange={(v) => set({ baud: Number(v) })} options={[9600, 19200, 38400, 115200].map((b) => ({ value: String(b), label: `${b} bauds` }))} />}
         </div>
