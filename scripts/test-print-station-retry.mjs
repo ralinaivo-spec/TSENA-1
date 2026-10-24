@@ -32,6 +32,6 @@ console.log('j1 auto', await st('j1'), 'bytes', (await p.evaluate(() => window._
 await p.goto('http://localhost:5173/#/parametres/imprimantes'); await p.waitForTimeout(800);
 const sum = p.getByText('Dernières impressions envoyées aux postes'); if (await sum.count()) await sum.click();
 await p.getByRole('button', { name: 'Réessayer' }).first().click(); await p.waitForTimeout(2500);
-console.log('j2 after retry', await st('j2'));
+console.log('j2 after retry', await st('j2'), 'close btn', await p.locator('.toast-close').count()); await p.locator('.toast-close').first().click(); await p.waitForTimeout(300); console.log('after close', await p.locator('.toast').count());
 console.log('reprint buttons', await p.getByRole('button', { name: 'Réimprimer' }).count());
 await b.close();

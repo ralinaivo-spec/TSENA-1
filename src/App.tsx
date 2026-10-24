@@ -151,7 +151,7 @@ function SyncPill() {
 function Shell() {
   const user = useMe();
   usePrintStationWorker();
-  useSentJobsWatcher((text, kind) => toast(text, kind));
+  useSentJobsWatcher((text, kind) => toast(text, kind, kind === 'error' ? { sticky: true } : { ms: 10000 })); // impressions envoyées : bien visibles
   const can = useCan();
   const company = useCompany();
   const route = useRoute();
@@ -233,7 +233,7 @@ function StationBanner() {
     <div className="notice notice-warn" role="alert"><Icon name="printer" />
       <div style={{ flex: 1 }}><strong>Poste d’impression : imprimante à reconnecter</strong>
         <div className="small">{st.pending ? `${st.pending} ticket(s) envoyé(s) par les autres appareils attend(ent). ` : ''}Vérifiez que l’imprimante est allumée, puis cliquez sur « Reconnecter ».</div></div>
-      <Button icon="printer" busy={busy} onClick={async () => { setBusy(true); try { await st.reconnect(); toast('Imprimante reconnectée : les tickets en attente sortent'); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); } }}>Reconnecter l’imprimante</Button>
+      <Button icon="printer" busy={busy} onClick={async () => { setBusy(true); try { await st.reconnect(); toast('Imprimante reconnectée : les tickets en attente sortent', 'ok', { ms: 10000 }); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(e?.message ?? String(e), 'error'); } finally { setBusy(false); } }}>Reconnecter l’imprimante</Button>
     </div>
   );
 }

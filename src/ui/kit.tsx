@@ -55,14 +55,16 @@ export function restoreScroll(route: string) {
 }
 
 // ---- Notifications ----
-interface Toast { id: number; text: string; kind: 'ok' | 'error' | 'info' }
+interface Toast { id: number; text: string; kind: 'ok' | 'error' | 'info'; sticky?: boolean }
 let toasts: Toast[] = [];
 const toastSubs = new Set<() => void>();
-export function toast(text: string, kind: Toast['kind'] = 'ok') {
-  const t = { id: Date.now() + Math.random(), text, kind };
-  toasts = [...toasts.slice(-2), t];
+const closeToast = (id: number) => { toasts = toasts.filter((x) => x.id !== id); toastSubs.forEach((f) => f()); };
+/** Notification. `sticky` : reste affichée jusqu'à ce qu'on la ferme (×) ; `ms` : durée d'affichage. */
+export function toast(text: string, kind: Toast['kind'] = 'ok', opts: { sticky?: boolean; ms?: number } = {}) {
+  const t = { id: Date.now() + Math.random(), text, kind, sticky: opts.sticky };
+  toasts = [...toasts.filter((x) => x.sticky).slice(-3), ...toasts.filter((x) => !x.sticky).slice(-2), t];
   toastSubs.forEach((f) => f());
-  setTimeout(() => { toasts = toasts.filter((x) => x !== t); toastSubs.forEach((f) => f()); }, kind === 'error' ? 6000 : 3500);
+  if (!opts.sticky) setTimeout(() => closeToast(t.id), opts.ms ?? (kind === 'error' ? 6000 : 3500));
 }
 export function Toasts() {
   const list = useSyncExternalStore((cb) => { toastSubs.add(cb); return () => toastSubs.delete(cb); }, () => toasts);
@@ -71,7 +73,8 @@ export function Toasts() {
       {list.map((t) => (
         <div key={t.id} className={`toast toast-${t.kind}`}>
           <Icon name={t.kind === 'error' ? 'alert' : 'check'} size={18} />
-          <span>{t.text}</span>
+          <span style={{ flex: 1 }}>{t.text}</span>
+          <button type="button" className="toast-close" aria-label="Fermer" title="Fermer" onClick={() => closeToast(t.id)}><Icon name="x" size={16} /></button>
         </div>
       ))}
     </div>

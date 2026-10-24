@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-24', items: [
+    'Notifications d’impression plus visibles : « Envoyé » et « Imprimé » restent 10 secondes ; les erreurs et les tickets en attente restent affichés jusqu’à ce qu’on les ferme. Toutes les notifications ont maintenant un bouton × pour les fermer.',
     'Historique des impressions envoyées aux postes : bouton « Réessayer » (ticket en attente ou en erreur, relancé tout de suite) et « Réimprimer » (ticket déjà sorti) ; le poste dont l’imprimante est à reconnecter est signalé dans la liste.',
     'Poste d’impression : les tickets en attente repartent tout seuls dès que l’imprimante du poste fonctionne (nouvel essai toutes les 20 s, ou dès une impression réussie sur le poste).',
     'Fenêtre « Imprimer » : les tickets déjà en attente sur le poste choisi sont affichés (avec « Ce document est déjà en attente ») et peuvent être annulés ; alerte si un ticket envoyé est encore en attente après 25 s ; corbeille pour annuler un ticket en attente ou effacer une erreur dans l’historique, et bouton pour tout effacer.',

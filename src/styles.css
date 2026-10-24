@@ -1331,3 +1331,7 @@ a.bell { text-decoration: none; }
 
 .printer-guide summary { cursor: pointer; }
 .guide-steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+
+.toast { pointer-events: auto; }
+.toast-close { background: none; border: 0; color: inherit; opacity: .8; cursor: pointer; padding: 4px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.toast-close:hover { opacity: 1; background: rgba(255,255,255,.15); }

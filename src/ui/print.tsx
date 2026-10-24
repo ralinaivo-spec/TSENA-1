@@ -29,8 +29,8 @@ export function PrintDialog({ docs, onClose }: { docs: DocChoice[]; onClose: () 
 
   async function go() {
     setBusy(true);
-    try { toast(await printTo(target, doc, copies)); onClose(); }
-    catch (e: any) { if (e?.name !== 'NotFoundError' && e?.name !== 'AbortError') toast(e?.message ?? String(e), 'error'); }
+    try { const msg = await printTo(target, doc, copies); toast(msg, msg.includes('attend') ? 'error' : 'ok', msg.includes('attend') ? { sticky: true } : { ms: 10000 }); onClose(); }
+    catch (e: any) { if (e?.name !== 'NotFoundError' && e?.name !== 'AbortError') toast(e?.message ?? String(e), 'error', { sticky: true }); }
     finally { setBusy(false); }
   }
 
