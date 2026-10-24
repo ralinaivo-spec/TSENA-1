@@ -36,6 +36,8 @@ export interface Printer {
   paused?: boolean;
   /** Taille des paquets Bluetooth (par défaut : sûr, 20 octets). */
   btSpeed?: BtSpeed;
+  /** Espace blanc en bas du ticket, en mm (pour le déchirer sans couper le texte). Par défaut 20 mm. */
+  feedMm?: number;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string; /** L'imprimante du poste attend un clic « Reconnecter » sur le poste. */ alert?: string | null }
 export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; retryAt?: string; byName?: string; printedAt?: string; error?: string }
@@ -82,7 +84,7 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies);
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
   if (p.paused) throw Object.assign(new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`), { name: 'PrinterPaused' });
-  const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
+  const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies, feedMm: p.feedMm ?? 20 });
   await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName, p.btSpeed);
   void clearStationAlert(p.id); // l'imprimante répond : le poste peut reprendre les tickets en attente
 }

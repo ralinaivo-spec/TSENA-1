@@ -69,7 +69,9 @@ export async function logoRaster(dataUrl: string, dots: number): Promise<number[
   return [GS, 0x76, 0x30, 0x00, bytesPerRow & 0xff, bytesPerRow >> 8, h & 0xff, h >> 8, ...data];
 }
 
-export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Charset; cut: boolean; logo?: string | null; copies?: number }): Promise<Uint8Array> {
+export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Charset; cut: boolean; logo?: string | null; copies?: number; feedMm?: number }): Promise<Uint8Array> {
+  // Espace blanc en bas pour déchirer le ticket sans couper le texte (8 points par mm ; ESC J avance de n points, 255 au plus).
+  const tail = (): number[] => { const out: number[] = []; let dots = Math.round((o.feedMm ?? 20) * 8); while (dots > 0) { const n = Math.min(255, dots); out.push(ESC, 0x4a, n); dots -= n; } return out; };
   const dots = o.cols >= 48 ? 576 : 384;
   const rows = layout(doc, o.cols);
   // Un logo par ligne « logo » : celui de la page si le document en a un, sinon celui de la société.
@@ -92,7 +94,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
       one.push(ESC, 0x61, 0);
       continue;
     }
-    if (r.cut) { one.push(ESC, 0x64, 4); if (o.cut) one.push(GS, 0x56, 0x42, 0x00); continue; }
+    if (r.cut) { one.push(...tail()); if (o.cut) one.push(GS, 0x56, 0x42, 0x00); continue; }
     if (!!r.bold !== bold) { bold = !!r.bold; one.push(ESC, 0x45, bold ? 1 : 0); }
     const size = r.big ? 0x11 : r.tall ? 0x01 : 0x00;
     if (size !== big) { big = size; one.push(GS, 0x21, size); }
@@ -100,7 +102,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   }
   if (bold) one.push(ESC, 0x45, 0);
   if (big) one.push(GS, 0x21, 0);
-  one.push(ESC, 0x64, 3);
+  one.push(...tail());
   if (o.cut) one.push(GS, 0x56, 0x42, 0x00);
   const all: number[] = [];
   for (let i = 0; i < Math.max(1, o.copies ?? 1); i++) all.push(...one);

@@ -28,5 +28,5 @@ await p.getByRole('button', { name: 'Enregistrer' }).click(); await p.waitForTim
 await p.evaluate(() => window.__out = []);
 await p.getByRole('button', { name: 'Test', exact: true }).first().click(); await p.waitForTimeout(800);
 const o2 = await p.evaluate(() => window.__out);
-console.log('test page bytes', o2.length, 'table2', o2.map(x => x.toString(16).padStart(2, '0')).join(' ').includes('1b 74 02'));
+console.log('test page bytes', o2.length, 'ESC J 160:', o2.map(x => x.toString(16).padStart(2, '0')).join(' ').includes('1b 4a a0'), 'table2', o2.map(x => x.toString(16).padStart(2, '0')).join(' ').includes('1b 74 02'));
 await b.close();
