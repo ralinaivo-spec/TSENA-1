@@ -6,7 +6,7 @@ import { currentUser } from '../auth';
 import { getCloud, syncNow } from '../sync';
 import { DEFAULT_COMPANY, type Company } from '../settings';
 import { colsOf, type Paper, type PrintDoc } from './doc';
-import { encodeDoc, type Charset } from './escpos';
+import { charsetProbe, encodeDoc, type Charset } from './escpos';
 import { shareImage, systemPrint, writeRaw } from './devices';
 
 export * from './doc';
@@ -36,7 +36,7 @@ export interface PrintStation extends BaseRecord { name: string; printerName?: s
 export interface PrintJob extends BaseRecord { stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; byName?: string; printedAt?: string; error?: string }
 
 /** Choix toujours disponibles, sans réglage. */
-export const SYSTEM_PRINTER: Printer = { id: '@system', name: 'Fenêtre d’impression de l’appareil', kind: 'system', paper: '58', charset: 'cp858', logo: true, cut: false };
+export const SYSTEM_PRINTER: Printer = { id: '@system', name: 'Fenêtre d’impression de l’appareil', kind: 'system', paper: '58', charset: 'cp850', logo: true, cut: false };
 export const SHARE_TARGET = '@share';
 
 export const usePrinters = () => useMeta<Printer[]>('printers', []);
@@ -76,7 +76,14 @@ export async function printOn(p: Printer, doc: PrintDoc, copies = 1) {
   if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies);
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
   const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies });
-  await writeRaw(p.kind, p.ref, data, p.baud);
+  await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName);
+}
+
+/** Imprime le ticket « Test des accents » pour trouver le bon jeu de caractères. */
+export async function printCharsetProbe(p: Printer) {
+  if (p.kind === 'system') throw new Error('Le test des accents ne concerne que les imprimantes Bluetooth, USB ou port série.');
+  if (!p.ref) throw new Error('Cherchez d’abord l’imprimante.');
+  await writeRaw(p.kind, p.ref, charsetProbe(), p.baud, p.deviceName);
 }
 
 /** Imprime vers un choix (imprimante, poste partagé ou image). Renvoie un message pour l'utilisateur. */

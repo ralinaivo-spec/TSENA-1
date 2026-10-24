@@ -1,12 +1,17 @@
 // Langage ESC/POS : celui des imprimantes à tickets (58 mm et 80 mm, Bluetooth ou USB).
 import { layout, logoFor, type PrintDoc } from './doc';
 
-export type Charset = 'cp858' | 'wpc1252' | 'ascii';
+export type Charset = 'cp850' | 'cp858' | 'wpc1252' | 'wpc1252cn' | 'ascii';
 export const CHARSETS: Record<Charset, string> = {
-  cp858: 'PC858 (le plus courant)',
-  wpc1252: 'Windows-1252',
-  ascii: 'Sans accents (si les autres impriment mal)',
+  cp850: 'A — PC850 (recommandé : marche sur presque toutes les imprimantes)',
+  cp858: 'B — PC858 (imprimantes Epson)',
+  wpc1252: 'C — Windows-1252 (imprimantes Epson)',
+  wpc1252cn: 'D — Windows-1252 (imprimantes 58 mm chinoises : JK-5803H, POS-58…)',
+  ascii: 'E — Sans accents (si aucune autre ne marche)',
 };
+/** Numéro de la page de code envoyé à l'imprimante (commande ESC t n). */
+const TABLE: Record<Charset, number> = { cp850: 2, cp858: 19, wpc1252: 16, wpc1252cn: 11, ascii: 0 };
+const ENC: Record<Charset, 'cp850' | 'cp858' | 'wpc1252' | 'ascii'> = { cp850: 'cp850', cp858: 'cp858', wpc1252: 'wpc1252', wpc1252cn: 'wpc1252', ascii: 'ascii' };
 
 // Correspondance des lettres accentuées pour les pages de code PC850/PC858.
 const CP858: Record<string, number> = {
@@ -17,12 +22,14 @@ const CP858: Record<string, number> = {
 };
 const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[«»]/g, '"').replace(/€/g, 'EUR').replace(/·/g, '.').replace(/°/g, 'o');
 
-function encodeText(s: string, cs: Charset): number[] {
+function encodeText(s: string, charset: Charset): number[] {
+  const cs = ENC[charset];
   const out: number[] = [];
   for (const ch of cs === 'ascii' ? stripAccents(s) : s) {
     const c = ch.codePointAt(0)!;
     if (c < 0x80) out.push(c);
-    else if (cs === 'cp858' && CP858[ch] != null) out.push(CP858[ch]);
+    else if (cs === 'cp850' && ch === '€') out.push(0x45, 0x55, 0x52); // PC850 n'a pas l'euro
+    else if ((cs === 'cp858' || cs === 'cp850') && CP858[ch] != null) out.push(CP858[ch]);
     else if (cs === 'wpc1252' && c <= 0xff) out.push(c);
     else if (cs === 'wpc1252' && ch === '€') out.push(0x80);
     else out.push(...[...stripAccents(ch)].map((x) => (x.charCodeAt(0) < 0x80 ? x.charCodeAt(0) : 0x3f)));
@@ -67,8 +74,7 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   const rasters = new Map<string, number[]>();
   for (const r of rows) { const src = r.logo ? logoFor(r, o.logo) : undefined; if (src && !rasters.has(src)) { try { rasters.set(src, await logoRaster(src, dots)); } catch { rasters.set(src, []); } } }
   const one: number[] = [ESC, 0x40]; // initialisation
-  const table = o.charset === 'cp858' ? 19 : o.charset === 'wpc1252' ? 16 : 0;
-  one.push(ESC, 0x74, table);
+  one.push(ESC, 0x74, TABLE[o.charset] ?? 2);
   let bold = false, big = false;
   for (const r of rows) {
     if (r.logo) { const src = logoFor(r, o.logo); const logo = src ? rasters.get(src) ?? [] : []; if (logo.length) one.push(ESC, 0x61, 1, ...logo, ESC, 0x61, 0); continue; }
@@ -96,4 +102,24 @@ export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Chars
   const all: number[] = [];
   for (let i = 0; i < Math.max(1, o.copies ?? 1); i++) all.push(...one);
   return new Uint8Array(all);
+}
+
+/** Ticket « Test des accents » : la même phrase dans chaque jeu de caractères, repérée par une lettre (A, B, C…).
+ *  On choisit ensuite la lettre dont la ligne s'imprime correctement. */
+export function charsetProbe(): Uint8Array {
+  const out: number[] = [ESC, 0x40];
+  const line = (t: string) => out.push(...encodeText(t, 'ascii'), 0x0a);
+  out.push(ESC, 0x61, 1, ESC, 0x45, 1); line('TEST DES ACCENTS'); out.push(ESC, 0x45, 0, ESC, 0x61, 0);
+  line('Choisissez la lettre dont la ligne');
+  line('est bien ecrite :');
+  line('');
+  for (const k of Object.keys(TABLE) as Charset[]) {
+    if (k === 'ascii') continue;
+    out.push(ESC, 0x74, TABLE[k]);
+    out.push(ESC, 0x45, 1, ...encodeText(`${CHARSETS[k][0]}`, 'ascii'), ESC, 0x45, 0, 0x20, ...encodeText('é è à ç ê ô û ï É', k), 0x0a);
+  }
+  out.push(ESC, 0x74, 0);
+  line(''); line('E : sans accents (dernier recours)');
+  out.push(ESC, 0x64, 4);
+  return new Uint8Array(out);
 }

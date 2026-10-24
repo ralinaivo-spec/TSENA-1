@@ -5,11 +5,45 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, makeStation, pairBluetooth, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  CHARSETS, KINDS, PAPERS, SYSTEM_PRINTER, deletePrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
 import { Icon } from '../ui/icons';
+
+const ua = navigator.userAgent;
+const isMac = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua);
+const directOk = support.bluetooth || support.usb || support.serial;
+const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|CriOS|FxiOS|Firefox/.test(ua);
+
+/** Navigateur sans impression directe (Safari, Firefox) : il faut ouvrir le logiciel dans Chrome ou Edge. */
+function BrowserNotice() {
+  if (directOk) return null;
+  return (
+    <div className="notice notice-warn"><Icon name="alert" /><div><strong>Ce navigateur ne peut pas parler directement à une imprimante à tickets.</strong>
+      <div className="small">{isSafari ? 'Safari' : 'Ce navigateur'} ne permet ni le Bluetooth ni l’USB direct. Ouvrez Trésor en ligne dans <strong>Google Chrome</strong> ou <strong>Microsoft Edge</strong>{isMac ? ' sur ce Mac' : ''} (même adresse, même compte), puis ajoutez l’imprimante ici. Vous pouvez aussi l’installer comme application depuis Chrome (icône ⊕ dans la barre d’adresse).</div></div></div>
+  );
+}
+
+/** Pas à pas pour une imprimante à tickets 58 mm (Bluetooth + USB), surtout sur Mac. */
+function TicketPrinterGuide({ open }: { open: boolean }) {
+  return (
+    <details className="card printer-guide" open={open}>
+      <summary><strong>Imprimante à tickets 58 mm (ex. JK-5803H, « POS-58 », « KPrinter ») : comment la brancher</strong></summary>
+      <div className="stack-s small" style={{ marginTop: 10 }}>
+        <p className="muted" style={{ margin: 0 }}>Aucun logiciel ni pilote à installer : Trésor en ligne envoie le ticket directement à l’imprimante. {isMac ? 'Inutile de l’ajouter dans « Imprimantes et scanners » du Mac.' : ''}</p>
+        <ol className="guide-steps">
+          <li><strong>Allumez l’imprimante</strong> (papier en place) et ouvrez le logiciel dans <strong>Chrome</strong> ou <strong>Edge</strong>.</li>
+          <li><strong>Ajouter une imprimante</strong> → Branchement <strong>« Bluetooth (direct) »</strong> → <strong>Chercher l’imprimante</strong> → choisissez son nom (ex. <em>KPrinter_6193</em>) → Associer.</li>
+          <li>Si son nom n’apparaît pas dans la liste : {isMac ? <>ouvrez <strong>Réglages Système → Bluetooth</strong> sur le Mac, appairez <em>KPrinter_…</em> (code souvent <strong>0000</strong> ou <strong>1234</strong>), </> : <>appairez-la d’abord dans les réglages Bluetooth de l’ordinateur (code souvent <strong>0000</strong> ou <strong>1234</strong>), </>}puis choisissez le branchement <strong>« Port série / Bluetooth appairé »</strong> et sélectionnez <em>KPrinter_…</em>.</li>
+          <li>Avec le câble USB : branchement <strong>« USB (direct) »</strong> → choisissez <em>POS-58</em> / <em>Printer POS-58</em>.</li>
+          <li>Papier <strong>58 mm</strong>, puis <strong>Test des accents</strong> : un petit ticket sort avec des lignes A, B, C, D. Choisissez dans « Jeu de caractères » la lettre dont la ligne <em>é è à ç</em> est bien écrite.</li>
+          <li>Enregistrez, mettez-la <strong>« Par défaut »</strong>. Ensuite, le bouton <strong>Imprimer</strong> (ticket de caisse, ticket client, bon de livraison, étiquette) l’utilise directement. Après chaque réouverture du logiciel, la première impression peut demander de recliquer sur l’imprimante dans la liste (sécurité du navigateur).</li>
+        </ol>
+      </div>
+    </details>
+  );
+}
 
 const isOnline = (s: PrintStation) => !!s.lastSeen && Date.now() - new Date(s.lastSeen).getTime() < 3 * 60_000;
 
@@ -36,6 +70,8 @@ export function PrintersTab() {
 
   return (
     <div className="stack">
+      <BrowserNotice />
+      <TicketPrinterGuide open={!printers.some((p) => p.kind !== 'system')} />
       <div className="card stack">
         <div className="row-between">
           <div><h2>Imprimantes de cet appareil</h2><p className="small muted">Chaque téléphone ou ordinateur a ses propres imprimantes. Donnez-leur un nom clair (ex. « Ticket caisse »).</p></div>
@@ -127,7 +163,7 @@ export function PrintersTab() {
 function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => void }) {
   const company = useCompany();
   const firstKind: PrinterKind = support.bluetooth ? 'bluetooth' : support.usb ? 'usb' : 'system';
-  const [p, setP] = useState<Printer>(printer ?? { id: newId(), name: '', kind: firstKind, paper: '58', charset: 'cp858', logo: true, cut: false });
+  const [p, setP] = useState<Printer>(printer ?? { id: newId(), name: '', kind: firstKind, paper: '58', charset: 'cp850', logo: true, cut: false });
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<Printer>) => setP({ ...p, ...patch });
   const available = (k: PrinterKind) => k === 'system' || support[k];
@@ -152,7 +188,8 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
   return (
     <Modal title={printer ? 'Modifier l’imprimante' : 'Ajouter une imprimante'} onClose={onClose}
       footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button>
-        {(!direct || p.ref) && <Button variant="ghost" onClick={async () => { try { await printOn(p, testDoc(company, p.name || 'Imprimante')); } catch (e: any) { toast(e?.message ?? String(e), 'error'); } }}>Page de test</Button>}
+        {direct && p.ref && <Button variant="ghost" onClick={async () => { try { await printCharsetProbe(p); toast('Ticket « Test des accents » envoyé : choisissez la lettre bien imprimée'); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(e?.message ?? String(e), 'error'); } }}>Test des accents</Button>}
+        {(!direct || p.ref) && <Button variant="ghost" onClick={async () => { try { await printOn(p, testDoc(company, p.name || 'Imprimante')); } catch (e: any) { if (e?.name !== 'NotFoundError') toast(e?.message ?? String(e), 'error'); } }}>Page de test</Button>}
         <Button onClick={submit}>Enregistrer</Button></>}>
       <div className="stack">
         <TextField label="Nom de l’imprimante" required hint="Le nom que vous choisirez au moment d’imprimer, ex. « Ticket caisse »." value={p.name} onChange={(v) => set({ name: v })} />
@@ -178,6 +215,8 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
             {p.ref ? <Badge tone="ok">Appairée : {p.deviceName}</Badge> : <span className="small muted">Une liste des appareils proches va s’ouvrir.</span>}
           </div>
         )}
+        {p.kind === 'bluetooth' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Le nom de l’imprimante n’apparaît pas ? Elle utilise peut-être le Bluetooth « classique » : appairez-la dans les réglages Bluetooth {isMac ? 'du Mac' : 'de l’ordinateur'}, puis choisissez « Port série / Bluetooth appairé ».</p>}
+        {p.kind === 'serial' && !p.ref && <p className="small muted" style={{ margin: 0 }}>Appairez d’abord l’imprimante dans les réglages Bluetooth {isMac ? 'du Mac (Réglages Système → Bluetooth)' : 'de l’ordinateur'}, puis cherchez-la ici : elle apparaît sous son nom (ex. « KPrinter_6193 » ou « cu.KPrinter_6193 »).</p>}
         <div className="grid-2">
           <SelectField label="Papier" value={p.paper} onChange={(v) => set({ paper: v as Paper })} options={(Object.keys(PAPERS) as Paper[]).filter((k) => direct ? k !== 'a4' : true).map((k) => ({ value: k, label: PAPERS[k] }))} />
           {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).map((k) => ({ value: k, label: CHARSETS[k] }))} />}

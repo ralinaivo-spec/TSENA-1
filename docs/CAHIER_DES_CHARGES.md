@@ -446,6 +446,7 @@ Menu **Ventes → Boosts pub** (droits « Saisir les résultats des boosts » po
 - **Poste d'impression partagé** : un appareil relié à l'imprimante (ex. téléphone Android ou ordinateur de la caisse) reçoit par le cloud les tickets envoyés par les autres appareils (iPhone compris) et les imprime automatiquement ; état en ligne / hors ligne visible et historique des impressions.
 - Option par appareil : **ticket imprimé automatiquement après chaque vente sur place**.
 - Imprimante conseillée : thermique 58 mm ESC/POS, Bluetooth + USB.
+- *(24/10/2026)* **Imprimante à tickets 58 mm sans pilote** (ex. JK-5803H « POS-58 », Bluetooth « KPrinter_… ») : guide pas à pas dans Paramètres → Imprimantes (Bluetooth direct ; sinon appairage dans les réglages Bluetooth du Mac/PC puis « Port série / Bluetooth appairé » ; ou USB direct). Rien à installer dans « Imprimantes et scanners » du Mac. Navigateur requis : **Chrome ou Edge** (Safari/Firefox : message d'avertissement). **Test des accents** : un ticket avec les lignes A–D (PC850, PC858, Windows-1252 Epson, Windows-1252 imprimantes chinoises) pour choisir le bon jeu de caractères ; PC850 par défaut (fonctionne sur presque toutes les imprimantes). Reconnexion Bluetooth simplifiée (la liste ne montre que l'imprimante enregistrée), envoi en petits paquets pour les imprimantes à petite mémoire.
 - *Plus tard* : étiquettes articles avec code-barres et prix, récapitulatif de clôture et rapports en PDF.
 
 ---

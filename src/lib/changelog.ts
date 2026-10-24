@@ -2,6 +2,11 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-24', items: [
+    'Imprimantes à tickets 58 mm (ex. JK-5803H / POS-58 / KPrinter) : guide pas à pas dans Paramètres → Imprimantes, sans pilote ni logiciel à installer (Bluetooth, Bluetooth appairé ou USB, dans Chrome ou Edge).',
+    'Nouveau « Test des accents » : un ticket avec les lignes A, B, C, D pour choisir le jeu de caractères qui imprime bien é è à ç (PC850 par défaut).',
+    'Bluetooth : reconnexion plus simple (la liste ne montre que votre imprimante) et envoi plus sûr pour les petites imprimantes ; avertissement si le navigateur (Safari, Firefox) ne peut pas imprimer directement.',
+  ] },
   { date: '2026-10-19', items: [
     'Caisse du jour : toucher un montant (total, sur place, livraison, Mobile Money, dépenses, net) ouvre une petite fenêtre avec le détail (heure, n°, client, articles, vendeur, référence) pour vérifier sans changer d’écran.',
     'Caisse du jour : nouvelle carte « Mobile Money reçu » (total du jour, avec le détail MVola / Orange / Airtel), visible aussi par les vendeurs (leurs pages seulement).',

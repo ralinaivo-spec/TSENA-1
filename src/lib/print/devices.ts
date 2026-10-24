@@ -29,14 +29,17 @@ export async function pairBluetooth(): Promise<{ ref: string; name: string }> {
   return { ref: dev.id, name: dev.name || 'Imprimante Bluetooth' };
 }
 
-async function btCharacteristic(ref: string): Promise<any> {
+async function btCharacteristic(ref: string, name?: string): Promise<any> {
   let dev = btDevices.get(ref);
-  if (!dev && nav.bluetooth.getDevices) dev = (await nav.bluetooth.getDevices()).find((d: any) => d.id === ref);
+  if (!dev && nav.bluetooth.getDevices) { try { dev = (await nav.bluetooth.getDevices()).find((d: any) => d.id === ref); } catch { /* non disponible */ } }
   if (!dev) {
-    // Le navigateur a oublié l'imprimante (après redémarrage) : on la redemande.
-    dev = await nav.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BT_SERVICES });
+    // Le navigateur a oublié l'imprimante (nouvelle ouverture du logiciel) : on la redemande,
+    // en ne montrant que l'imprimante enregistrée (un seul clic sur « Associer »).
+    const filters = name && name !== 'Imprimante Bluetooth' ? [{ name }, { namePrefix: name.slice(0, Math.max(3, name.length - 4)) }] : null;
+    dev = await nav.bluetooth.requestDevice(filters ? { filters, optionalServices: BT_SERVICES } : { acceptAllDevices: true, optionalServices: BT_SERVICES });
   }
   btDevices.set(ref, dev);
+  if (dev.id !== ref) btDevices.set(dev.id, dev);
   const cached = btChars.get(ref);
   if (cached && dev.gatt.connected) return cached;
   const server = await dev.gatt.connect();
@@ -49,12 +52,14 @@ async function btCharacteristic(ref: string): Promise<any> {
   throw new Error('Cette imprimante Bluetooth n’accepte pas l’impression directe.');
 }
 
-async function writeBluetooth(ref: string, data: Uint8Array) {
-  const ch = await btCharacteristic(ref);
-  const size = 180;
+async function writeBluetooth(ref: string, data: Uint8Array, name?: string) {
+  let ch = await btCharacteristic(ref, name);
+  if (!ch.service?.device?.gatt?.connected) { btChars.delete(ref); ch = await btCharacteristic(ref, name); } // imprimante éteinte puis rallumée
+  // Petits paquets : les imprimantes bon marché ont une petite mémoire et perdent les paquets trop gros ou trop rapides.
+  const size = 100;
   for (let i = 0; i < data.length; i += size) {
     const part = data.slice(i, i + size);
-    if (ch.properties.writeWithoutResponse && ch.writeValueWithoutResponse) { await ch.writeValueWithoutResponse(part); await sleep(25); }
+    if (ch.properties.writeWithoutResponse && ch.writeValueWithoutResponse) { await ch.writeValueWithoutResponse(part); await sleep(20); }
     else await (ch.writeValueWithResponse ? ch.writeValueWithResponse(part) : ch.writeValue(part));
   }
 }
@@ -84,25 +89,32 @@ async function writeUsb(ref: string, data: Uint8Array) {
 }
 
 // ---------- Port série (USB-série, ou Bluetooth appairé dans Windows/macOS) ----------
+const SPP = '00001101-0000-1000-8000-00805f9b34fb';
 export async function pairSerial(): Promise<{ ref: string; name: string }> {
   if (!support.serial) throw new Error('Port série non disponible sur ce navigateur. Utilisez Chrome ou Edge sur ordinateur.');
-  const port = await nav.serial.requestPort();
+  // Imprimantes Bluetooth « classiques » (port série SPP) appairées dans les réglages Bluetooth de l'ordinateur.
+  let port: any;
+  try { port = await nav.serial.requestPort({ allowedBluetoothServiceClassIds: [SPP] }); }
+  catch (e: any) { if (e?.name === 'TypeError') port = await nav.serial.requestPort(); else throw e; }
   const info = port.getInfo?.() || {};
   const ports = await nav.serial.getPorts();
-  return { ref: `${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}:${ports.indexOf(port)}`, name: info.usbVendorId ? 'Imprimante (port série USB)' : 'Imprimante (port série Bluetooth)' };
+  return { ref: `${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}:${ports.indexOf(port)}`, name: info.usbVendorId ? 'Imprimante (port série USB)' : 'Imprimante Bluetooth (port série)' };
 }
 async function writeSerial(ref: string, data: Uint8Array, baud: number) {
   const [vid, pid, idx] = ref.split(':');
   const ports = await nav.serial.getPorts();
   let port = ports.find((p: any) => { const i = p.getInfo?.() || {}; return vid && String(i.usbVendorId) === vid && String(i.usbProductId) === pid; }) || ports[Number(idx)];
-  if (!port) port = await nav.serial.requestPort();
-  if (!port.writable) await port.open({ baudRate: baud || 9600 });
+  if (!port) { try { port = await nav.serial.requestPort({ allowedBluetoothServiceClassIds: [SPP] }); } catch (e: any) { if (e?.name === 'TypeError') port = await nav.serial.requestPort(); else throw e; } }
+  if (!port.writable) {
+    try { await port.open({ baudRate: baud || 9600 }); }
+    catch (e: any) { if (!/already open/i.test(e?.message ?? '')) throw new Error(`Impossible d’ouvrir l’imprimante : vérifiez qu’elle est allumée et appairée dans les réglages Bluetooth de l’ordinateur. (${e?.message ?? e})`); }
+  }
   const w = port.writable.getWriter();
   try { await w.write(data); } finally { w.releaseLock(); }
 }
 
-export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number) {
-  if (kind === 'bluetooth') return writeBluetooth(ref, data);
+export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number, name?: string) {
+  if (kind === 'bluetooth') return writeBluetooth(ref, data, name);
   if (kind === 'usb') return writeUsb(ref, data);
   return writeSerial(ref, data, baud || 9600);
 }
