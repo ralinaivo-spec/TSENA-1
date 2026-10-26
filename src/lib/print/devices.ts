@@ -177,17 +177,48 @@ export async function pairSerial(): Promise<{ ref: string; name: string }> {
   const ports = await nav.serial.getPorts();
   return { ref: `${info.usbVendorId ?? ''}:${info.usbProductId ?? ''}:${ports.indexOf(port)}`, name: info.usbVendorId ? 'Imprimante (port série USB)' : 'Imprimante Bluetooth (port série)' };
 }
-async function writeSerial(ref: string, data: Uint8Array, baud: number) {
-  const [vid, pid, idx] = ref.split(':');
-  const ports = await nav.serial.getPorts();
-  let port = ports.find((p: any) => { const i = p.getInfo?.() || {}; return vid && String(i.usbVendorId) === vid && String(i.usbProductId) === pid; }) || ports[Number(idx)];
-  if (!port) { try { port = await nav.serial.requestPort({ allowedBluetoothServiceClassIds: [SPP] }); } catch (e: any) { if (e?.name === 'TypeError') port = await nav.serial.requestPort(); else throw e; } }
-  if (!port.writable) {
-    try { await port.open({ baudRate: baud || 9600 }); }
-    catch (e: any) { if (!/already open/i.test(e?.message ?? '')) throw new Error(`Impossible d’ouvrir l’imprimante : vérifiez qu’elle est allumée et appairée dans les réglages Bluetooth de l’ordinateur. (${e?.message ?? e})`); }
-  }
-  const w = port.writable.getWriter();
-  try { await w.write(data); } finally { w.releaseLock(); }
+/** Port qui a fonctionné la dernière fois pour chaque imprimante (évite de tâtonner à chaque ticket). */
+const goodPort = new Map<string, any>();
+const withTimeout = <T,>(p: Promise<T>, ms: number, what: string) => Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(Object.assign(new Error(`${what} : pas de réponse`), { name: 'NetworkError' })), ms))]);
+async function closePort(port: any) { try { await port.close(); } catch { /* déjà fermé */ } }
+
+/** Port série (USB-série ou Bluetooth « classique » appairé). Robuste : si le port enregistré ne s'ouvre pas
+ *  (numéro changé, imprimante éteinte puis rallumée, liaison tombée), il est refermé et on essaie les autres ports
+ *  autorisés ; un port bloqué est refermé puis rouvert. */
+function writeSerial(ref: string, data: Uint8Array, baud: number, silent = false) {
+  return withLock('serial:' + ref, async () => {
+    const [vid, pid, idx] = ref.split(':');
+    const ports: any[] = await nav.serial.getPorts();
+    const byUsb = ports.filter((p: any) => { const i = p.getInfo?.() || {}; return vid && String(i.usbVendorId) === vid && String(i.usbProductId) === pid; });
+    const order = [goodPort.get(ref), ...byUsb, ports[Number(idx)], ...ports].filter((p, k, a) => p && a.indexOf(p) === k && ports.includes(p));
+    if (!order.length) {
+      if (silent) throw Object.assign(new Error('Imprimante à reconnecter (port non autorisé)'), { name: 'NotAllowedError' });
+      let port: any;
+      try { port = await nav.serial.requestPort({ allowedBluetoothServiceClassIds: [SPP] }); } catch (e: any) { if (e?.name === 'TypeError') port = await nav.serial.requestPort(); else throw e; }
+      order.push(port);
+    }
+    let last: any = null;
+    for (const port of order) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          if (!port.writable) await withTimeout(port.open({ baudRate: baud || 9600 }), 12000, 'Ouverture de l’imprimante');
+          const w = port.writable.getWriter();
+          try { await withTimeout(w.write(data), 20000, 'Envoi à l’imprimante'); } finally { try { w.releaseLock(); } catch { /* */ } }
+          goodPort.set(ref, port);
+          linkChanged();
+          return;
+        } catch (e: any) {
+          last = e;
+          if (/already open/i.test(e?.message ?? '') && port.writable) continue; // ouvert ailleurs dans la page : on réessaie d'écrire
+          await closePort(port); // port bloqué ou liaison tombée : refermer, puis rouvrir au tour suivant
+          if (goodPort.get(ref) === port) goodPort.delete(ref);
+          await sleep(800);
+        }
+      }
+    }
+    linkChanged();
+    throw Object.assign(new Error('Impossible de se connecter à l’imprimante : elle est éteinte, trop loin, ou déjà connectée à un autre appareil (téléphone, autre ordinateur). Éteignez-la puis rallumez-la, vérifiez qu’elle est appairée dans les réglages Bluetooth, puis réessayez.' + (last?.message ? ` (${last.message})` : '')), { name: 'NetworkError' });
+  });
 }
 
 export type LinkState = 'connected' | 'ready' | 'disconnected';
@@ -261,7 +292,7 @@ export const btConnected = (ref: string) => { const d = btDevices.get(ref); retu
 export async function writeRaw(kind: 'bluetooth' | 'usb' | 'serial', ref: string, data: Uint8Array, baud?: number, name?: string, speed?: BtSpeed, silent = false) {
   if (kind === 'bluetooth') return writeBluetooth(ref, data, name, speed, silent);
   if (kind === 'usb') return writeUsb(ref, data);
-  return writeSerial(ref, data, baud || 9600);
+  return writeSerial(ref, data, baud || 9600, silent);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

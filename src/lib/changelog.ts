@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-26', items: [
+    'Imprimante Bluetooth en « port série » (poste d’impression) : si le port enregistré ne s’ouvre pas (« Failed to open serial port »), le logiciel le referme et essaie les autres ports autorisés, rouvre un port bloqué, et retient celui qui marche ; message clair si l’imprimante est éteinte, trop loin ou connectée à un autre appareil.',
     'Récapitulatifs (écran et message) : seulement les mouvements de la période choisie. « Total à verser par les livreurs (compte à ce jour) » remplacé par « Reste à verser par les livreurs (livraisons de la période) », et plus de « Soldes en fin de période » (montants cumulés depuis le début) : les comptes des semaines déjà versées n’y entrent plus.',
     'Récapitulatifs : la ligne « Versement au patron — semaine du … » n’apparaît plus dans le récapitulatif ni dans le message WhatsApp (elle reste dans l’historique des versements au patron).',
     'Dépenses : bouton ✏️ « Corriger » (Dépenses et Caisse du jour, gérant) pour changer la date, le montant, le compte, la catégorie, la description ou la note d’une dépense mal saisie, tant que la semaine n’est pas versée au patron ; raison obligatoire, gardée dans le journal d’activité. Semaine versée : cadenas, plus modifiable.',
