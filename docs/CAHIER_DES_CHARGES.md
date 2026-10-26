@@ -227,6 +227,8 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 
 - *(26/10/2026)* **Correction d'une dépense** (droit « Saisir les dépenses ») : ✏️ dans Dépenses et Caisse du jour → date, montant, compte, catégorie, description, note ; refusée si l'ancienne ou la nouvelle date est dans une semaine versée au patron (cadenas) ; raison obligatoire, avant / après dans le journal d'activité. Dépenses liées (virement, achat) : à corriger depuis l'opération d'origine.
 
+- *(26/10/2026)* **Récapitulatifs = mouvements de la période uniquement** : pas de ligne « Versement au patron » (historique à part), « Reste à verser par les livreurs » calculé sur les livraisons de la période non réglées (au lieu du compte cumulé), pas de « Soldes en fin de période » dans le récapitulatif ni dans le message. Le contrôle de caisse (espèces attendues) reste sur l'écran, à part.
+
 ### 7.2 Livraisons
 - *(26/10/2026)* **Onglet « Livraisons effectuées »** (Livraisons et livreurs) : colis revenus (livrés, en partie, refusés) filtrés par période (jour du retour), livreur, état, versement (réglées / à régler) et recherche ; colonnes retour, n° (lien), client, lieu, livreur, état, articles, frais, encaissé par le livreur, à verser, versement (« Réglée jj/mm » ou « À régler ») ; totaux. **Retour livreur** : coches, décisions, frais, montant, note et date gardés pendant la session (on peut ouvrir une commande et revenir sans perdre la sélection).
 - **Zones / axes de livraison** paramétrables, chacun avec un **tarif par défaut** ; le montant peut être modifié à la main.

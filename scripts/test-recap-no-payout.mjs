@@ -11,10 +11,15 @@ await p.evaluate(async () => {
   const pt = (t, rec) => new Promise(r => { const tx = db.transaction(t, 'readwrite'); tx.objectStore(t).put(rec); tx.oncomplete = r; });
   const now = new Date().toISOString();
   await pt('cashMoves', { id: 'pomv_x', at: now, account: 'cash', amount: -3650000, type: 'owner_out', label: 'Versement au patron — semaine du 12/10/2026 au 17/10/2026', refType: 'payouts', refId: 'po_x', createdAt: now, updatedAt: now });
+  await pt('couriers', { id: 'c1', name: 'Johnson', active: true, createdAt: now, updatedAt: now });
+  await pt('products', { id: 'p1', name: 'Lampe', active: true, createdAt: now, updatedAt: now });
+  await pt('variants', { id: 'v1', productId: 'p1', sku: 'L1', active: true, createdAt: now, updatedAt: now });
+  await pt('orders', { id: 'o1', number: 'C-1', kind: 'order', channel: 'facebook', phone: '0340000000', zoneId: 'zone-centre', deliveryFee: 4000, discount: 0, payments: [], status: 'out', courierId: 'c1', dispatchedAt: now, lines: [{ id: 'l1', variantId: 'v1', qty: 1, unitPrice: 20000 }], createdAt: now, updatedAt: now });
   await pt('cashMoves', { id: 'e1', at: now, account: 'cash', amount: -5000, type: 'expense', categoryId: 'fc-divers', label: 'Taxi', createdAt: now, updatedAt: now });
 });
 await p.reload(); await p.waitForTimeout(1500);
 await p.goto('http://localhost:5173/#/recapitulatif'); await p.waitForTimeout(1500);
 const txt = await p.locator('body').innerText();
+console.log('soldes:', /Soldes en fin de période/.test(await p.locator('.recap-text, pre').first().innerText().catch(() => '')), 'reste periode:', /livraisons de la période/.test(txt));
 console.log('patron in page/text:', /Versement au patron — semaine/.test(txt), 'taxi/expenses shown:', /Total dépenses/.test(txt));
 await b.close();

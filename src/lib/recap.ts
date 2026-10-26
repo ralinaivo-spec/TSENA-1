@@ -45,7 +45,8 @@ function common(r: Report, withProfit: boolean): Section[] {
     ...r.couriers.map((c) => ({ label: `${c.name} : ${c.count} livraison(s)${c.out ? `, ${c.out} pas encore confirmée(s)` : ''}`, value: `à encaisser ${fmtAr(c.collect)}` })),
     ...r.couriers.filter((c) => c.feeOwed).map((c) => ({ label: `Frais à reverser à ${c.name} (payés par Mobile Money)`, value: fmtAr(c.feeOwed), sub: true })),
     ...r.couriers.filter((c) => c.paidIn).map((c) => ({ label: `Versé par ${c.name}`, value: fmtAr(c.paidIn), sub: true })),
-    { label: 'Total à verser par les livreurs (compte à ce jour)', value: fmtAr(r.courierDue), strong: true },
+    // Seulement les livraisons de la période pas encore réglées (les comptes des semaines déjà versées n'y entrent pas).
+    { label: 'Reste à verser par les livreurs (livraisons de la période)', value: fmtAr(r.deliveries.filter((d) => d.courierId && !d.settled).reduce((a, d) => a + d.net, 0)), strong: true },
   ] : [{ label: 'Aucune livraison', value: '—' }] });
   out.push({ title: 'Paiements reçus', lines: [
     { label: 'Espèces (boutique)', value: fmtAr(r.receipts.cash), sub: true },
@@ -64,12 +65,7 @@ function common(r: Report, withProfit: boolean): Section[] {
     { label: 'Bénéfice brut (ventes − coût des articles)', value: fmtAr(r.grossProfit) },
     { label: 'Résultat (bénéfice − dépenses + autres revenus)', value: fmtAr(r.grossProfit - r.expenses + r.incomes), strong: true },
   ] });
-  out.push({ title: 'Soldes en fin de période', lines: [
-    { label: 'Caisse espèces', value: fmtAr(r.balancesEnd.cash), strong: true },
-    ...MM.filter((a) => r.balancesEnd[a]).map((a) => ({ label: ACCOUNTS[a], value: fmtAr(r.balancesEnd[a]), sub: true })),
-    ...(r.balancesEnd.bank ? [{ label: 'Banque', value: fmtAr(r.balancesEnd.bank), sub: true }] : []),
-    { label: 'Espèces attendues (caisse + à verser par les livreurs)', value: fmtAr(r.balancesEnd.cash + r.courierDue), strong: true },
-  ] });
+  // Pas de soldes cumulés (caisse, comptes depuis le début) : le récapitulatif ne parle que des mouvements de la période.
   return out;
 }
 
@@ -135,7 +131,7 @@ export function dayText(r: Report, company: Company, withProfit: boolean) {
 export function weekText(r: Report, days: WeekDay[], company: Company, withProfit: boolean, due?: { sales: number; expenses: number; rest: number }) {
   const head = [`*${company.name} — Récapitulatif de la semaine*`, `du ${longDate(r.from)} au ${longDate(r.to)}`];
   if (due) head.push('', '━━━━━━━━━━━━━━━', `💰 *TOTAL DES VENTES : ${fmtAr(due.sales)}*`, `🧾 *DÉPENSES : − ${fmtAr(due.expenses)}*`, `✅ *RESTE À VERSER : ${fmtAr(due.rest)}*`, '━━━━━━━━━━━━━━━');
-  return toText(head, weekSections(r, days, withProfit).filter((s) => s.title !== 'Soldes en fin de période'));
+  return toText(head, weekSections(r, days, withProfit));
 }
 
 // ---------- Ticket imprimé ----------
