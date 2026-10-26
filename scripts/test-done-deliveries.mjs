@@ -1,0 +1,38 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const ctx = await b.newContext({ viewport: { width: 1400, height: 1000 } });
+const p = await ctx.newPage();
+p.on('pageerror', e => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/');
+await p.getByLabel("Nom d'utilisateur").fill('super-adm');
+await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(800);
+await p.evaluate(async () => {
+  const db = await new Promise(r => { const q = indexedDB.open('tsena'); q.onsuccess = () => r(q.result); });
+  const pt = (t, rec) => new Promise(r => { const tx = db.transaction(t, 'readwrite'); tx.objectStore(t).put(rec); tx.oncomplete = r; });
+  const now = new Date().toISOString();
+  await pt('products', { id: 'p1', name: 'Lampe', active: true, createdAt: now, updatedAt: now });
+  await pt('variants', { id: 'v1', productId: 'p1', sku: 'L1', active: true, createdAt: now, updatedAt: now });
+  await pt('couriers', { id: 'c1', name: 'Johnson', active: true, createdAt: now, updatedAt: now });
+  await pt('couriers', { id: 'c2', name: 'Tafita', active: true, createdAt: now, updatedAt: now });
+  const base = (id, num, cid, extra) => ({ id, number: num, kind: 'order', channel: 'facebook', phone: '0340000000', name: 'Client ' + num, zoneId: 'zone-centre', deliveryFee: 4000, discount: 0, payments: [], courierId: cid, dispatchedAt: now, lines: [{ id: 'l' + id, variantId: 'v1', qty: 1, unitPrice: 20000, ...(extra.kept != null ? { qtyKept: extra.kept } : {}) }], createdAt: now, updatedAt: now, ...extra.o });
+  await pt('orders', base('d1', 'C-E0035', 'c1', { kept: 1, o: { status: 'delivered', returnedAt: now, feeCharged: 4000, courierSettledAt: now, payments: [{ id: 'x1', at: now, amount: 24000, method: 'cash', receivedBy: 'courier', courierId: 'c1' }] } }));
+  await pt('orders', base('d2', 'C-E0036', 'c2', { kept: 1, o: { status: 'delivered', returnedAt: now, feeCharged: 4000, payments: [{ id: 'x2', at: now, amount: 24000, method: 'cash', receivedBy: 'courier', courierId: 'c2' }] } }));
+  for (const [i, n] of [['o1', 'C-G0001'], ['o2', 'C-G0002'], ['o3', 'C-G0003']]) await pt('orders', base(i, n, 'c1', { o: { status: 'out' } }));
+});
+await p.reload(); await p.waitForTimeout(1500);
+await p.goto('http://localhost:5173/#/livraisons/effectuees'); await p.waitForTimeout(1000);
+console.log('rows all', await p.locator('.review-table tbody tr').count() - 1);
+await p.locator('select').filter({ hasText: 'Tous les livreurs' }).selectOption({ label: 'Johnson' }); await p.waitForTimeout(300);
+console.log('rows Johnson', await p.locator('.review-table tbody tr').count() - 1, await p.locator('.review-table tbody tr').first().innerText().then(t => t.replace(/\s+/g, ' ')));
+await p.screenshot({ path: '/tmp/claude-0/t/dd1.png' });
+// courier return persistence
+await p.goto('http://localhost:5173/#/livraisons/retour'); await p.waitForTimeout(1000);
+await p.getByRole('button', { name: 'Tout décocher' }).click(); await p.waitForTimeout(200);
+await p.getByLabel(/Régler C-G0002/).check(); await p.waitForTimeout(200);
+const before = await p.locator('input.perm-check').evaluateAll(els => els.map(e => e.checked));
+await p.getByRole('link', { name: 'C-G0001' }).first().click(); await p.waitForTimeout(800);
+await p.goBack(); await p.waitForTimeout(1000);
+const after = await p.locator('input.perm-check').evaluateAll(els => els.map(e => e.checked));
+console.log('before', before.join(','), 'after', after.join(','));
+await b.close();

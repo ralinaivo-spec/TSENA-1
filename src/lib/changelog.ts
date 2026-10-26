@@ -2,6 +2,10 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-26', items: [
+    'Livraisons et livreurs : nouvel onglet « Livraisons effectuées » — colis livrés, livrés en partie ou refusés, par période (jour du retour) et par livreur, avec filtres État / Versement (réglées ou non) et recherche ; totaux articles, frais, encaissé et net à verser ; n° cliquable pour ouvrir la commande, filtres gardés au retour.',
+    'Retour livreur : les colis cochés / décochés, les choix, les frais et les saisies sont gardés quand on ouvre une commande (préciser un choix, corriger un paiement…) puis qu’on revient : plus besoin de tout recommencer.',
+  ] },
   { date: '2026-10-24', items: [
     'Poste d’impression sur téléphone Android : l’écran reste allumé tant que le logiciel est ouvert (écran éteint = téléphone endormi = Bluetooth coupé), la liaison avec l’imprimante est entretenue toutes les 25 s et se reconnecte toute seule si elle tombe, connexion dès l’ouverture (sans attendre un ticket) ; liste des réglages Android à faire une fois (batterie de Chrome « Non restreinte », chargeur, câble USB OTG…).',
     'Impression plus rapide, sans perte de qualité : le poste reçoit les tickets en 1 à 2 secondes (petite vérification toutes les 2 s au lieu d’une synchronisation toutes les 5 s) et l’envoi Bluetooth est 5 à 10 fois plus rapide (paquets rythmés sans attente de confirmation ; mode « Très sûr » disponible) ; logo converti une seule fois.',

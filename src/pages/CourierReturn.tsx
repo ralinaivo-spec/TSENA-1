@@ -47,7 +47,7 @@ export function CourierReturn() {
   const inP = (o: Order) => (all || inPeriod(o.dispatchedAt || o.createdAt, period)) && (!scope.strict || scope.mine(o));
   const count = (c: Courier) => courierBalance(c.id).pending.filter(inP).length;
   const withWork = couriers.filter((c) => count(c) || (all && !scope.strict && courierBalance(c.id).carry));
-  const [cid, setCid] = useState('');
+  const [cid, setCid] = useKeep<string>('return.courier', '');
   const courier = withWork.find((c) => c.id === cid) ?? withWork[0];
   return (
     <>
@@ -81,17 +81,20 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
   // Avec une période : seulement les colis de ces dates ; le reste des fois précédentes n'est pas ajouté à l'attendu
   // (il reste sur le compte du livreur et apparaît avec « Tout »).
   const b = only ? { ...full, pending: full.pending.filter(only), carry: 0 } : full;
-  const [dec, setDec] = useState<Record<string, Decision>>({});
-  const [fees, setFees] = useState<Record<string, string>>({});
-  const [off, setOff] = useState<Record<string, boolean>>({});
+  // Coches, décisions, frais et saisies gardés pendant la session : on peut ouvrir une commande (préciser un choix,
+  // corriger un paiement…) puis revenir sans perdre ce qui était déjà coché / décoché.
+  const k = `return.${courier.id}.`;
+  const [dec, setDec] = useKeep<Record<string, Decision>>(k + 'dec', {});
+  const [fees, setFees] = useKeep<Record<string, string>>(k + 'fees', {});
+  const [off, setOff] = useKeep<Record<string, boolean>>(k + 'off', {});
   const [ret, setRet] = useState<Order | null>(null);
   const [toShop, setToShop] = useState<Order | null>(null);
   const [postpone, setPostpone] = useState<Order | null>(null);
-  const [mode, setMode] = useState<FeeMode>('retenue');
-  const [amount, setAmount] = useState<string | null>(null);
+  const [mode, setMode] = useKeep<FeeMode>(k + 'mode', 'retenue');
+  const [amount, setAmount] = useKeep<string | null>(k + 'amount', null);
   const [account, setAccount] = useState<AccountId>('cash');
   const [feeAccount, setFeeAccount] = useState<AccountId>('cash');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useKeep<string>(k + 'note', '');
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState(false);
 
@@ -123,7 +126,7 @@ function CourierSheet({ courier, canSettle, only }: { courier: Courier; canSettl
   const after = full.carry + collect - feeOwed - n + payFees; // après validation : + il doit encore ; − la boutique lui doit
   const blockedRows = rows.filter((r) => r.blocked);
   // Date réelle du retour : par défaut le jour de départ des colis cochés (le livreur revient le jour même), modifiable.
-  const [retDay, setRetDay] = useState<string | null>(null);
+  const [retDay, setRetDay] = useKeep<string | null>(k + 'day', null);
   const autoDay = defaultReturnDay(on.map((r) => r.o));
   const day = retDay ?? autoDay;
   const days = departureDays(on.map((r) => r.o));

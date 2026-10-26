@@ -12,6 +12,7 @@ import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period
 import { matchQuery } from '../lib/catalog';
 import { ChoiceModal, ReassignModal, ReturnModal, OrderRow, RedateModal } from './Orders';
 import { CourierReturn } from './CourierReturn';
+import { DoneDeliveries } from './DoneDeliveries';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
 import { ScopeBar } from '../ui/scope';
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'a-livrer', label: 'En attente de livraison', perm: 'orders.dispatch' },
   { key: 'en-cours', label: 'En livraison', perm: 'deliveries.manage' },
   { key: 'retour', label: 'Retour livreur', perm: 'deliveries.manage' },
+  { key: 'effectuees', label: 'Livraisons effectuées', perm: 'deliveries.manage' },
   { key: 'zones', label: 'Zones et frais', perm: 'couriers.view' },
 ];
 
@@ -69,6 +71,7 @@ export function DeliveriesPage() {
       {cur.key === 'a-livrer' && <ToDeliver />}
       {cur.key === 'en-cours' && <OutNow />}
       {cur.key === 'retour' && <CourierReturn />}
+      {cur.key === 'effectuees' && <DoneDeliveries />}
       {cur.key === 'livreurs' && <Couriers />}
       {cur.key === 'zones' && <Zones />}
     </>
