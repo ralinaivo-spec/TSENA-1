@@ -10,6 +10,7 @@ import { compressPhoto } from '../lib/images';
 import { addDays, addMove, atFor, deleteMove, today, type FinanceCategory } from '../lib/money';
 import { catName, dayRecap, dayRecapText, dayReview } from '../lib/payouts';
 import { closedBy } from '../lib/closed';
+import { ExpenseEdit } from './Expenses';
 import { PAY_METHODS, fmtPhone, normPhone, type PayMethod } from '../lib/orders';
 import { useCompany } from '../lib/settings';
 import { useMyScope } from '../lib/scope';
@@ -82,6 +83,7 @@ function Expenses({ date, moves, total, mine: onlyMine }: { date: string; moves:
   const [photo, setPhoto] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<CashMove | null>(null);
+  const [edit, setEdit] = useState<CashMove | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const isToday = date === today();
   const closed = closedBy(date);
@@ -125,11 +127,13 @@ function Expenses({ date, moves, total, mine: onlyMine }: { date: string; moves:
               <div className="list-item-main"><span className="list-item-title">{m.label || catName(m.categoryId) || 'Dépense'}</span>
                 <p className="small muted">{catName(m.categoryId)}{m.userName ? ` · ${m.userName}` : ''} · {new Date(m.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}{m.photo ? ' · reçu joint' : ''}</p></div>
               <strong className="num neg">{fmtAr(-m.amount)}</strong>
+              {!closed && can('expenses.manage') && !m.transferId && !m.refType && <IconButton icon="edit" label="Corriger (date, montant…)" onClick={() => setEdit(m)} />}
               {canDel && <IconButton icon="trash" label="Supprimer" onClick={() => setDel(m)} />}
             </li>
           );
         })}</ul>
       )}
+      {edit && <ExpenseEdit move={edit} onClose={() => setEdit(null)} />}
       {del && <Confirm title="Supprimer cette dépense ?" danger confirmLabel="Supprimer" message={<p>{del.label} — {fmtAr(-del.amount)}</p>} onConfirm={async () => { await deleteMove(del); toast('Dépense supprimée'); }} onClose={() => setDel(null)} />}
     </div>
   );

@@ -7,7 +7,7 @@ import { all, save, useTable } from '../lib/db';
 import { fmtAr, matchQuery, parseNum, parseAr } from '../lib/catalog';
 import { compressPhoto } from '../lib/images';
 import {
-  ACCOUNTS, ACCOUNT_IDS, FREQS, RHYTHMS, WEEKDAYS, addMove, atFor, catHabit, confirmRecurring, dayOf, deleteMove, dueRecurring, habitText, nextOccurrence, recurringText, skipRecurring, today, typeForCat,
+  ACCOUNTS, ACCOUNT_IDS, FREQS, RHYTHMS, WEEKDAYS, addMove, atFor, catHabit, editMove, confirmRecurring, dayOf, deleteMove, dueRecurring, habitText, nextOccurrence, recurringText, skipRecurring, today, typeForCat,
   type AccountId, type CashMove, type FinanceCategory, type Freq, type Recurring, type Rhythm,
 } from '../lib/money';
 import { closedBy } from '../lib/closed';
@@ -261,6 +261,7 @@ function ExpenseList() {
   const [type, setType] = useKeep('exp.type', '');
   const [q, setQ] = useKeep('exp.q', '');
   const [del, setDel] = useState<CashMove | null>(null);
+  const [edit, setEdit] = useState<CashMove | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [allCats, setAllCats] = useState(false);
   const name = (id?: string) => cats.find((c) => c.id === id)?.name ?? '—';
@@ -281,7 +282,7 @@ function ExpenseList() {
     { key: 'a', label: 'Compte', value: (m) => ACCOUNTS[m.account], render: (m) => <div className="cell-wrap">{ACCOUNTS[m.account]}{m.userName ? <div className="small muted">par {m.userName}</div> : null}</div>, width: 16 },
     { key: 'u', label: 'Saisi par', value: (m) => m.userName ?? '', width: 16, hide: true },
     { key: 'm', label: 'Montant', value: (m) => -m.amount, money: true, total: true, width: 14 },
-    { key: 'x', label: '', value: () => '', render: (m) => <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>{m.photo && <IconButton icon="eye" label="Voir le reçu" onClick={() => setPhoto(m.photo!)} />}{can('expenses.manage') && <IconButton icon="trash" label="Supprimer" onClick={() => setDel(m)} />}</span> },
+    { key: 'x', label: '', value: () => '', render: (m) => <span className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>{m.photo && <IconButton icon="eye" label="Voir le reçu" onClick={() => setPhoto(m.photo!)} />}{can('expenses.manage') && !closedBy(dayOf(m.at)) && !m.transferId && !m.refType && <IconButton icon="edit" label="Corriger (date, montant…)" onClick={() => setEdit(m)} />}{can('expenses.manage') && <IconButton icon="trash" label="Supprimer" onClick={() => setDel(m)} />}{closedBy(dayOf(m.at)) && <span title="Semaine versée au patron : plus modifiable"><Icon name="lock" size={16} /></span>}</span> },
   ];
   return (
     <>
@@ -307,6 +308,7 @@ function ExpenseList() {
       </div>
       {del && <Confirm title="Supprimer cette dépense ?" danger confirmLabel="Supprimer" onClose={() => setDel(null)} onConfirm={async () => { await deleteMove(del); toast('Dépense supprimée'); }}
         message={<p>{del.label || name(del.categoryId)} — {fmtAr(-del.amount)} ({ACCOUNTS[del.account]}, {fmtDate(dayOf(del.at))}). Le solde du compte remonte d’autant.</p>} />}
+      {edit && <ExpenseEdit move={edit} onClose={() => setEdit(null)} />}
       {photo && <Modal title="Reçu" onClose={() => setPhoto(null)}><img src={photo} alt="Reçu" style={{ width: '100%', borderRadius: 12 }} /></Modal>}
     </>
   );
@@ -432,6 +434,46 @@ function CatForm({ cat, onClose }: { cat: FinanceCategory | { kind: 'expense' | 
         {isExp && <HabitFields h={h} set={setH} rec={rec} />}
         {existing && <Toggle checked={active} onChange={setActive} label="Active (proposée dans les listes)" />}
         {isExp && existing && <p className="small muted">Changer le rythme ne modifie pas les dépenses déjà enregistrées, seulement les prochaines.</p>}
+      </div>
+    </Modal>
+  );
+}
+
+/** Corriger une dépense mal saisie (date, montant, compte, catégorie, description, note), tant que la semaine
+ *  n'est pas versée au patron. La raison est demandée et gardée dans le journal d'activité. */
+export function ExpenseEdit({ move: m, onClose }: { move: CashMove; onClose: () => void }) {
+  const cats = useTable<FinanceCategory>('financeCategories').filter((c) => c.kind === 'expense' && (c.active !== false || c.id === m.categoryId));
+  const [date, setDate] = useState(dayOf(m.at));
+  const [amount, setAmount] = useState(String(Math.abs(m.amount)));
+  const [account, setAccount] = useState<AccountId>(m.account);
+  const [cat, setCat] = useState(m.categoryId ?? '');
+  const [label, setLabel] = useState(m.label ?? '');
+  const [note, setNote] = useState(m.note ?? '');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const n = parseAr(amount) || 0;
+  const closedOld = closedBy(dayOf(m.at));
+  const closedNew = closedBy(date);
+  const changed = date !== dayOf(m.at) || n !== Math.abs(m.amount) || account !== m.account || cat !== (m.categoryId ?? '') || label.trim() !== (m.label ?? '') || note.trim() !== (m.note ?? '');
+  return (
+    <Modal title="Corriger la dépense" onClose={onClose}
+      footer={<><Button variant="ghost" onClick={onClose}>Annuler</Button><Button busy={busy} disabled={!n || !changed || !reason.trim() || !!closedOld || !!closedNew} onClick={async () => {
+        setBusy(true);
+        try { await editMove(m, { ymd: date, amount: n, account, categoryId: cat || undefined, label, note }, reason); toast('Dépense corrigée'); onClose(); }
+        catch (e: any) { toast(e?.message ?? String(e), 'error', { sticky: true }); setBusy(false); }
+      }}>Enregistrer la correction</Button></>}>
+      <div className="stack">
+        <p className="small muted" style={{ margin: 0 }}>Saisie le {fmtDateTime(m.createdAt || m.at)}{m.userName ? ` par ${m.userName}` : ''}. Possible tant que la semaine n’est pas versée au patron.</p>
+        <div className="grid-2">
+          <TextField label="Montant (Ar)" required value={amount} onChange={setAmount} inputMode="numeric" />
+          <TextField label="Date" type="date" value={date} max={today()} onChange={setDate} error={closedNew ? 'Semaine déjà versée au patron : choisissez une autre date.' : null} />
+          <SelectField label="Payé depuis" value={account} onChange={(v) => setAccount(v as AccountId)} options={accountOptions} />
+          <SelectField label="Catégorie" value={cat} onChange={setCat} options={cats.map((c) => ({ value: c.id, label: c.name }))} />
+        </div>
+        <TextField label="Description" value={label} onChange={setLabel} />
+        <TextField label="Note (facultatif)" value={note} onChange={setNote} />
+        <TextField label="Raison de la correction" required value={reason} onChange={setReason} placeholder="Ex. erreur de montant, mauvaise date" />
+        {closedOld && <div className="notice notice-danger"><Icon name="lock" /><span>Cette dépense est dans une semaine déjà versée au patron : elle ne peut plus être modifiée.</span></div>}
       </div>
     </Modal>
   );

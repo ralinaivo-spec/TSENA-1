@@ -156,6 +156,23 @@ export async function addTransfer(from: AccountId, to: AccountId, amount: number
   ]);
   await audit('Virement entre comptes', `${label} : ${amount} Ar${fee ? ` (frais ${fee} Ar)` : ''}`, 'cashMoves', transferId);
 }
+/** Corrige une dépense (ou un revenu) mal saisi : date, montant, compte, catégorie, description, note.
+ *  Refusé si l'ancienne ou la nouvelle date tombe dans une semaine déjà versée au patron (compte clôturé). */
+export async function editMove(m: CashMove, patch: { ymd: string; amount: number; account: AccountId; categoryId?: string; label?: string; note?: string }, reason: string) {
+  if (m.type !== 'expense' && m.type !== 'income') throw new Error('Seules les dépenses et les revenus se corrigent ici.');
+  if (m.transferId || m.refType) throw new Error('Cette dépense est liée à une autre opération (virement, achat…) : corrigez-la depuis celle-ci.');
+  if (!reason.trim()) throw new Error('Indiquez la raison de la correction.');
+  const what = m.type === 'expense' ? 'Correction de la dépense' : 'Correction du revenu';
+  assertOpenAt(m.at, what);
+  const at = patch.ymd === dayOf(m.at) ? m.at : atFor(patch.ymd);
+  assertOpenAt(at, what);
+  const amount = m.type === 'expense' ? -Math.abs(patch.amount) : Math.abs(patch.amount);
+  const before = `${fmtYmd(dayOf(m.at))} · ${Math.abs(m.amount)} Ar · ${ACCOUNTS[m.account]}${m.label ? ' · ' + m.label : ''}`;
+  await save('cashMoves', { id: m.id, at, amount, account: patch.account, categoryId: patch.categoryId || m.categoryId, label: patch.label?.trim() || m.label, note: patch.note?.trim() ? patch.note.trim() : (null as unknown as undefined) });
+  const after = `${fmtYmd(patch.ymd)} · ${Math.abs(amount)} Ar · ${ACCOUNTS[patch.account]}${patch.label ? ' · ' + patch.label.trim() : ''}`;
+  await audit(what, `${before} → ${after} — raison : ${reason.trim()}`, 'cashMoves', m.id, 'high');
+}
+const fmtYmd = (ymd: string) => new Date(`${ymd}T12:00:00`).toLocaleDateString('fr-FR');
 export async function deleteMove(m: CashMove) {
   if (m.refType === 'purchases' || (m.type === 'purchase' && m.refId)) throw new Error('Ce mouvement est un paiement de commande Chine : supprimez-le depuis la commande (Achats), pour que la commande et la trésorerie restent d’accord.');
   if (m.type === 'courier_settlement') throw new Error('Ce mouvement est un versement de livreur : il ne se supprime pas depuis la trésorerie.');
