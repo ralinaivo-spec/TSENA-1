@@ -22,10 +22,10 @@ await p.evaluate(async () => {
 });
 await p.reload(); await p.waitForTimeout(1500);
 await p.goto('http://localhost:5173/#/livraisons/effectuees'); await p.waitForTimeout(1000);
-console.log('rows all', await p.locator('.review-table tbody tr').count() - 1);
+console.log('rows all', await p.locator('.done-table tbody tr').count() - 1);
 await p.locator('select').filter({ hasText: 'Tous les livreurs' }).selectOption({ label: 'Johnson' }); await p.waitForTimeout(300);
-console.log('rows Johnson', await p.locator('.review-table tbody tr').count() - 1, await p.locator('.review-table tbody tr').first().innerText().then(t => t.replace(/\s+/g, ' ')));
-await p.screenshot({ path: '/tmp/claude-0/t/dd1.png' });
+console.log('rows Johnson', await p.locator('.done-table tbody tr').count() - 1, await p.locator('.done-table tbody tr').first().innerText().then(t => t.replace(/\s+/g, ' ')));
+await p.setViewportSize({ width: 1180, height: 900 }); await p.screenshot({ path: '/tmp/claude-0/t/dd1.png' });
 // courier return persistence
 await p.goto('http://localhost:5173/#/livraisons/retour'); await p.waitForTimeout(1000);
 await p.getByRole('button', { name: 'Tout décocher' }).click(); await p.waitForTimeout(200);

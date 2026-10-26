@@ -3,9 +3,11 @@
 import { useTable } from '../lib/db';
 import { fmtAr, matchQuery } from '../lib/catalog';
 import { courierSplit, isPickupZone, isWalkIn, keptTotal, orderLabel, type Courier, type Order, type Zone } from '../lib/orders';
-import { Badge, Empty, FilterSelect, TextField, fmtDateTime, navigate, useKeep } from '../ui/kit';
+import { Badge, Empty, FilterSelect, TextField, navigate, useKeep } from '../ui/kit';
 import { PeriodPicker, defaultPeriod, inPeriod, type Period } from '../ui/period';
 import { useMyScope } from '../lib/scope';
+
+const shortDt = (iso: string) => (iso ? new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(' ', ' · ') : '');
 
 type St = 'all' | 'delivered' | 'partial' | 'refused';
 const ST_LABEL: Record<Exclude<St, 'all'>, { label: string; tone: 'ok' | 'warn' | 'danger' }> = {
@@ -68,25 +70,29 @@ export function DoneDeliveries() {
 
       <div className="card card-flush">
         {rows.length === 0 ? <Empty icon="truck" title="Aucune livraison effectuée sur cette période">Changez la période ou le livreur.</Empty> : (
-          <div className="table-wrap"><table className="table review-table">
-            <thead><tr><th>Retour</th><th>N°</th><th>Client</th><th>Lieu</th><th>Livreur</th><th>État</th><th className="t-num">Articles</th><th className="t-num">Frais</th><th className="t-num">Encaissé par le livreur</th><th className="t-num">À verser</th><th>Versement</th></tr></thead>
+          <div className="table-wrap"><table className="table done-table">
+            <thead><tr><th>Colis</th><th>Retour</th>{!cid && <th>Livreur</th>}<th>État</th><th className="t-num">Articles</th><th className="t-num">Frais</th><th className="t-num">Encaissé</th><th className="t-num">À verser</th></tr></thead>
             <tbody>
               {rows.map(({ o, x, items }) => (
                 <tr key={o.id}>
-                  <td className="small">{fmtDateTime(doneAt(o))}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}><a href={`#/commandes/${o.id}`} onClick={(e) => { e.preventDefault(); navigate(`/commandes/${o.id}`); }}>{o.number}</a></td>
-                  <td className="small">{orderLabel(o)}</td>
-                  <td className="small">{zones.find((z) => z.id === o.zoneId)?.name ?? ''}{o.place ? ` — ${o.place}` : ''}</td>
-                  <td className="small">{courierName(o.courierId)}</td>
-                  <td><Badge tone={ST_LABEL[o.status as 'delivered'].tone}>{ST_LABEL[o.status as 'delivered'].label}</Badge></td>
-                  <td className="t-num">{fmtAr(items)}</td>
-                  <td className="t-num">{fmtAr(x.fee)}</td>
-                  <td className="t-num">{fmtAr(x.clientPays)}{x.clientPays === 0 && (o.payments || []).some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé à la boutique</div> : null}</td>
-                  <td className={`t-num ${x.net < 0 ? 'neg' : ''}`}><strong>{fmtAr(x.net)}</strong></td>
-                  <td className="small">{o.courierSettledAt ? <Badge tone="ok">Réglée {new Date(o.courierSettledAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</Badge> : <Badge tone="warn">À régler</Badge>}</td>
+                  <td style={{ minWidth: 190 }}>
+                    <a href={`#/commandes/${o.id}`} style={{ fontWeight: 700, whiteSpace: 'nowrap' }} onClick={(e) => { e.preventDefault(); navigate(`/commandes/${o.id}`); }}>{o.number}</a>
+                    <div className="small">{orderLabel(o)}</div>
+                    <div className="small muted">{o.place || zones.find((z) => z.id === o.zoneId)?.name || ''}</div>
+                  </td>
+                  <td className="small nowrap">{shortDt(doneAt(o))}</td>
+                  {!cid && <td className="small nowrap">{courierName(o.courierId)}</td>}
+                  <td className="nowrap">
+                    <Badge tone={ST_LABEL[o.status as 'delivered'].tone}>{ST_LABEL[o.status as 'delivered'].label}</Badge>
+                    <div style={{ marginTop: 4 }}>{o.courierSettledAt ? <Badge tone="ok">Réglée {new Date(o.courierSettledAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}</Badge> : <Badge tone="warn">À régler</Badge>}</div>
+                  </td>
+                  <td className="t-num nowrap">{fmtAr(items)}</td>
+                  <td className="t-num nowrap">{fmtAr(x.fee)}</td>
+                  <td className="t-num nowrap">{fmtAr(x.clientPays)}{x.clientPays === 0 && (o.payments || []).some((p) => p.receivedBy === 'shop') ? <div className="small muted">payé boutique</div> : null}</td>
+                  <td className={`t-num nowrap ${x.net < 0 ? 'neg' : ''}`}><strong>{fmtAr(x.net)}</strong></td>
                 </tr>
               ))}
-              <tr className="t-total"><td colSpan={6}>Total ({rows.length})</td><td className="t-num">{fmtAr(tot.items)}</td><td className="t-num">{fmtAr(tot.fee)}</td><td className="t-num">{fmtAr(tot.got)}</td><td className="t-num">{fmtAr(tot.net)}</td><td /></tr>
+              <tr className="t-total"><td colSpan={cid ? 3 : 4}>Total ({rows.length})</td><td className="t-num nowrap">{fmtAr(tot.items)}</td><td className="t-num nowrap">{fmtAr(tot.fee)}</td><td className="t-num nowrap">{fmtAr(tot.got)}</td><td className="t-num nowrap">{fmtAr(tot.net)}</td></tr>
             </tbody>
           </table></div>
         )}
