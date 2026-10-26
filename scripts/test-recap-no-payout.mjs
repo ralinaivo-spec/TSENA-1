@@ -1,0 +1,20 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await (await b.newContext({ viewport: { width: 1300, height: 1000 } })).newPage();
+p.on('pageerror', e => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/');
+await p.getByLabel("Nom d'utilisateur").fill('super-adm');
+await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(800);
+await p.evaluate(async () => {
+  const db = await new Promise(r => { const q = indexedDB.open('tsena'); q.onsuccess = () => r(q.result); });
+  const pt = (t, rec) => new Promise(r => { const tx = db.transaction(t, 'readwrite'); tx.objectStore(t).put(rec); tx.oncomplete = r; });
+  const now = new Date().toISOString();
+  await pt('cashMoves', { id: 'pomv_x', at: now, account: 'cash', amount: -3650000, type: 'owner_out', label: 'Versement au patron — semaine du 12/10/2026 au 17/10/2026', refType: 'payouts', refId: 'po_x', createdAt: now, updatedAt: now });
+  await pt('cashMoves', { id: 'e1', at: now, account: 'cash', amount: -5000, type: 'expense', categoryId: 'fc-divers', label: 'Taxi', createdAt: now, updatedAt: now });
+});
+await p.reload(); await p.waitForTimeout(1500);
+await p.goto('http://localhost:5173/#/recapitulatif'); await p.waitForTimeout(1500);
+const txt = await p.locator('body').innerText();
+console.log('patron in page/text:', /Versement au patron — semaine/.test(txt), 'taxi/expenses shown:', /Total dépenses/.test(txt));
+await b.close();

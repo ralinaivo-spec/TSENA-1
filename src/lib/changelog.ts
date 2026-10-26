@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-26', items: [
+    'Récapitulatifs : la ligne « Versement au patron — semaine du … » n’apparaît plus dans le récapitulatif ni dans le message WhatsApp (elle reste dans l’historique des versements au patron).',
     'Dépenses : bouton ✏️ « Corriger » (Dépenses et Caisse du jour, gérant) pour changer la date, le montant, le compte, la catégorie, la description ou la note d’une dépense mal saisie, tant que la semaine n’est pas versée au patron ; raison obligatoire, gardée dans le journal d’activité. Semaine versée : cadenas, plus modifiable.',
     'Livraisons effectuées : tableau plus compact et lisible (n°, client et lieu regroupés, état et versement dans la même colonne, colonne Livreur seulement pour « Tous les livreurs », montants sur une ligne) : plus rien de coupé.',
     'Livraisons et livreurs : nouvel onglet « Livraisons effectuées » — colis livrés, livrés en partie ou refusés, par période (jour du retour) et par livreur, avec filtres État / Versement (réglées ou non) et recherche ; totaux articles, frais, encaissé et net à verser ; n° cliquable pour ouvrir la commande, filtres gardés au retour.',

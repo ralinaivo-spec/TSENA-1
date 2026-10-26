@@ -57,7 +57,8 @@ function common(r: Report, withProfit: boolean): Section[] {
   out.push({ title: 'Dépenses et autres mouvements', lines: [
     ...r.expensesByCat.map((e) => ({ label: e.name, value: neg(e.amount), sub: true })),
     { label: 'Total dépenses', value: neg(r.expenses), strong: true },
-    ...r.otherMoves.map((m) => ({ label: `${m.label || MOVE_TYPES[m.type]} (${ACCOUNTS[m.account]})`, value: (m.amount > 0 ? '+ ' : '− ') + fmtAr(Math.abs(m.amount)), sub: true })),
+    // Les versements au patron (semaines précédentes) ne figurent pas dans le récapitulatif : ils ont leur propre historique.
+    ...r.otherMoves.filter((m) => m.refType !== 'payouts').map((m) => ({ label: `${m.label || MOVE_TYPES[m.type]} (${ACCOUNTS[m.account]})`, value: (m.amount > 0 ? '+ ' : '− ') + fmtAr(Math.abs(m.amount)), sub: true })),
   ] });
   if (withProfit) out.push({ title: 'Bénéfice', lines: [
     { label: 'Bénéfice brut (ventes − coût des articles)', value: fmtAr(r.grossProfit) },

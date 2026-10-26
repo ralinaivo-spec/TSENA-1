@@ -203,11 +203,11 @@ function MoneyCard({ r }: { r: Report }) {
       </div>
       <div className="card stack-s">
         <h2>Dépenses et autres mouvements</h2>
-        {r.expenseMoves.length + r.otherMoves.length === 0 ? <p className="small muted">Aucun.</p> : (
+        {r.expenseMoves.length + r.otherMoves.filter((m) => m.refType !== 'payouts').length === 0 ? <p className="small muted">Aucun.</p> : (
           <table className="kv-table"><tbody>
             {r.expenseMoves.map((m) => <tr key={m.id}><td>{m.label || 'Dépense'} <span className="muted small">· {ACCOUNTS[m.account]}</span></td><td className="neg">− {fmtAr(-m.amount)}</td></tr>)}
             {r.expenseMoves.length > 0 && <tr className="total"><td>Total dépenses</td><td className="neg">− {fmtAr(r.expenses)}</td></tr>}
-            {r.otherMoves.map((m) => <tr key={m.id}><td>{m.label || MOVE_TYPES[m.type]} <span className="muted small">· {MOVE_TYPES[m.type]} · {ACCOUNTS[m.account]}</span></td><td className={m.amount < 0 ? 'neg' : 'pos'}>{m.amount < 0 ? '− ' : '+ '}{fmtAr(Math.abs(m.amount))}</td></tr>)}
+            {r.otherMoves.filter((m) => m.refType !== 'payouts').map((m) => <tr key={m.id}><td>{m.label || MOVE_TYPES[m.type]} <span className="muted small">· {MOVE_TYPES[m.type]} · {ACCOUNTS[m.account]}</span></td><td className={m.amount < 0 ? 'neg' : 'pos'}>{m.amount < 0 ? '− ' : '+ '}{fmtAr(Math.abs(m.amount))}</td></tr>)}
           </tbody></table>
         )}
       </div>
