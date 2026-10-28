@@ -3,6 +3,7 @@
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
   { date: '2026-10-28', items: [
+    'Ajouter une imprimante : quand « Bluetooth (direct) » ou « USB (direct) » est grisé, le logiciel indique le navigateur utilisé (Brave, Opera, Firefox, Chrome trop ancien…) et quoi faire ; le nom du navigateur est aussi affiché en bas de Paramètres → Imprimantes.',
     'Imprimantes sur ordinateur Windows (10 / 11) : nouveau guide quand Windows « demande un pilote » — Bluetooth direct sans appairer, Bluetooth classique par port COM « Sortant », ou câble USB (pilote du fabricant + fenêtre d’impression sans dialogue avec --kiosk-printing, ou outil Zadig / WinUSB pour l’USB direct) ; message d’erreur USB clair sur Windows.',
   ] },
   { date: '2026-10-26', items: [

@@ -15,6 +15,17 @@ const ua = navigator.userAgent;
 const isMac = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua);
 const isAndroid = /Android/.test(ua);
 const isWindows = /Windows/.test(ua);
+/** Nom et version du navigateur, pour expliquer pourquoi le Bluetooth / l'USB direct sont grisés. */
+const browser = (() => {
+  const n = navigator as any;
+  if (n.brave) return { name: 'Brave', fix: 'Brave bloque l’USB et le Bluetooth direct : ouvrez Trésor en ligne dans Google Chrome.' };
+  if (/Edg\//.test(ua)) return { name: `Microsoft Edge ${ua.match(/Edg\/(\d+)/)?.[1] ?? ''}`, fix: 'Mettez Edge à jour (⋯ → Aide et commentaires → À propos), ou utilisez Google Chrome.' };
+  if (/OPR\//.test(ua)) return { name: 'Opera', fix: 'Ouvrez Trésor en ligne dans Google Chrome.' };
+  if (/Firefox\//.test(ua)) return { name: 'Firefox', fix: 'Firefox ne permet pas l’impression directe : ouvrez Trésor en ligne dans Google Chrome.' };
+  const v = ua.match(/Chrome\/(\d+)/)?.[1];
+  if (v) return { name: `Chrome ${v}`, fix: Number(v) < 90 ? 'Ce Chrome est trop ancien : mettez-le à jour (⋮ → Aide → À propos de Google Chrome).' : 'Vérifiez que c’est bien Google Chrome (et pas un autre navigateur) et qu’aucun réglage de l’entreprise ne bloque l’USB / le Bluetooth.' };
+  return { name: 'ce navigateur', fix: 'Ouvrez Trésor en ligne dans Google Chrome.' };
+})();
 const where = isMac ? 'du Mac (Réglages Système → Bluetooth)' : isAndroid ? 'du téléphone (Paramètres → Bluetooth)' : 'de l’ordinateur';
 const directOk = support.bluetooth || support.usb || support.serial;
 const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|CriOS|FxiOS|Firefox/.test(ua);
@@ -245,7 +256,7 @@ export function PrintersTab() {
       <div className="card stack-s">
         <h2>Quelle imprimante acheter ?</h2>
         <p className="small">Une imprimante à tickets <strong>58 mm « ESC/POS »</strong> avec <strong>Bluetooth et USB</strong>. Sur Android (Chrome) et sur ordinateur (Chrome ou Edge), Trésor en ligne imprime directement dessus. Sur iPhone, Apple bloque le Bluetooth direct : utilisez un poste d’impression partagé, une imprimante compatible AirPrint, ou le partage en image.</p>
-        <p className="small muted">Ce navigateur : Bluetooth {support.bluetooth ? '✓' : '✗'} · USB {support.usb ? '✓' : '✗'} · Port série {support.serial ? '✓' : '✗'}</p>
+        <p className="small muted">Navigateur : {browser.name} · Bluetooth {support.bluetooth ? '✓' : '✗'} · USB {support.usb ? '✓' : '✗'} · Port série {support.serial ? '✓' : '✗'}</p>
       </div>
 
       {edit && <PrinterForm printer={edit === 'new' ? undefined : edit} onClose={() => setEdit(null)} />}
@@ -297,8 +308,8 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
               <label key={k} className={`choice ${p.kind === k ? 'is-on' : ''} ${available(k) ? '' : 'is-disabled'}`}>
                 <input type="radio" name="kind" disabled={!available(k)} checked={p.kind === k} onChange={() => set({ kind: k, ref: undefined, deviceName: undefined })} />
                 <span className="choice-text"><strong>{KINDS[k]}</strong><span className="small muted">{{
-                  bluetooth: available(k) ? 'Android (Chrome), ordinateur (Chrome/Edge). Allumez l’imprimante avant de chercher.' : 'Pas disponible sur ce navigateur (iPhone/Safari, Firefox).',
-                  usb: available(k) ? 'Ordinateur avec Chrome ou Edge, imprimante branchée par câble.' : 'Pas disponible sur ce navigateur.',
+                  bluetooth: available(k) ? 'Android (Chrome), ordinateur (Chrome/Edge). Allumez l’imprimante avant de chercher.' : `Pas disponible sur ${browser.name}. ${browser.fix}`,
+                  usb: available(k) ? `Ordinateur avec Chrome ou Edge, imprimante branchée par câble.${isWindows ? ' Sur Windows : pilote WinUSB (Zadig) nécessaire, voir le guide.' : ''}` : `Pas disponible sur ${browser.name}. ${browser.fix}`,
                   serial: available(k) ? 'Imprimante Bluetooth « classique » (ex. JK-301PL) déjà appairée dans les réglages Bluetooth du téléphone Android ou de l’ordinateur, ou câble USB-série.' : (isAndroid ? 'Pas disponible : mettez à jour Google Chrome sur ce téléphone (Play Store), puis rouvrez le logiciel.' : 'Pas disponible sur ce navigateur.'),
                   system: 'Tous les appareils : la fenêtre d’impression s’ouvre, vous y choisissez l’imprimante.',
                 }[k]}</span></span>
