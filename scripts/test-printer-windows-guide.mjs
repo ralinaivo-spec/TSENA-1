@@ -1,0 +1,13 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const ctx = await b.newContext({ viewport: { width: 1200, height: 1400 }, userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' });
+const p = await ctx.newPage();
+p.on('pageerror', e => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/');
+await p.getByLabel("Nom d'utilisateur").fill('super-adm');
+await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(800);
+await p.goto('http://localhost:5173/#/parametres/imprimantes'); await p.waitForTimeout(1000);
+console.log('windows guide open:', await p.locator('details.windows-guide').evaluate(e => e.open));
+await p.locator('details.windows-guide').screenshot({ path: '/tmp/claude-0/t/win.png' });
+await b.close();

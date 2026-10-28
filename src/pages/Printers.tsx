@@ -14,6 +14,7 @@ import { Icon } from '../ui/icons';
 const ua = navigator.userAgent;
 const isMac = /Macintosh|Mac OS X/.test(ua) && !/iPhone|iPad/.test(ua);
 const isAndroid = /Android/.test(ua);
+const isWindows = /Windows/.test(ua);
 const where = isMac ? 'du Mac (Réglages Système → Bluetooth)' : isAndroid ? 'du téléphone (Paramètres → Bluetooth)' : 'de l’ordinateur';
 const directOk = support.bluetooth || support.usb || support.serial;
 const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg|CriOS|FxiOS|Firefox/.test(ua);
@@ -91,7 +92,34 @@ function TicketPrinterGuide({ open }: { open: boolean }) {
           <li>Papier <strong>58 mm</strong>, puis <strong>Test des accents</strong> : un petit ticket sort avec des lignes A, C, D. Choisissez dans « Jeu de caractères » la lettre dont la ligne <em>é è à ç</em> est bien écrite.</li>
           <li>Enregistrez, mettez-la <strong>« Par défaut »</strong>. Ensuite, le bouton <strong>Imprimer</strong> (ticket de caisse, ticket client, bon de livraison, étiquette) l’utilise directement. Après chaque réouverture du logiciel, la première impression peut demander de recliquer sur l’imprimante dans la liste (sécurité du navigateur).</li>
         </ol>
+        <WindowsGuide />
       </div>
+    </details>
+  );
+}
+
+/** Windows : le pilote installé par Windows (ou demandé) bloque souvent l'accès direct. Trois façons qui marchent. */
+function WindowsGuide() {
+  return (
+    <details className="windows-guide" open={isWindows}>
+      <summary><strong>Sur un ordinateur Windows (Windows 10 / 11)</strong> — si Windows « demande un pilote »</summary>
+      <p className="muted" style={{ margin: '6px 0' }}>Le message « pilote introuvable » de Windows peut être ignoré : Trésor en ligne n’utilise pas de pilote Windows. Essayez dans cet ordre :</p>
+      <ol className="guide-steps">
+        <li><strong>Bluetooth direct, sans appairer dans Windows</strong> (imprimantes dont le nom finit par <em>_BLE</em>, ex. <em>KPrinter_6193_BLE</em>) : dans Chrome, Ajouter une imprimante → <strong>« Bluetooth (direct) »</strong> → Chercher. Si l’imprimante a déjà été appairée dans Windows et n’apparaît pas, retirez-la d’abord (Paramètres → Bluetooth et appareils → l’imprimante → <em>Supprimer l’appareil</em>).</li>
+        <li><strong>Bluetooth « classique » par port COM</strong> (ex. <em>JK-301PL</em>) :
+          <ul>
+            <li>Paramètres → Bluetooth et appareils → Ajouter un appareil → Bluetooth → choisissez <em>KPrinter…</em> (code <strong>0000</strong> ou <strong>1234</strong>). Le message « pilote » qui suit n’a pas d’importance.</li>
+            <li>Vérifiez le port COM : Paramètres → Bluetooth → <strong>Plus d’options Bluetooth</strong> → onglet <strong>Ports COM</strong>. Il faut une ligne <strong>« Sortant »</strong> pour l’imprimante. Sinon : <em>Ajouter… → Sortant → choisissez l’imprimante → OK</em>.</li>
+            <li>Dans Trésor en ligne : Ajouter une imprimante → <strong>« Port série / Bluetooth appairé »</strong> → Chercher → choisissez <em>COM…</em> (le port « Sortant »). Vitesse 9600 ; si rien ne sort, essayez 115200.</li>
+          </ul>
+        </li>
+        <li><strong>Câble USB</strong> : Windows réserve l’imprimante à son propre pilote, ce qui empêche « USB (direct) ». Deux possibilités :
+          <ul>
+            <li><strong>Simple</strong> : installez le pilote du fabricant (souvent sur le CD ou la notice, nom « POS-58 » / « POS58 Printer Driver »). L’imprimante devient une imprimante Windows : choisissez <strong>« Fenêtre d’impression de l’appareil »</strong>, papier 58 mm, marges « Aucune ». Pour imprimer sans fenêtre à chaque ticket : faites un raccourci Chrome avec l’option <code>--kiosk-printing</code> (clic droit sur le raccourci → Propriétés → Cible : ajouter <code> --kiosk-printing</code> à la fin) et mettez l’imprimante ticket <em>par défaut</em> dans Windows.</li>
+            <li><strong>Direct (sans pilote)</strong> : avec le petit outil gratuit <strong>Zadig</strong> (zadig.akeo.ie), choisissez l’imprimante (Options → List All Devices), pilote <strong>WinUSB</strong> → <em>Replace Driver</em>. Ensuite « USB (direct) » fonctionne dans Chrome, comme sur Mac. (L’imprimante ne sera plus visible comme imprimante Windows.)</li>
+          </ul>
+        </li>
+      </ol>
     </details>
   );
 }

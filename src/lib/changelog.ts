@@ -2,6 +2,9 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-10-28', items: [
+    'Imprimantes sur ordinateur Windows (10 / 11) : nouveau guide quand Windows « demande un pilote » — Bluetooth direct sans appairer, Bluetooth classique par port COM « Sortant », ou câble USB (pilote du fabricant + fenêtre d’impression sans dialogue avec --kiosk-printing, ou outil Zadig / WinUSB pour l’USB direct) ; message d’erreur USB clair sur Windows.',
+  ] },
   { date: '2026-10-26', items: [
     'Imprimante Bluetooth en « port série » (poste d’impression) : si le port enregistré ne s’ouvre pas (« Failed to open serial port »), le logiciel le referme et essaie les autres ports autorisés, rouvre un port bloqué, et retient celui qui marche ; message clair si l’imprimante est éteinte, trop loin ou connectée à un autre appareil.',
     'Récapitulatifs (écran et message) : seulement les mouvements de la période choisie. « Total à verser par les livreurs (compte à ce jour) » remplacé par « Reste à verser par les livreurs (livraisons de la période) », et plus de « Soldes en fin de période » (montants cumulés depuis le début) : les comptes des semaines déjà versées n’y entrent plus.',

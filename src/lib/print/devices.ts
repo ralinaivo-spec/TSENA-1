@@ -148,7 +148,16 @@ export async function pairUsb(): Promise<{ ref: string; name: string }> {
   const d = await nav.usb.requestDevice({ filters: [] });
   return { ref: usbRef(d), name: d.productName || 'Imprimante USB' };
 }
+const isWin = typeof navigator !== 'undefined' && /Windows/.test(navigator.userAgent);
+const WIN_USB = 'Windows réserve cette imprimante USB à son propre pilote. Solutions : imprimante en Bluetooth (direct ou port COM), pilote du fabricant + « Fenêtre d’impression », ou outil Zadig (pilote WinUSB) pour l’USB direct. Détails : Paramètres → Imprimantes → « Sur un ordinateur Windows ».';
 async function writeUsb(ref: string, data: Uint8Array) {
+  try { return await writeUsbRaw(ref, data); }
+  catch (e: any) {
+    if (isWin && (e?.name === 'SecurityError' || e?.name === 'NetworkError' || /access denied|claim|Unable to/i.test(e?.message ?? ''))) throw Object.assign(new Error(WIN_USB), { name: 'NetworkError' });
+    throw e;
+  }
+}
+async function writeUsbRaw(ref: string, data: Uint8Array) {
   let d = (await nav.usb.getDevices()).find((x: any) => usbRef(x) === ref);
   if (!d) d = await nav.usb.requestDevice({ filters: [] });
   if (!d.opened) await d.open();
@@ -162,7 +171,7 @@ async function writeUsb(ref: string, data: Uint8Array) {
       return;
     }
   }
-  throw new Error('Impossible d’écrire sur cette imprimante USB. Sur Windows, utilisez plutôt « Port série » ou la fenêtre d’impression.');
+  throw new Error(isWin ? WIN_USB : 'Impossible d’écrire sur cette imprimante USB : utilisez le Bluetooth ou la fenêtre d’impression.');
 }
 
 // ---------- Port série (USB-série, ou Bluetooth appairé dans Windows/macOS) ----------
