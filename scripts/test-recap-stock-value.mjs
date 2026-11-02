@@ -1,0 +1,27 @@
+import { chromium } from '/opt/npm-tools/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+const p = await (await b.newContext({ viewport: { width: 1300, height: 1000 } })).newPage();
+p.on('pageerror', e => console.log('ERR', e.message));
+await p.goto('http://localhost:5173/');
+await p.getByLabel("Nom d'utilisateur").fill('super-adm');
+await p.locator('input[type=password]').fill('anosy'); await p.keyboard.press('Enter');
+await p.getByRole('button', { name: 'Plus tard' }).click(); await p.waitForTimeout(800);
+await p.evaluate(async () => {
+  const db = await new Promise(r => { const q = indexedDB.open('tsena'); q.onsuccess = () => r(q.result); });
+  const pt = (t, rec) => new Promise(r => { const tx = db.transaction(t, 'readwrite'); tx.objectStore(t).put(rec); tx.oncomplete = r; });
+  const now = new Date().toISOString();
+  await pt('categories', { id: 'pgA', name: 'ANTIVOL', createdAt: now, updatedAt: now });
+  await pt('categories', { id: 'pgB', name: 'LAMPE', createdAt: now, updatedAt: now });
+  await pt('products', { id: 'pa', name: 'Antivol', categoryId: 'pgA', active: true, createdAt: now, updatedAt: now });
+  await pt('products', { id: 'pb', name: 'Lampe', categoryId: 'pgB', active: true, createdAt: now, updatedAt: now });
+  await pt('variants', { id: 'va', productId: 'pa', sku: 'A', active: true, costAvg: 5000, createdAt: now, updatedAt: now });
+  await pt('variants', { id: 'vb', productId: 'pb', sku: 'B', active: true, costAvg: 8000, createdAt: now, updatedAt: now });
+  await pt('stockMoves', { id: 'm1', variantId: 'va', qty: 10, type: 'in', at: now, createdAt: now, updatedAt: now });
+  await pt('stockMoves', { id: 'm2', variantId: 'vb', qty: 4, type: 'in', at: now, createdAt: now, updatedAt: now });
+});
+await p.reload(); await p.waitForTimeout(1500);
+await p.goto('http://localhost:5173/#/recapitulatif'); await p.waitForTimeout(1500);
+const txt = await p.locator('body').innerText();
+const i = txt.indexOf('Valeur du stock');
+console.log(i >= 0 ? txt.slice(i, i + 260).replace(/\n+/g, ' | ') : 'ABSENT');
+await b.close();

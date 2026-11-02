@@ -5,6 +5,7 @@ import { ACCOUNTS, MOVE_TYPES, addDays, report, type AccountId, type Report } fr
 import type { Company } from './settings';
 import type { Block, PrintDoc } from './print/doc';
 import { daySynthesis, type Synthesis } from './synthesis';
+import { stockByPage, SALES_DAYS } from './stockRank';
 
 export interface Line { label: string; value: string; strong?: boolean; sub?: boolean }
 export interface Section { title: string; lines: Line[] }
@@ -65,6 +66,17 @@ function common(r: Report, withProfit: boolean): Section[] {
     { label: 'Bénéfice brut (ventes − coût des articles)', value: fmtAr(r.grossProfit) },
     { label: 'Résultat (bénéfice − dépenses + autres revenus)', value: fmtAr(r.grossProfit - r.expenses + r.incomes), strong: true },
   ] });
+  // Valeur du stock (prix de revient × pièces en stock), au moment de l'envoi : total et par page, avec l'argent qui dort.
+  if (withProfit) {
+    const pages = stockByPage().filter((p) => p.pieces > 0);
+    const total = pages.reduce((t, p) => t + p.value, 0), pcs = pages.reduce((t, p) => t + p.pieces, 0), dormant = pages.reduce((t, p) => t + p.dormantValue, 0);
+    const now = new Date().toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    out.push({ title: `Valeur du stock (au ${now})`, lines: [
+      { label: `Valeur totale du stock (${fmtNum(pcs)} pcs)`, value: fmtAr(total), strong: true },
+      ...pages.sort((a, b) => b.value - a.value).map((p) => ({ label: `${p.name} (${fmtNum(p.pieces)} pcs${p.dormantValue ? `, dont dormant ${fmtAr(p.dormantValue)}` : ''})`, value: fmtAr(p.value), sub: true })),
+      ...(dormant ? [{ label: `dont stock dormant (aucune vente depuis ${SALES_DAYS} j)`, value: fmtAr(dormant) }] : []),
+    ] });
+  }
   // Pas de soldes cumulés (caisse, comptes depuis le début) : le récapitulatif ne parle que des mouvements de la période.
   return out;
 }
