@@ -227,6 +227,7 @@ Brouillon → Confirmée → En préparation → Prête → Assignée au livreur
 
 - *(26/10/2026)* **Correction d'une dépense** (droit « Saisir les dépenses ») : ✏️ dans Dépenses et Caisse du jour → date, montant, compte, catégorie, description, note ; refusée si l'ancienne ou la nouvelle date est dans une semaine versée au patron (cadenas) ; raison obligatoire, avant / après dans le journal d'activité. Dépenses liées (virement, achat) : à corriger depuis l'opération d'origine.
 
+- *(04/11/2026)* **Marges des tickets** par imprimante (haut, bas, gauche, droite, en mm) : défaut 20 / 20 mm et 15 / 15 mm en 80 mm (3 / 1,5 mm en 58 mm) ; ESC/POS : avance papier en haut et en bas, colonnes de marge à gauche / droite (1 caractère = 1,5 mm), au moins 20 (58 mm) ou 30 (80 mm) caractères par ligne gardés ; même rendu dans l'aperçu et la fenêtre d'impression.
 - *(02/11/2026)* **Valeur du stock dans les récapitulatifs** (jour et semaine, écran, WhatsApp, impression ; droit « voir les prix d'achat ») : valeur totale au moment de l'envoi (prix de revient moyen × pièces), détail par page (pièces, valeur, dont stock dormant sans vente depuis 30 j) et total dormant.
 - *(26/10/2026)* **Récapitulatifs = mouvements de la période uniquement** : pas de ligne « Versement au patron » (historique à part), « Reste à verser par les livreurs » calculé sur les livraisons de la période non réglées (au lieu du compte cumulé), pas de « Soldes en fin de période » dans le récapitulatif ni dans le message. Le contrôle de caisse (espèces attendues) reste sur l'écran, à part.
 

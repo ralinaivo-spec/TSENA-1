@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useCompany } from '../lib/settings';
 import { useMeta, useTable } from '../lib/db';
-import { cancelJobs, defaultTarget, docHtml, findPrinter, printTo, useTargets, type PrintDoc, type PrintJob } from '../lib/print';
+import { cancelJobs, defaultTarget, docHtml, findPrinter, marginsOf, printTo, useTargets, type PrintDoc, type PrintJob } from '../lib/print';
 import { Button, IconButton, Modal, navigate, toast } from './kit';
 import { Icon } from './icons';
 
@@ -20,7 +20,7 @@ export function PrintDialog({ docs, onClose }: { docs: DocChoice[]; onClose: () 
   const doc = useMemo(() => choice.build(), [choice]);
   const printer = findPrinter(target);
   const paper = printer?.paper ?? '58';
-  const html = useMemo(() => docHtml(doc, paper, printer && !printer.logo ? null : company.logo ?? ''), [doc, paper, printer, company.logo]);
+  const html = useMemo(() => docHtml(doc, paper, printer && !printer.logo ? null : company.logo ?? '', marginsOf(printer)), [doc, paper, printer, company.logo]);
   const t = targets.find((x) => x.id === target);
   // Tickets encore en attente sur le poste choisi : visibles ici pour éviter de renvoyer plusieurs fois le même.
   const jobs = useTable<PrintJob>('printJobs');

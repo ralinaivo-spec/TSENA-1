@@ -5,7 +5,7 @@ import { newId, remove, setMeta, useMeta, useTable } from '../lib/db';
 import { getCloud } from '../lib/sync';
 import { useCompany } from '../lib/settings';
 import {
-  BT_SPEEDS, CHARSETS, btRemembers, linkState, onLinkChange, useWakeState, type LinkState, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, retryJob, reprintJob, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
+  BT_SPEEDS, CHARSETS, colsOf, marginChars, marginsOf, type Margins, btRemembers, linkState, onLinkChange, useWakeState, type LinkState, KINDS, PAPERS, SYSTEM_PRINTER, cancelJobs, retryJob, reprintJob, deletePrinter, disconnectPrinter, reconnectPrinter, makeStation, pairBluetooth, printCharsetProbe, pairSerial, pairUsb, printOn, savePrinter, stopStation, support, testDoc, usePrinters,
   type BtSpeed, type Charset, type Paper, type PrintJob, type PrintStation, type Printer, type PrinterKind,
 } from '../lib/print';
 import { Help, Badge, Button, Confirm, Empty, IconButton, Modal, SelectField, TextField, Toggle, fmtDateTime, timeAgo, toast } from '../ui/kit';
@@ -268,6 +268,26 @@ export function PrintersTab() {
   );
 }
 
+/** Marges du ticket : haut, bas, gauche, droite (mm), avec la largeur de texte qui reste. */
+function MarginFields({ p, set }: { p: Printer; set: (patch: Partial<Printer>) => void }) {
+  const m = marginsOf(p);
+  const opts = (vals: number[]) => vals.map((n) => ({ value: String(n), label: n === 0 ? 'Aucune' : n < 10 ? `${n.toLocaleString('fr-FR')} mm` : `${(n / 10).toLocaleString('fr-FR')} cm` }));
+  const upd = (k: keyof Margins, v: string) => set({ margins: { ...m, [k]: Number(v) }, feedMm: undefined });
+  const mc = marginChars(colsOf(p.paper), m);
+  return (
+    <div className="stack-s">
+      <strong>Marges du ticket</strong>
+      <div className="grid-2">
+        <SelectField label="Haut" value={String(m.top)} onChange={(v) => upd('top', v)} options={opts([0, 5, 10, 15, 20, 25, 30])} />
+        <SelectField label="Bas (pour déchirer sans couper)" value={String(m.bottom)} onChange={(v) => upd('bottom', v)} options={opts([10, 15, 20, 25, 30, 40])} />
+        <SelectField label="Gauche" value={String(m.left)} onChange={(v) => upd('left', v)} options={opts([0, 1.5, 3, 5, 10, 15, 20])} />
+        <SelectField label="Droite" value={String(m.right)} onChange={(v) => upd('right', v)} options={opts([0, 1.5, 3, 5, 10, 15, 20])} />
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>Largeur du texte : <strong>{mc.usable} caractères</strong> par ligne.{mc.reduced ? ` Marges gauche/droite réduites automatiquement pour garder au moins ${p.paper === '80' ? 30 : 20} caractères (papier ${p.paper} mm).` : ''} Si le texte est coupé sur un côté, vérifiez aussi que le papier choisi ({PAPERS[p.paper]}) correspond au rouleau.</p>
+    </div>
+  );
+}
+
 function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => void }) {
   const company = useCompany();
   const firstKind: PrinterKind = support.bluetooth ? 'bluetooth' : support.usb ? 'usb' : 'system';
@@ -328,7 +348,9 @@ function PrinterForm({ printer, onClose }: { printer?: Printer; onClose: () => v
         <div className="grid-2">
           <SelectField label="Papier" value={p.paper} onChange={(v) => set({ paper: v as Paper })} options={(Object.keys(PAPERS) as Paper[]).filter((k) => direct ? k !== 'a4' : true).map((k) => ({ value: k, label: PAPERS[k] }))} />
           {direct && <SelectField label="Jeu de caractères (accents)" value={p.charset} onChange={(v) => set({ charset: v as Charset })} options={(Object.keys(CHARSETS) as Charset[]).filter((k) => k !== 'cp858' || p.charset === 'cp858').map((k) => ({ value: k, label: CHARSETS[k] }))} />}
-          {direct && <SelectField label="Espace blanc en bas du ticket" hint="Pour déchirer sans couper le texte." value={String(p.feedMm ?? 20)} onChange={(v) => set({ feedMm: Number(v) })} options={[10, 15, 20, 25, 30].map((n) => ({ value: String(n), label: `${n / 10} cm${n === 20 ? ' (conseillé)' : ''}` }))} />}
+        </div>
+        <MarginFields p={p} set={set} />
+        <div className="grid-2">
           {p.kind === 'bluetooth' && <SelectField label="Envoi Bluetooth" hint="Si le ticket s’arrête au milieu : choisissez « Normal »." value={p.btSpeed ?? 'safe'} onChange={(v) => set({ btSpeed: v as BtSpeed })} options={(Object.keys(BT_SPEEDS) as BtSpeed[]).map((k) => ({ value: k, label: BT_SPEEDS[k] }))} />}
           {p.kind === 'serial' && <SelectField label="Vitesse du port" value={String(p.baud ?? 9600)} onChange={(v) => set({ baud: Number(v) })} options={[9600, 19200, 38400, 115200].map((b) => ({ value: String(b), label: `${b} bauds` }))} />}
         </div>

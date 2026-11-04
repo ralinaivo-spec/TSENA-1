@@ -1,5 +1,5 @@
 // Langage ESC/POS : celui des imprimantes à tickets (58 mm et 80 mm, Bluetooth ou USB).
-import { layout, logoFor, type PrintDoc } from './doc';
+import { defaultMargins, layout, logoFor, marginChars, type Margins, type PrintDoc } from './doc';
 
 export type Charset = 'cp850' | 'cp858' | 'wpc1252' | 'wpc1252cn' | 'ascii';
 export const CHARSETS: Record<Charset, string> = {
@@ -72,16 +72,20 @@ export async function logoRaster(dataUrl: string, dots: number): Promise<number[
 /** Logos déjà convertis en points d'imprimante (évite de refaire le calcul à chaque ticket). */
 const rasterCache = new Map<string, number[]>();
 
-export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Charset; cut: boolean; logo?: string | null; copies?: number; feedMm?: number }): Promise<Uint8Array> {
-  // Espace blanc en bas pour déchirer le ticket sans couper le texte (8 points par mm ; ESC J avance de n points, 255 au plus).
-  const tail = (): number[] => { const out: number[] = []; let dots = Math.round((o.feedMm ?? 20) * 8); while (dots > 0) { const n = Math.min(255, dots); out.push(ESC, 0x4a, n); dots -= n; } return out; };
+export async function encodeDoc(doc: PrintDoc, o: { cols: number; charset: Charset; cut: boolean; logo?: string | null; copies?: number; margins?: Margins }): Promise<Uint8Array> {
+  const m = o.margins ?? defaultMargins(o.cols >= 48 ? '80' : '58');
+  // Avance du papier de n mm (8 points par mm ; ESC J avance de n points, 255 au plus) : marges haut et bas.
+  const feed = (mm: number): number[] => { const out: number[] = []; let dots = Math.round(mm * 8); while (dots > 0) { const n = Math.min(255, dots); out.push(ESC, 0x4a, n); dots -= n; } return out; };
+  const tail = () => feed(m.bottom);
+  const { lc, rc } = marginChars(o.cols, m);
   const dots = o.cols >= 48 ? 576 : 384;
-  const rows = layout(doc, o.cols);
+  const rows = layout(doc, o.cols, lc, rc);
   // Un logo par ligne « logo » : celui de la page si le document en a un, sinon celui de la société.
   const rasters = new Map<string, number[]>();
   for (const r of rows) { const src = r.logo ? logoFor(r, o.logo) : undefined; if (src && !rasters.has(src)) { const key = `${dots}|${src}`; let ras = rasterCache.get(key); if (!ras) { try { ras = await logoRaster(src, dots); } catch { ras = []; } rasterCache.set(key, ras); } rasters.set(src, ras); } }
   const one: number[] = [ESC, 0x40]; // initialisation
   one.push(ESC, 0x74, TABLE[o.charset] ?? 2);
+  one.push(...feed(m.top)); // marge du haut
   let bold = false, big = 0;
   for (const r of rows) {
     if (r.logo) { const src = logoFor(r, o.logo); const logo = src ? rasters.get(src) ?? [] : []; if (logo.length) one.push(ESC, 0x61, 1, ...logo, ESC, 0x61, 0); continue; }

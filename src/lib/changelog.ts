@@ -2,6 +2,9 @@
 // La plus récente en premier. `date` : AAAA-MM-JJ.
 export interface Release { date: string; items: string[] }
 export const CHANGELOG: Release[] = [
+  { date: '2026-11-04', items: [
+    'Tickets : marges réglables dans la fiche de chaque imprimante (haut, bas, gauche, droite). Par défaut 2 cm en haut et en bas ; 1,5 cm à gauche et à droite en papier 80 mm (3 mm / 1,5 mm en 58 mm pour garder une ligne lisible). La largeur de texte restante est affichée ; les marges sont réduites automatiquement si la ligne devient trop étroite. Aperçu et fenêtre d’impression suivent les mêmes marges.',
+  ] },
   { date: '2026-11-02', items: [
     'Récapitulatifs (jour et semaine, écran et message WhatsApp) : nouvelle partie « Valeur du stock » au moment de l’envoi — valeur totale (prix de revient × pièces) et par page, avec le nombre de pièces et l’argent qui dort (aucune vente depuis 30 jours). Visible seulement par ceux qui voient les prix d’achat.',
   ] },

@@ -1,6 +1,6 @@
 // Moyens d'impression : Bluetooth, USB, port série (navigateurs Chrome/Edge), fenêtre d'impression
 // du système (tous les appareils) et image à partager (WhatsApp, enregistrer…).
-import { layout, logoFor, type Paper, type PrintDoc, type Row } from './doc';
+import { defaultMargins, layout, logoFor, marginChars, type Margins, type Paper, type PrintDoc, type Row } from './doc';
 import { qrMatrix, qrSvg } from '../qr';
 
 const nav = navigator as any;
@@ -308,30 +308,34 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- Rendu HTML (aperçu et fenêtre d'impression) ----------
 const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
-export function docHtml(doc: PrintDoc, paper: Paper, logo?: string | null): string {
+export function docHtml(doc: PrintDoc, paper: Paper, logo?: string | null, margins?: Margins): string {
   const cols = paper === '58' ? 32 : 48;
-  return layout(doc, cols).map((r: Row) => {
+  const m = margins ?? defaultMargins(paper);
+  const { lc, rc } = paper === 'a4' ? { lc: 2, rc: 1 } : marginChars(cols, m);
+  // Marges haut / bas : espaces blancs (1 mm ≈ 1/1,5 colonne de caractère).
+  const gap = (mm: number) => (mm > 0 && paper !== 'a4' ? `<div class="tk-gap" style="height:${(mm / 1.5).toFixed(2)}ch"></div>` : '');
+  return gap(m.top) + layout(doc, cols, lc, rc).map((r: Row) => {
     if (r.logo) { const src = logoFor(r, logo); return src ? `<div class="tk-logo"><img src="${src}" alt=""></div>` : ''; }
     if (r.cut) return '<div class="tk-cut"></div>';
     if (r.qr) return `<div class="tk-qr">${qrSvg(r.qr, 2)}</div>`;
     const cls = [r.bold && 'b', r.big && 'big', r.tall && 'tall'].filter(Boolean).join(' ');
     return `<div class="tk-row ${cls}">${esc(r.s) || '&nbsp;'}</div>`;
-  }).join('');
+  }).join('') + gap(m.bottom);
 }
 
 /** Ouvre la fenêtre d'impression de l'appareil (AirPrint sur iPhone, imprimantes installées sur Windows/Mac…). */
-export function systemPrint(doc: PrintDoc, paper: Paper, logo?: string | null, copies = 1): Promise<void> {
+export function systemPrint(doc: PrintDoc, paper: Paper, logo?: string | null, copies = 1, margins?: Margins): Promise<void> {
   return new Promise((resolve) => {
     const lay = layout(doc, paper === '58' ? 32 : 48);
     const rows = lay.length + lay.filter((r) => r.big || r.tall).length + lay.filter((r) => r.qr).length * 7;
     const area = document.createElement('div');
     area.className = `print-area ticket paper-${paper}`;
-    const one = `<div class="tk-page">${docHtml(doc, paper, logo)}</div>`;
+    const one = `<div class="tk-page">${docHtml(doc, paper, logo, margins)}</div>`;
     area.innerHTML = Array.from({ length: Math.max(1, copies) }, () => one).join('');
     const style = document.createElement('style');
     const width = paper === '58' ? 58 : 80;
     style.textContent = paper === 'a4' ? '@page { size: A4; margin: 14mm; }'
-      : `@page { size: ${width}mm ${Math.max(60, Math.ceil(rows * 4.4 * copies + 20))}mm; margin: 0; }`;
+      : `@page { size: ${width}mm ${Math.max(60, Math.ceil(rows * 4.4 * copies + 20 + ((margins ?? defaultMargins(paper)).top + (margins ?? defaultMargins(paper)).bottom) * copies))}mm; margin: 0; }`;
     document.head.appendChild(style);
     document.body.appendChild(area);
     document.body.classList.add('printing');

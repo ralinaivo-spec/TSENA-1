@@ -26,6 +26,23 @@ export type Paper = '58' | '80' | 'a4';
 export const PAPERS: Record<Paper, string> = { '58': 'Ticket 58 mm', '80': 'Ticket 80 mm', a4: 'Feuille A4' };
 export const colsOf = (paper: Paper) => (paper === '58' ? 32 : 48);
 
+/** Marges du ticket, en millimètres. */
+export interface Margins { top: number; bottom: number; left: number; right: number }
+export const DEFAULT_MARGINS: Margins = { top: 20, bottom: 20, left: 15, right: 15 };
+/** Marges par défaut selon le papier : 2 cm en haut et en bas ; 1,5 cm à gauche et à droite en 80 mm, mais seulement
+ *  3 mm / 1,5 mm en 58 mm (sinon il ne resterait qu'une vingtaine de caractères par ligne). */
+export const defaultMargins = (paper: Paper): Margins => (paper === '80' ? { ...DEFAULT_MARGINS } : { top: 20, bottom: 20, left: 3, right: 1.5 });
+/** Largeur d'un caractère : zone imprimable (48 mm en 58 mm, 72 mm en 80 mm) / nombre de colonnes = 1,5 mm. */
+const CHAR_MM = 1.5;
+/** Marges gauche / droite converties en colonnes de caractères. Il reste toujours au moins 20 caractères par ligne
+ *  (58 mm) ou 30 (80 mm) : au-delà, les marges sont réduites proportionnellement pour que le ticket reste lisible. */
+export function marginChars(paperCols: number, m: Pick<Margins, 'left' | 'right'>) {
+  let lc = Math.max(0, Math.round(m.left / CHAR_MM)), rc = Math.max(0, Math.round(m.right / CHAR_MM));
+  const maxMargin = paperCols - (paperCols >= 48 ? 30 : 20);
+  if (lc + rc > maxMargin) { const k = maxMargin / (lc + rc); lc = Math.floor(lc * k); rc = maxMargin - lc; }
+  return { lc, rc, usable: paperCols - lc - rc, reduced: Math.round(m.left / CHAR_MM) + Math.round(m.right / CHAR_MM) > maxMargin };
+}
+
 // ---------- Mise en page en colonnes ----------
 /** Espaces spéciaux (séparateurs de milliers français) → espace normal, pour que tout tienne en colonnes. */
 export const clean = (s: string) => (s ?? '').replace(/[   ]/g, ' ').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/…/g, '...').replace(/[–—]/g, '-');
@@ -56,9 +73,9 @@ export const logoFor = (r: Row, allowed: string | null | undefined) => (allowed 
 
 /** Transforme les blocs en lignes de texte de largeur fixe (utilisé pour l'aperçu, l'image et l'imprimante).
  *  Marge : 2 colonnes à gauche, 1 à droite (le texte ne touche pas le bord du papier). */
-export function layout(doc: PrintDoc, paperCols: number): Row[] {
-  const cols = paperCols - 3;
-  const M = '  ';
+export function layout(doc: PrintDoc, paperCols: number, lc = 2, rc = 1): Row[] {
+  const cols = paperCols - lc - rc;
+  const M = ' '.repeat(lc);
   const rows: Row[] = [];
   const push = (r: Row) => rows.push(r.s ? { ...r, s: M + r.s } : r);
   for (const b of doc.blocks) {

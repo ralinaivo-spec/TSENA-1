@@ -5,7 +5,7 @@ import { all, get, getMeta, newId, nowIso, remove, save, setMeta, useMeta, useTa
 import { currentUser } from '../auth';
 import { checkRemote, getCloud, syncNow } from '../sync';
 import { DEFAULT_COMPANY, type Company } from '../settings';
-import { colsOf, type Paper, type PrintDoc } from './doc';
+import { defaultMargins, colsOf, type Margins, type Paper, type PrintDoc } from './doc';
 import { charsetProbe, encodeDoc, type Charset } from './escpos';
 import { connectSilently, disconnectRaw, keepAlive, shareImage, systemPrint, writeRaw, type BtSpeed } from './devices';
 
@@ -36,8 +36,10 @@ export interface Printer {
   paused?: boolean;
   /** Taille des paquets Bluetooth (par défaut : sûr, 20 octets). */
   btSpeed?: BtSpeed;
-  /** Espace blanc en bas du ticket, en mm (pour le déchirer sans couper le texte). Par défaut 20 mm. */
+  /** Ancien réglage : espace blanc en bas du ticket (mm). Remplacé par margins.bottom. */
   feedMm?: number;
+  /** Marges du ticket en mm (haut, bas, gauche, droite). */
+  margins?: Margins;
 }
 export interface PrintStation extends BaseRecord { name: string; printerName?: string; paper?: Paper; lastSeen?: string; deviceId?: string; /** L'imprimante du poste attend un clic « Reconnecter » sur le poste. */ alert?: string | null }
 export interface PrintJob extends BaseRecord { fromDevice?: string; stationId: string; doc: PrintDoc; copies: number; status: 'pending' | 'done' | 'error'; retryAt?: string; attempts?: number; lastError?: string; byName?: string; printedAt?: string; error?: string }
@@ -78,13 +80,16 @@ export function useTargets(): Target[] {
 const company = (): Company => ({ ...DEFAULT_COMPANY, ...(get<Company>('settings', 'company') ?? {}) });
 export const findPrinter = (id: string) => (id === SYSTEM_PRINTER.id ? SYSTEM_PRINTER : getPrinters().find((p) => p.id === id));
 
+/** Marges de l'imprimante (réglage de sa fiche, sinon 2 cm haut / bas et 1,5 cm gauche / droite). */
+export const marginsOf = (p?: Pick<Printer, 'margins' | 'feedMm' | 'paper'>): Margins => ({ ...defaultMargins(p?.paper ?? '58'), ...(p?.feedMm != null ? { bottom: p.feedMm } : {}), ...(p?.margins ?? {}) });
+
 /** Imprime sur une imprimante de cet appareil. */
 export async function printOn(p: Printer, doc: PrintDoc, copies = 1, silent = false) {
   const logo = p.logo ? company().logo ?? '' : null; // null : pas de logo sur cette imprimante
-  if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies);
+  if (p.kind === 'system') return systemPrint(doc, p.paper, logo, copies, marginsOf(p));
   if (!p.ref) throw new Error(`L’imprimante « ${p.name} » n’est pas encore appairée : ouvrez Paramètres → Imprimantes.`);
   if (p.paused) throw Object.assign(new Error(`L’imprimante « ${p.name} » est déconnectée de cet appareil : Paramètres → Imprimantes → « Reconnecter », ou imprimez sur le poste d’impression partagé.`), { name: 'PrinterPaused' });
-  const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies, feedMm: p.feedMm ?? 20 });
+  const data = await encodeDoc(doc, { cols: colsOf(p.paper), charset: p.charset, cut: p.cut, logo, copies, margins: marginsOf(p) });
   await writeRaw(p.kind, p.ref, data, p.baud, p.deviceName, p.btSpeed, silent);
   void clearStationAlert(p.id); // l'imprimante répond : le poste peut reprendre les tickets en attente
 }
